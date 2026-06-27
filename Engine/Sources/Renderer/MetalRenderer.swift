@@ -1,19 +1,27 @@
 import Foundation
 import Metal
 
-/// An error that can occur during renderer initialization.
-public enum RendererError: Error {
-    /// Failed to create a command queue.
-    case initializationFailed
-    /// Failed to load the default Metal library.
-    case libraryNotFound
-    /// Failed to find the required shader functions.
-    case functionNotFound
+/// A Metal-specific render context.
+public struct MetalRenderContext: RenderContext, @unchecked Sendable {
+    /// The Metal render pass descriptor.
+    public let renderPassDescriptor: MTLRenderPassDescriptor
+    
+    /// The Metal command buffer.
+    public let commandBuffer: any MTLCommandBuffer
+    
+    /// Initializes a new Metal render context.
+    /// - Parameters:
+    ///   - renderPassDescriptor: The render pass descriptor.
+    ///   - commandBuffer: The command buffer.
+    public init(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: any MTLCommandBuffer) {
+        self.renderPassDescriptor = renderPassDescriptor
+        self.commandBuffer = commandBuffer
+    }
 }
 
-/// A renderer responsible for drawing meshes using a forward rendering pipeline.
+/// A renderer implementation that uses the Metal API.
 @MainActor
-public class ForwardRenderer {
+public class MetalRenderer: Renderer {
     /// The Metal device.
     public let device: any MTLDevice
     
@@ -23,7 +31,7 @@ public class ForwardRenderer {
     /// The render pipeline state.
     private let pipelineState: any MTLRenderPipelineState
     
-    /// Initializes a new forward renderer.
+    /// Initializes a new Metal renderer.
     /// - Parameters:
     ///   - device: The Metal device to use.
     ///   - pixelFormat: The pixel format of the render target. Defaults to `.bgra8Unorm`.
@@ -56,19 +64,25 @@ public class ForwardRenderer {
         self.pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
     
-    /// Renders a mesh into a render pass using the provided command buffer.
-    /// - Parameters:
-    ///   - mesh: The mesh to render.
-    ///   - renderPassDescriptor: The render pass descriptor specifying the render target.
-    ///   - commandBuffer: The command buffer to encode commands into.
-    public func render(mesh: Mesh, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: any MTLCommandBuffer) {
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+    /// Creates a Metal mesh from vertices.
+    public nonisolated func createMesh(vertices: [Vertex]) -> Mesh? {
+        return MetalMesh(device: device, vertices: vertices)
+    }
+    
+    /// Renders a mesh using the given Metal frame context.
+    public nonisolated func render(mesh: Mesh, context: RenderContext) {
+        guard let metalContext = context as? MetalRenderContext,
+              let metalMesh = mesh as? MetalMesh else {
+            return
+        }
+        
+        guard let encoder = metalContext.commandBuffer.makeRenderCommandEncoder(descriptor: metalContext.renderPassDescriptor) else {
             return
         }
         
         encoder.setRenderPipelineState(pipelineState)
-        encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: mesh.vertexCount)
+        encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
         
         encoder.endEncoding()
     }

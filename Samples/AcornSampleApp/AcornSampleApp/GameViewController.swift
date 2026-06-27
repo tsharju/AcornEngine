@@ -4,6 +4,7 @@ import AcornEngine
 
 class GameViewController: UIViewController, MTKViewDelegate {
     var engine: Engine!
+    var renderer: MetalRenderer!
     var commandQueue: MTLCommandQueue!
     var lastRenderTime: CFTimeInterval = 0
     
@@ -30,20 +31,27 @@ class GameViewController: UIViewController, MTKViewDelegate {
         self.commandQueue = queue
         
         do {
-            self.engine = try Engine(device: defaultDevice)
+            self.renderer = try MetalRenderer(device: defaultDevice)
+            self.engine = Engine(renderer: self.renderer)
             mtkView.delegate = self
-            setupScene(device: defaultDevice)
+            setupScene()
         } catch {
-            print("Failed to initialize Engine: \(error)")
+            print("Failed to initialize Renderer: \(error)")
         }
     }
     
-    private func setupScene(device: MTLDevice) {
+    private func setupScene() {
         let entity = engine.world.createEntity()
         let transform = TransformComponent(position: .zero)
         engine.world.addComponent(transform, to: entity)
         
-        if let mesh = Mesh.makeTriangle(device: device) {
+        let vertices: [Vertex] = [
+            Vertex(position: SIMD3<Float>(0, 0.5, 0), color: SIMD4<Float>(1, 0, 0, 1)),
+            Vertex(position: SIMD3<Float>(-0.5, -0.5, 0), color: SIMD4<Float>(0, 1, 0, 1)),
+            Vertex(position: SIMD3<Float>(0.5, -0.5, 0), color: SIMD4<Float>(0, 0, 1, 1))
+        ]
+        
+        if let mesh = renderer.createMesh(vertices: vertices) {
             let meshComponent = MeshComponent(mesh: mesh)
             engine.world.addComponent(meshComponent, to: entity)
         }
@@ -66,7 +74,9 @@ class GameViewController: UIViewController, MTKViewDelegate {
         lastRenderTime = currentTime
         
         engine.tick(deltaTime: deltaTime)
-        engine.render(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
+        
+        let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
+        engine.render(context: context)
         
         commandBuffer.present(drawable)
         commandBuffer.commit()

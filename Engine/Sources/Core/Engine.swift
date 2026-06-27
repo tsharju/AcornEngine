@@ -7,18 +7,17 @@ public class Engine {
     /// The ECS world.
     public let world: World
     
-    /// The forward renderer.
-    public let renderer: ForwardRenderer
+    /// The renderer.
+    public let renderer: any Renderer
     
     /// The system responsible for rendering meshes.
     public let renderSystem: RenderSystem
     
     /// Initializes a new engine.
-    /// - Parameter device: The Metal device.
-    /// - Throws: An error if the renderer cannot be initialized.
-    public init(device: any MTLDevice) throws {
+    /// - Parameter renderer: The renderer.
+    public init(renderer: any Renderer) {
         self.world = World()
-        self.renderer = try ForwardRenderer(device: device)
+        self.renderer = renderer
         self.renderSystem = RenderSystem(renderer: self.renderer)
     }
     
@@ -29,10 +28,8 @@ public class Engine {
     }
     
     /// Renders the current state of the world.
-    /// - Parameters:
-    ///   - renderPassDescriptor: The render pass descriptor.
-    ///   - commandBuffer: The command buffer.
-    public func render(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: any MTLCommandBuffer) {
-        renderSystem.render(world: world, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+    /// - Parameter context: The render context for the current frame.
+    public func render(context: RenderContext) {
+        renderSystem.render(world: world, context: context)
     }
 }

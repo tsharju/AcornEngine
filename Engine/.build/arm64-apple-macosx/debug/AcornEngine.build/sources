@@ -1,0 +1,13 @@
+/Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/MeshComponent.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/TransformComponent.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Engine.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Systems/RenderSystem.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Component.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Entity.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/System.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/World.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/ForwardRenderer.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Mesh.swift
+/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Vertex.swift
+/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/DerivedSources/resource_bundle_accessor.swift

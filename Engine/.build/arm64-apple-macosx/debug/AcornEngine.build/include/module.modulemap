@@ -1,0 +1,3 @@
+module AcornEngine {
+    header "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/include/AcornEngine-Swift.h"
+}

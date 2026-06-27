@@ -1,0 +1,899 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.xctest/Contents/MacOS/AcornEnginePackageTests",
+      "packagePath" : "/Users/tsharju/Code/AcornEngine/Engine",
+      "productName" : "AcornEnginePackageTests"
+    }
+  ],
+  "copyCommands" : {
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine_AcornEngine.bundle/Info.plist" : {
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Info.plist"
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine_AcornEngine.bundle/Info.plist"
+        }
+      ]
+    },
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine_AcornEngine.bundle/Shaders.metal.txt" : {
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Shaders.metal.txt"
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine_AcornEngine.bundle/Shaders.metal.txt"
+        }
+      ]
+    }
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.AcornEngine-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/sources",
+      "importPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/MeshComponent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/TransformComponent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Engine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Systems/RenderSystem.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Component.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Entity.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/System.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/World.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/ForwardRenderer.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Mesh.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Vertex.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/DerivedSources/resource_bundle_accessor.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<AcornEngine-arm64-apple-macosx-debug.module-resources>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "AcornEngine",
+      "moduleOutputPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEngine.swiftmodule",
+      "objects" : [
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/AcornEngine.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/MeshComponent.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/TransformComponent.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Engine.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/RenderSystem.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Component.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Entity.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/System.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/World.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/ForwardRenderer.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Mesh.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Vertex.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/resource_bundle_accessor.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+        "-module-cache-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/include/AcornEngine-Swift.h",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "engine"
+      ],
+      "outputFileMapPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/AcornEngine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/MeshComponent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/TransformComponent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Engine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/RenderSystem.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Component.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Entity.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/System.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/World.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/ForwardRenderer.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Mesh.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Vertex.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/resource_bundle_accessor.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEngine.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/MeshComponent.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/TransformComponent.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Engine.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Systems/RenderSystem.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Component.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Entity.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/System.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/World.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/ForwardRenderer.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Mesh.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Vertex.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/DerivedSources/resource_bundle_accessor.swift"
+      ],
+      "tempsPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.AcornEnginePackageTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/sources",
+      "importPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEngineTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "AcornEnginePackageTests",
+      "moduleOutputPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEnginePackageTests.swiftmodule",
+      "objects" : [
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/include/AcornEnginePackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "engine"
+      ],
+      "outputFileMapPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEnginePackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.AcornEngineTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/sources",
+      "importPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Tests/AcornEngineTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Tests/ECSTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Tests/RendererTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEngine.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "AcornEngineTests",
+      "moduleOutputPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEngineTests.swiftmodule",
+      "objects" : [
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/AcornEngineTests.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/ECSTests.swift.o",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/RendererTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "6",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "engine"
+      ],
+      "outputFileMapPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/AcornEngineTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/ECSTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/RendererTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules/AcornEngineTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/tsharju/Code/AcornEngine/Engine/Tests/AcornEngineTests.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Tests/ECSTests.swift",
+        "/Users/tsharju/Code/AcornEngine/Engine/Tests/RendererTests.swift"
+      ],
+      "tempsPath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "AcornEngine" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "AcornEngine",
+      "-package-name",
+      "engine",
+      "-c",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/MeshComponent.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/TransformComponent.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Engine.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Systems/RenderSystem.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Component.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Entity.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/System.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/World.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/ForwardRenderer.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Mesh.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Vertex.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/DerivedSources/resource_bundle_accessor.swift",
+      "-I",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+      "-module-cache-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/include/AcornEngine-Swift.h",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "engine",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "AcornEnginePackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "AcornEnginePackageTests",
+      "-package-name",
+      "engine",
+      "-c",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.derived/runner.swift",
+      "-I",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/include/AcornEnginePackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "engine",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "AcornEngineTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "AcornEngineTests",
+      "-package-name",
+      "engine",
+      "-c",
+      "/Users/tsharju/Code/AcornEngine/Engine/Tests/AcornEngineTests.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Tests/ECSTests.swift",
+      "/Users/tsharju/Code/AcornEngine/Engine/Tests/RendererTests.swift",
+      "-I",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "6",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "engine",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "AcornEngine" : [
+
+    ],
+    "AcornEnginePackageTests" : [
+      "AcornEngineTests",
+      "AcornEngine"
+    ],
+    "AcornEngineTests" : [
+      "AcornEngine"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/MeshComponent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Components/TransformComponent.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Engine.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Core/Systems/RenderSystem.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Component.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/Entity.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/System.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/ECS/World.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/ForwardRenderer.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Mesh.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Sources/Renderer/Vertex.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/DerivedSources/resource_bundle_accessor.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/sources"
+    },
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/sources"
+    },
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/AcornEngine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Component.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Engine.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Entity.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/ForwardRenderer.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Mesh.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/MeshComponent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/RenderSystem.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/System.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/TransformComponent.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/Vertex.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/World.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngine.build/resource_bundle_accessor.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/AcornEngineTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/ECSTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/RendererTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEnginePackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Tests/AcornEngineTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Tests/ECSTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/tsharju/Code/AcornEngine/Engine/Tests/RendererTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/AcornEngineTests.build/sources"
+    },
+    "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/tsharju/Code/AcornEngine/Engine/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

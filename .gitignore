@@ -1,9 +1,9 @@
 # Git Ignore file for Swift/macOS
 
 .DS_Store
-/.build/
-/Packages/
-/xcuserdata/
-/*.xcodeproj/
+.build/
+Packages/
+xcuserdata/
+*.xcodeproj/
 .swiftpm/
 

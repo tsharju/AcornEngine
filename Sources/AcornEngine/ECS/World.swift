@@ -1,0 +1,91 @@
+/// The central registry managing all entities, components, and systems.
+@MainActor
+public class World {
+    private var nextEntityID: UInt64 = 0
+    private var entities: Set<Entity> = []
+    
+    /// A dictionary mapping the component type's identifier to a dictionary of entity to component.
+    private var components: [ObjectIdentifier: [Entity: any Component]] = [:]
+    
+    /// The systems registered in the world.
+    private var systems: [any System] = []
+    
+    /// Creates a new, empty world.
+    public init() {}
+    
+    /// Creates a new entity and adds it to the world.
+    /// - Returns: The newly created entity.
+    public func createEntity() -> Entity {
+        let entity = Entity(id: nextEntityID)
+        nextEntityID += 1
+        entities.insert(entity)
+        return entity
+    }
+    
+    /// Destroys the given entity, removing it and all its components from the world.
+    /// - Parameter entity: The entity to destroy.
+    public func destroyEntity(_ entity: Entity) {
+        entities.remove(entity)
+        for typeId in components.keys {
+            components[typeId]?[entity] = nil
+        }
+    }
+    
+    /// Adds a component to the specified entity.
+    /// - Parameters:
+    ///   - component: The component to add.
+    ///   - entity: The entity to add the component to.
+    public func addComponent<T: Component>(_ component: T, to entity: Entity) {
+        guard entities.contains(entity) else { return }
+        let typeId = ObjectIdentifier(T.self)
+        if components[typeId] == nil {
+            components[typeId] = [:]
+        }
+        components[typeId]?[entity] = component
+    }
+    
+    /// Removes a component of the specified type from the entity.
+    /// - Parameters:
+    ///   - type: The type of the component to remove.
+    ///   - entity: The entity to remove the component from.
+    public func removeComponent<T: Component>(ofType type: T.Type, from entity: Entity) {
+        let typeId = ObjectIdentifier(T.self)
+        components[typeId]?[entity] = nil
+    }
+    
+    /// Retrieves a component of the specified type from the entity.
+    /// - Parameters:
+    ///   - type: The type of the component to retrieve.
+    ///   - entity: The entity to retrieve the component for.
+    /// - Returns: The component if it exists, otherwise `nil`.
+    public func component<T: Component>(ofType type: T.Type, for entity: Entity) -> T? {
+        let typeId = ObjectIdentifier(T.self)
+        return components[typeId]?[entity] as? T
+    }
+    
+    /// Retrieves all entities that have a specific component type, along with the component.
+    /// - Parameter type: The type of the component to query.
+    /// - Returns: An array of tuples containing the entity and its corresponding component.
+    public func entities<T: Component>(with type: T.Type) -> [(Entity, T)] {
+        let typeId = ObjectIdentifier(T.self)
+        guard let componentMap = components[typeId] else { return [] }
+        return componentMap.compactMap { (entity, component) in
+            guard let typedComponent = component as? T else { return nil }
+            return (entity, typedComponent)
+        }
+    }
+    
+    /// Registers a system with the world.
+    /// - Parameter system: The system to register.
+    public func registerSystem(_ system: any System) {
+        systems.append(system)
+    }
+    
+    /// Updates all registered systems.
+    /// - Parameter deltaTime: The time elapsed since the last update.
+    public func update(deltaTime: Double) {
+        for system in systems {
+            system.update(world: self, deltaTime: deltaTime)
+        }
+    }
+}

@@ -31,6 +31,9 @@ struct SDFUniforms {
     float4 outlineColor;
     float outlineWidth;
     float edgeWidth;
+    float2 padding;
+    float4 translation;
+    float4 scale;
 };
 
 struct VertexOutText {
@@ -40,9 +43,12 @@ struct VertexOutText {
 };
 
 vertex VertexOutText sdf_vertex(uint vertexID [[vertex_id]],
-                                constant VertexIn *vertices [[buffer(0)]]) {
+                                constant VertexIn *vertices [[buffer(0)]],
+                                constant SDFUniforms &uniforms [[buffer(1)]]) {
     VertexOutText out;
-    out.position = float4(vertices[vertexID].position, 1.0);
+    float3 pos = vertices[vertexID].position;
+    pos = pos * uniforms.scale.xyz + uniforms.translation.xyz;
+    out.position = float4(pos, 1.0);
     out.color = vertices[vertexID].color;
     out.texCoord = vertices[vertexID].texCoord;
     return out;

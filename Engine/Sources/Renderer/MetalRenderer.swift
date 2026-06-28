@@ -2,12 +2,15 @@ import Foundation
 import Metal
 
 /// A Metal-specific render context.
-public struct MetalRenderContext: RenderContext, @unchecked Sendable {
+public final class MetalRenderContext: RenderContext, @unchecked Sendable {
     /// The Metal render pass descriptor.
     public let renderPassDescriptor: MTLRenderPassDescriptor
     
     /// The Metal command buffer.
     public let commandBuffer: any MTLCommandBuffer
+    
+    private let lock = NSLock()
+    private var _encoder: (any MTLRenderCommandEncoder)?
     
     /// Initializes a new Metal render context.
     /// - Parameters:
@@ -16,6 +19,30 @@ public struct MetalRenderContext: RenderContext, @unchecked Sendable {
     public init(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: any MTLCommandBuffer) {
         self.renderPassDescriptor = renderPassDescriptor
         self.commandBuffer = commandBuffer
+    }
+    
+    /// Returns the active render command encoder, creating it if necessary.
+    public func getOrCreateEncoder() -> (any MTLRenderCommandEncoder)? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let encoder = _encoder {
+            return encoder
+        }
+        let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
+        _encoder = encoder
+        return encoder
+    }
+    
+    /// Ends encoding on the active render command encoder.
+    public func endEncoding() {
+        lock.lock()
+        defer { lock.unlock() }
+        _encoder?.endEncoding()
+        _encoder = nil
+    }
+    
+    deinit {
+        _encoder?.endEncoding()
     }
 }
 
@@ -104,15 +131,13 @@ public class MetalRenderer: Renderer {
             return
         }
         
-        guard let encoder = metalContext.commandBuffer.makeRenderCommandEncoder(descriptor: metalContext.renderPassDescriptor) else {
+        guard let encoder = metalContext.getOrCreateEncoder() else {
             return
         }
         
         encoder.setRenderPipelineState(pipelineState)
         encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
-        
-        encoder.endEncoding()
     }
     
     /// Renders text using signed distance field shaders.
@@ -128,7 +153,7 @@ public class MetalRenderer: Renderer {
             return
         }
         
-        guard let encoder = metalContext.commandBuffer.makeRenderCommandEncoder(descriptor: metalContext.renderPassDescriptor) else {
+        guard let encoder = metalContext.getOrCreateEncoder() else {
             return
         }
         
@@ -138,12 +163,11 @@ public class MetalRenderer: Renderer {
         // Bind the SDF Font texture atlas
         encoder.setFragmentTexture(metalTexture.texture, index: 0)
         
-        // Bind the SDF parameters in uniform buffer
+        // Bind the SDF parameters in uniform buffer to fragment and vertex shaders
         var mutUniforms = uniforms
         encoder.setFragmentBytes(&mutUniforms, length: MemoryLayout<SDFUniforms>.stride, index: 0)
+        encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<SDFUniforms>.stride, index: 1)
         
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
-        
-        encoder.endEncoding()
     }
 }

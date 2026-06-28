@@ -32,7 +32,7 @@ public struct RenderSystem {
         // Render text components
         let textEntities = world.entities(with: TextComponent.self)
         for (entity, textComponent) in textEntities {
-            guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
+            guard let transform = world.component(ofType: TransformComponent.self, for: entity) else {
                 continue
             }
             
@@ -51,11 +51,27 @@ public struct RenderSystem {
             }
             
             if let mesh = currentComponent.mesh {
+                // Scale text down to fit Normalized Device Coordinates (NDC)
+                let baseScale: Float = 0.003
+                let finalScale = SIMD4<Float>(
+                    transform.scale.x * baseScale,
+                    transform.scale.y * baseScale,
+                    transform.scale.z * baseScale,
+                    1.0
+                )
+                let finalTranslation = SIMD4<Float>(
+                    transform.position.x,
+                    transform.position.y,
+                    transform.position.z,
+                    0.0
+                )
                 let uniforms = SDFUniforms(
                     textColor: currentComponent.textColor,
                     outlineColor: currentComponent.outlineColor,
                     outlineWidth: currentComponent.outlineWidth,
-                    edgeWidth: currentComponent.edgeWidth
+                    edgeWidth: currentComponent.edgeWidth,
+                    translation: finalTranslation,
+                    scale: finalScale
                 )
                 renderer.renderText(
                     mesh: mesh,

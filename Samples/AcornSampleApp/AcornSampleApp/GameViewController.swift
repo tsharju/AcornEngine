@@ -103,6 +103,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
         engine.render(context: context)
+        context.endEncoding()
         
         commandBuffer.present(drawable)
         commandBuffer.commit()

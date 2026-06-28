@@ -31,18 +31,26 @@ public struct SDFUniforms: Sendable, Equatable {
     public var outlineWidth: Float
     /// The edge smoothing factor for anti-aliasing.
     public var edgeWidth: Float
+    /// The translation applied to the text vertices.
+    public var translation: SIMD4<Float>
+    /// The scale applied to the text vertices.
+    public var scale: SIMD4<Float>
     
     /// Initializes a new set of SDF rendering uniforms.
     public init(
         textColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
         outlineColor: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
         outlineWidth: Float = 0.0,
-        edgeWidth: Float = 0.05
+        edgeWidth: Float = 0.05,
+        translation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 0),
+        scale: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)
     ) {
         self.textColor = textColor
         self.outlineColor = outlineColor
         self.outlineWidth = outlineWidth
         self.edgeWidth = edgeWidth
+        self.translation = translation
+        self.scale = scale
     }
 }
 

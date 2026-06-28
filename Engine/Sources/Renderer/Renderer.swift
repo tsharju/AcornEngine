@@ -21,6 +21,17 @@ public protocol Mesh: Sendable {
 /// Opaque protocol representing the context for the current frame (e.g., command buffer, render target).
 public protocol RenderContext: Sendable {}
 
+/// Global uniforms passed to the renderer.
+public struct GlobalUniforms: Sendable, Equatable {
+    /// The combined model-view-projection matrix.
+    public var modelViewProjectionMatrix: simd_float4x4
+    
+    /// Initializes a new set of global uniforms.
+    public init(modelViewProjectionMatrix: simd_float4x4 = .identity) {
+        self.modelViewProjectionMatrix = modelViewProjectionMatrix
+    }
+}
+
 /// Uniforms used by the SDF text shader.
 public struct SDFUniforms: Sendable, Equatable {
     /// The text body color.
@@ -31,10 +42,10 @@ public struct SDFUniforms: Sendable, Equatable {
     public var outlineWidth: Float
     /// The edge smoothing factor for anti-aliasing.
     public var edgeWidth: Float
-    /// The translation applied to the text vertices.
-    public var translation: SIMD4<Float>
-    /// The scale applied to the text vertices.
-    public var scale: SIMD4<Float>
+    /// Padding.
+    public var padding: SIMD2<Float>
+    /// The combined model-view-projection matrix.
+    public var modelViewProjectionMatrix: simd_float4x4
     
     /// Initializes a new set of SDF rendering uniforms.
     public init(
@@ -42,15 +53,14 @@ public struct SDFUniforms: Sendable, Equatable {
         outlineColor: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
         outlineWidth: Float = 0.0,
         edgeWidth: Float = 0.05,
-        translation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 0),
-        scale: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)
+        modelViewProjectionMatrix: simd_float4x4 = .identity
     ) {
         self.textColor = textColor
         self.outlineColor = outlineColor
         self.outlineWidth = outlineWidth
         self.edgeWidth = edgeWidth
-        self.translation = translation
-        self.scale = scale
+        self.padding = .zero
+        self.modelViewProjectionMatrix = modelViewProjectionMatrix
     }
 }
 
@@ -64,8 +74,9 @@ public protocol Renderer: Sendable {
     /// Renders a mesh using the given frame context.
     /// - Parameters:
     ///   - mesh: The mesh to render.
+    ///   - uniforms: The global uniforms (e.g. view-projection).
     ///   - context: The render context for the current frame.
-    func render(mesh: Mesh, context: RenderContext)
+    func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext)
     
     /// Renders text using signed distance field shaders.
     /// - Parameters:

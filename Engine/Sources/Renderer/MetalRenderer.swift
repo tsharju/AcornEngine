@@ -125,7 +125,7 @@ public class MetalRenderer: Renderer {
     }
     
     /// Renders a mesh using the given Metal frame context.
-    public nonisolated func render(mesh: Mesh, context: RenderContext) {
+    public nonisolated func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {
         guard let metalContext = context as? MetalRenderContext,
               let metalMesh = mesh as? MetalMesh else {
             return
@@ -137,6 +137,10 @@ public class MetalRenderer: Renderer {
         
         encoder.setRenderPipelineState(pipelineState)
         encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        
+        var mutUniforms = uniforms
+        encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<GlobalUniforms>.stride, index: 1)
+        
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
     }
     

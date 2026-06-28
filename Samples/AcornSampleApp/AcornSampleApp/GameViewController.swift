@@ -33,8 +33,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
         do {
             self.renderer = try MetalRenderer(device: defaultDevice)
             self.engine = Engine(renderer: self.renderer)
+            self.engine.world.registerSystem(CameraSystem())
             mtkView.delegate = self
             setupScene()
+            self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
         } catch {
             print("Failed to initialize Renderer: \(error)")
         }
@@ -81,9 +83,29 @@ class GameViewController: UIViewController, MTKViewDelegate {
         } catch {
             print("Failed to initialize SDF FontAtlas: \(error)")
         }
+        
+        // Setup Camera Entity
+        let cameraEntity = engine.world.createEntity()
+        let cameraTransform = TransformComponent(position: SIMD3<Float>(0, 0, -5))
+        engine.world.addComponent(cameraTransform, to: cameraEntity)
+        let cameraComponent = CameraComponent(projectionType: .orthographic, orthographicSize: 2.0, nearZ: 0.1, farZ: 100.0, aspectRatio: 1.0)
+        // engine.world.addComponent(cameraComponent, to: cameraEntity)
+        
+        // Let camera track the triangle entity (with smoothing)
+        let trackingComponent = CameraTrackingComponent(target: entity, offset: SIMD3<Float>(0, 0, -5), smoothing: 0.05)
+        engine.world.addComponent(trackingComponent, to: cameraEntity)
     }
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        guard let engine = engine else { return }
+        let aspect = Float(max(size.width, 1.0) / max(size.height, 1.0))
+        
+        if let cameraTuple = engine.world.entities(with: CameraComponent.self).first {
+            let entityId = cameraTuple.0
+            var camera = cameraTuple.1
+            camera.aspectRatio = aspect
+            engine.world.addComponent(camera, to: entityId)
+        }
     }
     
     func draw(in view: MTKView) {
@@ -102,6 +124,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
         engine.tick(deltaTime: deltaTime)
         
         let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
+        
+        // Force encoder creation so clear color is always applied
+        _ = context.getOrCreateEncoder()
+        
         engine.render(context: context)
         context.endEncoding()
         

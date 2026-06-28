@@ -1,5 +1,6 @@
 import Foundation
 import Metal
+import simd
 
 /// A system that queries the world for renderable entities and submits them to the renderer.
 @MainActor
@@ -18,14 +19,24 @@ public struct RenderSystem {
     ///   - world: The ECS world.
     ///   - context: The render context for the current frame.
     public func render(world: World, context: RenderContext) {
+        // Find active camera
+        var viewProjectionMatrix = simd_float4x4.identity
+        if let cameraEntity = world.entities(with: CameraComponent.self).first {
+            let camera = cameraEntity.1
+            if let transform = world.component(ofType: TransformComponent.self, for: cameraEntity.0) {
+                let viewMatrix = transform.matrix.inverse
+                let projectionMatrix = camera.projectionMatrix()
+                viewProjectionMatrix = matrix_multiply(projectionMatrix, viewMatrix)
+            }
+        }
+        
         // Render mesh components
         let entities = world.entities(with: MeshComponent.self)
         for (entity, meshComponent) in entities {
-            // Query for TransformComponent to fulfill the architecture plan,
-            // even though the current ForwardRenderer doesn't use it yet.
-            let transform = world.component(ofType: TransformComponent.self, for: entity)
-            if transform != nil {
-                renderer.render(mesh: meshComponent.mesh, context: context)
+            if let transform = world.component(ofType: TransformComponent.self, for: entity) {
+                let mvp = matrix_multiply(viewProjectionMatrix, transform.matrix)
+                let uniforms = GlobalUniforms(modelViewProjectionMatrix: mvp)
+                renderer.render(mesh: meshComponent.mesh, uniforms: uniforms, context: context)
             }
         }
         
@@ -51,27 +62,24 @@ public struct RenderSystem {
             }
             
             if let mesh = currentComponent.mesh {
-                // Scale text down to fit Normalized Device Coordinates (NDC)
+                // Scale text down to a sensible size
                 let baseScale: Float = 0.003
-                let finalScale = SIMD4<Float>(
-                    transform.scale.x * baseScale,
-                    transform.scale.y * baseScale,
-                    transform.scale.z * baseScale,
-                    1.0
+                let finalScale = transform.scale * SIMD3<Float>(repeating: baseScale)
+                
+                let modelMatrix = simd_float4x4(
+                    position: transform.position,
+                    rotation: transform.rotation,
+                    scale: finalScale
                 )
-                let finalTranslation = SIMD4<Float>(
-                    transform.position.x,
-                    transform.position.y,
-                    transform.position.z,
-                    0.0
-                )
+                
+                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
+                
                 let uniforms = SDFUniforms(
                     textColor: currentComponent.textColor,
                     outlineColor: currentComponent.outlineColor,
                     outlineWidth: currentComponent.outlineWidth,
                     edgeWidth: currentComponent.edgeWidth,
-                    translation: finalTranslation,
-                    scale: finalScale
+                    modelViewProjectionMatrix: mvp
                 )
                 renderer.renderText(
                     mesh: mesh,

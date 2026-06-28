@@ -22,4 +22,9 @@ public struct TransformComponent: Component {
         self.rotation = rotation
         self.scale = scale
     }
+    
+    /// The 4x4 transformation matrix derived from position, rotation, and scale.
+    public var matrix: simd_float4x4 {
+        simd_float4x4(position: position, rotation: rotation, scale: scale)
+    }
 }

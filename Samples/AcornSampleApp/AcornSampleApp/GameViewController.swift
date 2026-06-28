@@ -22,6 +22,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         }
         
         mtkView.device = defaultDevice
+        mtkView.colorPixelFormat = .bgra8Unorm_srgb
         mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.2, blue: 0.3, alpha: 1.0)
         
         guard let queue = defaultDevice.makeCommandQueue() else {

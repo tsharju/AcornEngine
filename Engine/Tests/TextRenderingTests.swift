@@ -101,7 +101,7 @@ struct TextRenderingTests {
         let commandBuffer = try #require(commandQueue.makeCommandBuffer())
         let rpDescriptor = MTLRenderPassDescriptor()
         
-        let texDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 64, height: 64, mipmapped: false)
+        let texDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm_srgb, width: 64, height: 64, mipmapped: false)
         texDesc.usage = [.renderTarget, .shaderRead]
         let dummyTarget = try #require(device.makeTexture(descriptor: texDesc))
         rpDescriptor.colorAttachments[0].texture = dummyTarget

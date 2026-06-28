@@ -68,9 +68,9 @@ public class MetalRenderer: Renderer {
     /// Initializes a new Metal renderer.
     /// - Parameters:
     ///   - device: The Metal device to use.
-    ///   - pixelFormat: The pixel format of the render target. Defaults to `.bgra8Unorm`.
+    ///   - pixelFormat: The pixel format of the render target. Defaults to `.bgra8Unorm_srgb`.
     /// - Throws: `RendererError` if initialization fails.
-    public init(device: any MTLDevice, pixelFormat: MTLPixelFormat = .bgra8Unorm) throws {
+    public init(device: any MTLDevice, pixelFormat: MTLPixelFormat = .bgra8Unorm_srgb) throws {
         self.device = device
         
         guard let queue = device.makeCommandQueue() else {

@@ -41,6 +41,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
     }
     
     private func setupScene() {
+        // Setup Triangle Entity
         let entity = engine.world.createEntity()
         let transform = TransformComponent(position: .zero)
         engine.world.addComponent(transform, to: entity)
@@ -54,6 +55,31 @@ class GameViewController: UIViewController, MTKViewDelegate {
         if let mesh = renderer.createMesh(vertices: vertices) {
             let meshComponent = MeshComponent(mesh: mesh)
             engine.world.addComponent(meshComponent, to: entity)
+        }
+        
+        // Setup SDF Text Entity
+        do {
+            let fontAtlas = try SDFFontAtlasGenerator.generate(
+                fontName: "Helvetica-Bold",
+                fontSize: 48,
+                device: renderer.device
+            )
+            
+            let textEntity = engine.world.createEntity()
+            let textTransform = TransformComponent(position: SIMD3<Float>(-0.5, 0, 0))
+            engine.world.addComponent(textTransform, to: textEntity)
+            
+            let textComponent = TextComponent(
+                text: "Acorn SDF Text!",
+                fontAtlas: fontAtlas,
+                textColor: SIMD4<Float>(1.0, 0.8, 0.2, 1.0),     // Gold body
+                outlineColor: SIMD4<Float>(0.1, 0.1, 0.3, 1.0),  // Dark blue outline
+                outlineWidth: 0.12,                              // outline thickness
+                edgeWidth: 0.03                                  // smooth edge
+            )
+            engine.world.addComponent(textComponent, to: textEntity)
+        } catch {
+            print("Failed to initialize SDF FontAtlas: \(error)")
         }
     }
     

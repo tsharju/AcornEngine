@@ -28,8 +28,12 @@ public class MetalRenderer: Renderer {
     /// The command queue for submitting rendering work.
     private let commandQueue: any MTLCommandQueue
     
+    
     /// The render pipeline state.
     private let pipelineState: any MTLRenderPipelineState
+    
+    /// The SDF text render pipeline state.
+    private let sdfTextPipelineState: any MTLRenderPipelineState
     
     /// Initializes a new Metal renderer.
     /// - Parameters:
@@ -62,6 +66,30 @@ public class MetalRenderer: Renderer {
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         
         self.pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        
+        // Initialize the SDF Text Pipeline
+        guard let sdfVertexFunction = library.makeFunction(name: "sdf_vertex"),
+              let sdfFragmentFunction = library.makeFunction(name: "sdf_fragment") else {
+            throw RendererError.functionNotFound
+        }
+        
+        let sdfPipelineDescriptor = MTLRenderPipelineDescriptor()
+        sdfPipelineDescriptor.label = "SDF Text Pipeline"
+        sdfPipelineDescriptor.vertexFunction = sdfVertexFunction
+        sdfPipelineDescriptor.fragmentFunction = sdfFragmentFunction
+        sdfPipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        
+        // Enable alpha blending for text rendering
+        let colorAttachment = sdfPipelineDescriptor.colorAttachments[0]
+        colorAttachment?.isBlendingEnabled = true
+        colorAttachment?.sourceRGBBlendFactor = .sourceAlpha
+        colorAttachment?.destinationRGBBlendFactor = .oneMinusSourceAlpha
+        colorAttachment?.rgbBlendOperation = .add
+        colorAttachment?.sourceAlphaBlendFactor = .sourceAlpha
+        colorAttachment?.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        colorAttachment?.alphaBlendOperation = .add
+        
+        self.sdfTextPipelineState = try device.makeRenderPipelineState(descriptor: sdfPipelineDescriptor)
     }
     
     /// Creates a Metal mesh from vertices.
@@ -82,6 +110,38 @@ public class MetalRenderer: Renderer {
         
         encoder.setRenderPipelineState(pipelineState)
         encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
+        
+        encoder.endEncoding()
+    }
+    
+    /// Renders text using signed distance field shaders.
+    public nonisolated func renderText(
+        mesh: Mesh,
+        texture: any Texture,
+        uniforms: SDFUniforms,
+        context: RenderContext
+    ) {
+        guard let metalContext = context as? MetalRenderContext,
+              let metalMesh = mesh as? MetalMesh,
+              let metalTexture = texture as? MetalTexture else {
+            return
+        }
+        
+        guard let encoder = metalContext.commandBuffer.makeRenderCommandEncoder(descriptor: metalContext.renderPassDescriptor) else {
+            return
+        }
+        
+        encoder.setRenderPipelineState(sdfTextPipelineState)
+        encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        
+        // Bind the SDF Font texture atlas
+        encoder.setFragmentTexture(metalTexture.texture, index: 0)
+        
+        // Bind the SDF parameters in uniform buffer
+        var mutUniforms = uniforms
+        encoder.setFragmentBytes(&mutUniforms, length: MemoryLayout<SDFUniforms>.stride, index: 0)
+        
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
         
         encoder.endEncoding()

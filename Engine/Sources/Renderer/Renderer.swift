@@ -32,6 +32,20 @@ public struct GlobalUniforms: Sendable, Equatable {
     }
 }
 
+/// Uniforms used by the sprite shader.
+public struct SpriteUniforms: Sendable, Equatable {
+    /// The combined model-view-projection matrix.
+    public var modelViewProjectionMatrix: simd_float4x4
+    /// A global color tint for the sprite.
+    public var colorTint: SIMD4<Float>
+    
+    /// Initializes a new set of sprite uniforms.
+    public init(modelViewProjectionMatrix: simd_float4x4 = .identity, colorTint: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)) {
+        self.modelViewProjectionMatrix = modelViewProjectionMatrix
+        self.colorTint = colorTint
+    }
+}
+
 /// Uniforms used by the SDF text shader.
 public struct SDFUniforms: Sendable, Equatable {
     /// The text body color.
@@ -88,6 +102,19 @@ public protocol Renderer: Sendable {
         mesh: Mesh,
         texture: any Texture,
         uniforms: SDFUniforms,
+        context: RenderContext
+    )
+    
+    /// Renders a sprite or tile map using a sprite sheet texture.
+    /// - Parameters:
+    ///   - mesh: The mesh containing quads.
+    ///   - texture: The texture containing the sprite sheet.
+    ///   - uniforms: The sprite parameters.
+    ///   - context: The render context.
+    func renderSprite(
+        mesh: Mesh,
+        texture: any Texture,
+        uniforms: SpriteUniforms,
         context: RenderContext
     )
 }

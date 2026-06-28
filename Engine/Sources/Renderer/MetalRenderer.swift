@@ -62,6 +62,9 @@ public class MetalRenderer: Renderer {
     /// The SDF text render pipeline state.
     private let sdfTextPipelineState: any MTLRenderPipelineState
     
+    /// The sprite render pipeline state.
+    private let spritePipelineState: any MTLRenderPipelineState
+    
     /// Initializes a new Metal renderer.
     /// - Parameters:
     ///   - device: The Metal device to use.
@@ -117,6 +120,30 @@ public class MetalRenderer: Renderer {
         colorAttachment?.alphaBlendOperation = .add
         
         self.sdfTextPipelineState = try device.makeRenderPipelineState(descriptor: sdfPipelineDescriptor)
+        
+        // Initialize the Sprite Pipeline
+        guard let spriteVertexFunction = library.makeFunction(name: "sprite_vertex"),
+              let spriteFragmentFunction = library.makeFunction(name: "sprite_fragment") else {
+            throw RendererError.functionNotFound
+        }
+        
+        let spritePipelineDescriptor = MTLRenderPipelineDescriptor()
+        spritePipelineDescriptor.label = "Sprite Pipeline"
+        spritePipelineDescriptor.vertexFunction = spriteVertexFunction
+        spritePipelineDescriptor.fragmentFunction = spriteFragmentFunction
+        spritePipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        
+        // Enable alpha blending for sprite rendering
+        let spriteColorAttachment = spritePipelineDescriptor.colorAttachments[0]
+        spriteColorAttachment?.isBlendingEnabled = true
+        spriteColorAttachment?.sourceRGBBlendFactor = .sourceAlpha
+        spriteColorAttachment?.destinationRGBBlendFactor = .oneMinusSourceAlpha
+        spriteColorAttachment?.rgbBlendOperation = .add
+        spriteColorAttachment?.sourceAlphaBlendFactor = .sourceAlpha
+        spriteColorAttachment?.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        spriteColorAttachment?.alphaBlendOperation = .add
+        
+        self.spritePipelineState = try device.makeRenderPipelineState(descriptor: spritePipelineDescriptor)
     }
     
     /// Creates a Metal mesh from vertices.
@@ -171,6 +198,36 @@ public class MetalRenderer: Renderer {
         var mutUniforms = uniforms
         encoder.setFragmentBytes(&mutUniforms, length: MemoryLayout<SDFUniforms>.stride, index: 0)
         encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<SDFUniforms>.stride, index: 1)
+        
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
+    }
+    
+    /// Renders a sprite or tile map using a sprite sheet texture.
+    public nonisolated func renderSprite(
+        mesh: Mesh,
+        texture: any Texture,
+        uniforms: SpriteUniforms,
+        context: RenderContext
+    ) {
+        guard let metalContext = context as? MetalRenderContext,
+              let metalMesh = mesh as? MetalMesh,
+              let metalTexture = texture as? MetalTexture else {
+            return
+        }
+        
+        guard let encoder = metalContext.getOrCreateEncoder() else {
+            return
+        }
+        
+        encoder.setRenderPipelineState(spritePipelineState)
+        encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        
+        // Bind the sprite texture
+        encoder.setFragmentTexture(metalTexture.texture, index: 0)
+        
+        // Bind uniforms
+        var mutUniforms = uniforms
+        encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<SpriteUniforms>.stride, index: 1)
         
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
     }

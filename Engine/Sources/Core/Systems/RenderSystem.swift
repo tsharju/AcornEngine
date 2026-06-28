@@ -89,5 +89,71 @@ public struct RenderSystem {
                 )
             }
         }
+        
+        // Render sprite components
+        let spriteEntities = world.entities(with: SpriteComponent.self)
+        for (entity, spriteComponent) in spriteEntities {
+            guard let transform = world.component(ofType: TransformComponent.self, for: entity) else {
+                continue
+            }
+            
+            var currentComponent = spriteComponent
+            if currentComponent.mesh == nil || currentComponent.isDirty {
+                let vertices = SpriteMeshGenerator.generateVertices(
+                    for: currentComponent.frameName,
+                    in: currentComponent.spriteSheet,
+                    color: currentComponent.color
+                )
+                if let newMesh = renderer.createMesh(vertices: vertices) {
+                    currentComponent.mesh = newMesh
+                    currentComponent.isDirty = false
+                    world.addComponent(currentComponent, to: entity)
+                }
+            }
+            
+            if let mesh = currentComponent.mesh {
+                let modelMatrix = transform.matrix
+                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
+                let uniforms = SpriteUniforms(modelViewProjectionMatrix: mvp, colorTint: SIMD4<Float>(1, 1, 1, 1))
+                
+                renderer.renderSprite(
+                    mesh: mesh,
+                    texture: currentComponent.spriteSheet.texture,
+                    uniforms: uniforms,
+                    context: context
+                )
+            }
+        }
+        
+        // Render tile map components
+        let tileMapEntities = world.entities(with: TileMapComponent.self)
+        for (entity, tileMapComponent) in tileMapEntities {
+            guard let transform = world.component(ofType: TransformComponent.self, for: entity) else {
+                continue
+            }
+            
+            var currentComponent = tileMapComponent
+            if currentComponent.mesh == nil || currentComponent.isDirty {
+                let vertices = SpriteMeshGenerator.generateVertices(for: currentComponent)
+                if let newMesh = renderer.createMesh(vertices: vertices) {
+                    currentComponent.mesh = newMesh
+                    currentComponent.isDirty = false
+                    world.addComponent(currentComponent, to: entity)
+                }
+            }
+            
+            if let mesh = currentComponent.mesh {
+                let modelMatrix = transform.matrix
+                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
+                let uniforms = SpriteUniforms(modelViewProjectionMatrix: mvp, colorTint: SIMD4<Float>(1, 1, 1, 1))
+                
+                renderer.renderSprite(
+                    mesh: mesh,
+                    texture: currentComponent.spriteSheet.texture,
+                    uniforms: uniforms,
+                    context: context
+                )
+            }
+        }
     }
 }

@@ -89,11 +89,57 @@ class GameViewController: UIViewController, MTKViewDelegate {
         let cameraTransform = TransformComponent(position: SIMD3<Float>(0, 0, -5))
         engine.world.addComponent(cameraTransform, to: cameraEntity)
         let cameraComponent = CameraComponent(projectionType: .orthographic, orthographicSize: 2.0, nearZ: 0.1, farZ: 100.0, aspectRatio: 1.0)
-        // engine.world.addComponent(cameraComponent, to: cameraEntity)
+        engine.world.addComponent(cameraComponent, to: cameraEntity)
         
         // Let camera track the triangle entity (with smoothing)
         let trackingComponent = CameraTrackingComponent(target: entity, offset: SIMD3<Float>(0, 0, -5), smoothing: 0.05)
         engine.world.addComponent(trackingComponent, to: cameraEntity)
+        
+        setupTileMap()
+    }
+    
+    private func setupTileMap() {
+        // We load the generated JSON and PNG from the app's Documents directory
+        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let pngUrl = docsDir.appendingPathComponent("tileset.png")
+        let jsonUrl = docsDir.appendingPathComponent("tileset.json")
+        
+        Task {
+            do {
+                let textureLoader = TextureLoader(device: self.renderer.device)
+                let texture = try await textureLoader.loadTexture(from: pngUrl)
+                let jsonData = try Data(contentsOf: jsonUrl)
+                let decoder = JSONDecoder()
+                let metadata = try decoder.decode(SpriteSheetMetadata.self, from: jsonData)
+                let spriteSheet = SpriteSheet(texture: texture, metadata: metadata)
+                
+                let tiles = [
+                    "red_tile", "green_tile", "red_tile", "green_tile",
+                    "blue_tile", "yellow_tile", "blue_tile", "yellow_tile",
+                    "red_tile", "green_tile", "red_tile", "green_tile",
+                    "blue_tile", "yellow_tile", "blue_tile", "yellow_tile"
+                ]
+                
+                let tileMap = TileMapComponent(
+                    spriteSheet: spriteSheet,
+                    columns: 4,
+                    rows: 4,
+                    tileSize: SIMD2<Float>(0.5, 0.5),
+                    tiles: tiles
+                )
+                
+                // Add the tile map to an entity
+                await MainActor.run {
+                    let mapEntity = self.engine.world.createEntity()
+                    // Place it slightly behind and to the left
+                    let transform = TransformComponent(position: SIMD3<Float>(-1.0, 0.0, -1.0))
+                    self.engine.world.addComponent(transform, to: mapEntity)
+                    self.engine.world.addComponent(tileMap, to: mapEntity)
+                }
+            } catch {
+                print("Failed to load tilemap: \(error)")
+            }
+        }
     }
     
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {

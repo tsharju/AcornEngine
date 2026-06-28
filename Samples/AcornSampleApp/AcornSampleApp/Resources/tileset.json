@@ -1,0 +1,40 @@
+{
+  "frames": {
+    "red_tile": {
+      "frame": {"x": 0, "y": 0, "w": 32, "h": 32},
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 32, "h": 32},
+      "sourceSize": {"w": 32, "h": 32}
+    },
+    "green_tile": {
+      "frame": {"x": 32, "y": 0, "w": 32, "h": 32},
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 32, "h": 32},
+      "sourceSize": {"w": 32, "h": 32}
+    },
+    "blue_tile": {
+      "frame": {"x": 0, "y": 32, "w": 32, "h": 32},
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 32, "h": 32},
+      "sourceSize": {"w": 32, "h": 32}
+    },
+    "yellow_tile": {
+      "frame": {"x": 32, "y": 32, "w": 32, "h": 32},
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {"x": 0, "y": 0, "w": 32, "h": 32},
+      "sourceSize": {"w": 32, "h": 32}
+    }
+  },
+  "meta": {
+    "app": "Test",
+    "version": "1.0",
+    "image": "tileset.png",
+    "format": "RGBA8888",
+    "size": {"w": 64, "h": 64},
+    "scale": "1"
+  }
+}

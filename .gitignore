@@ -7,3 +7,4 @@ xcuserdata/
 *.xcodeproj/
 .swiftpm/
 
+build_output/

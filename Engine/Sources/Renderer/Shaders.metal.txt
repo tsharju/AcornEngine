@@ -81,3 +81,38 @@ fragment float4 sdf_fragment(VertexOutText in [[stage_in]],
     
     return finalColor;
 }
+
+// --- Sprite Rendering Shaders ---
+
+struct SpriteUniforms {
+    float4x4 modelViewProjectionMatrix;
+    float4 colorTint;
+};
+
+struct VertexOutSprite {
+    float4 position [[position]];
+    float4 color;
+    float2 texCoord;
+};
+
+vertex VertexOutSprite sprite_vertex(uint vertexID [[vertex_id]],
+                                     constant VertexIn *vertices [[buffer(0)]],
+                                     constant SpriteUniforms &uniforms [[buffer(1)]]) {
+    VertexOutSprite out;
+    float4 pos = float4(vertices[vertexID].position, 1.0);
+    out.position = uniforms.modelViewProjectionMatrix * pos;
+    // Multiply vertex color by global color tint
+    out.color = vertices[vertexID].color * uniforms.colorTint;
+    out.texCoord = vertices[vertexID].texCoord;
+    return out;
+}
+
+fragment float4 sprite_fragment(VertexOutSprite in [[stage_in]],
+                                texture2d<float> spriteTexture [[texture(0)]]) {
+    constexpr sampler linearSampler(coord::normalized,
+                                    address::clamp_to_edge,
+                                    filter::linear);
+                                    
+    float4 texColor = spriteTexture.sample(linearSampler, in.texCoord);
+    return texColor * in.color;
+}

@@ -101,5 +101,25 @@ extension simd_float4x4 {
             SIMD4<Float>(0.0, 0.0, 1.0 / (farZ - nearZ), 0.0), // Metal uses 0..1 for Z
             SIMD4<Float>(-ral / rsl, -tab / tsb, -nearZ / (farZ - nearZ), 1.0)
         )
-    }
+     }
+     
+     /// Creates a perspective projection matrix.
+     /// Metal's NDC z-range is [0, 1].
+     /// - Parameters:
+     ///   - fovY: The vertical field of view in radians.
+     ///   - aspect: The aspect ratio (width / height).
+     ///   - nearZ: The near clipping plane.
+     ///   - farZ: The far clipping plane.
+     public init(perspectiveFovY fovY: Float, aspect: Float, nearZ: Float, farZ: Float) {
+         let ys = 1.0 / tan(fovY * 0.5)
+         let xs = ys / aspect
+         let zs = farZ / (farZ - nearZ)
+         
+         self.init(
+             SIMD4<Float>(xs, 0.0, 0.0, 0.0),
+             SIMD4<Float>(0.0, ys, 0.0, 0.0),
+             SIMD4<Float>(0.0, 0.0, zs, 1.0),
+             SIMD4<Float>(0.0, 0.0, -nearZ * zs, 0.0)
+         )
+     }
 }

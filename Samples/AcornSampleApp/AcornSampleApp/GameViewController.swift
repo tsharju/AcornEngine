@@ -86,14 +86,30 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         // Setup Camera Entity
         let cameraEntity = engine.world.createEntity()
-        let cameraTransform = TransformComponent(position: SIMD3<Float>(0, 0, -5))
+        let cameraTransform = TransformComponent(position: SIMD3<Float>(0, 0.8, -4.5))
         engine.world.addComponent(cameraTransform, to: cameraEntity)
-        let cameraComponent = CameraComponent(projectionType: .orthographic, orthographicSize: 2.0, nearZ: 0.1, farZ: 100.0, aspectRatio: 1.0)
+        
+        let cameraComponent = CameraComponent(
+            projectionType: .perspective,
+            fovY: Float.pi / 3.0, // 60 degrees vertical FOV
+            nearZ: 0.1,
+            farZ: 100.0,
+            aspectRatio: 1.0
+        )
         engine.world.addComponent(cameraComponent, to: cameraEntity)
         
-        // Let camera track the triangle entity (with smoothing)
-        let trackingComponent = CameraTrackingComponent(target: entity, offset: SIMD3<Float>(0, 0, -5), smoothing: 0.05)
-        engine.world.addComponent(trackingComponent, to: cameraEntity)
+        // Use a floating orbit component to orbit the triangle entity
+        let orbitComponent = CameraOrbitComponent(
+            target: entity,
+            radius: 4.5,
+            speed: 0.3,          // Elegant slow rotation (0.3 rad/s)
+            baseHeight: 0.8,      // Look from slightly above (0.8 units)
+            bobbingAmplitude: 0.25, // Up/down floating (0.25 units)
+            bobbingSpeed: 1.0,    // 1.0 rad/s vertical floating speed
+            swayAmplitude: 0.15,   // Left/right swaying (0.15 units)
+            swaySpeed: 0.8        // 0.8 rad/s horizontal sway speed
+        )
+        engine.world.addComponent(orbitComponent, to: cameraEntity)
         
         setupTileMap()
     }

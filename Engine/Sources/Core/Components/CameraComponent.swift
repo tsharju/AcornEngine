@@ -6,8 +6,8 @@ public enum ProjectionType: Sendable {
     /// Orthographic projection, preserving parallel lines and ignoring depth perspective.
     case orthographic
     
-    // Future expansion:
-    // case perspective
+    /// Perspective projection, simulating human vision with depth cues.
+    case perspective
 }
 
 /// A component that defines camera projection parameters.
@@ -17,6 +17,9 @@ public struct CameraComponent: Component {
     
     /// The vertical half-size of the orthographic viewing volume.
     public var orthographicSize: Float
+    
+    /// The field of view in radians (for perspective projection).
+    public var fovY: Float
     
     /// The near clipping plane distance.
     public var nearZ: Float
@@ -32,18 +35,21 @@ public struct CameraComponent: Component {
     /// - Parameters:
     ///   - projectionType: The projection type. Defaults to `.orthographic`.
     ///   - orthographicSize: The vertical half-size. Defaults to 5.0.
+    ///   - fovY: The field of view in radians for perspective. Defaults to 60 degrees.
     ///   - nearZ: The near clipping plane. Defaults to 0.1.
     ///   - farZ: The far clipping plane. Defaults to 1000.0.
     ///   - aspectRatio: The aspect ratio. Defaults to 1.0.
     public init(
         projectionType: ProjectionType = .orthographic,
         orthographicSize: Float = 5.0,
+        fovY: Float = Float.pi / 3.0,
         nearZ: Float = 0.1,
         farZ: Float = 1000.0,
         aspectRatio: Float = 1.0
     ) {
         self.projectionType = projectionType
         self.orthographicSize = orthographicSize
+        self.fovY = fovY
         self.nearZ = nearZ
         self.farZ = farZ
         self.aspectRatio = aspectRatio
@@ -60,6 +66,13 @@ public struct CameraComponent: Component {
                 right: right,
                 bottom: -top,
                 top: top,
+                nearZ: nearZ,
+                farZ: farZ
+            )
+        case .perspective:
+            return simd_float4x4(
+                perspectiveFovY: fovY,
+                aspect: aspectRatio,
                 nearZ: nearZ,
                 farZ: farZ
             )

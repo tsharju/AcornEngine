@@ -2,8 +2,9 @@
 using namespace metal;
 
 struct VertexIn {
-    float3 position [[attribute(0)]];
-    float4 color [[attribute(1)]];
+    float3 position;
+    float4 color;
+    float2 texCoord;
 };
 
 struct VertexOut {
@@ -21,4 +22,52 @@ vertex VertexOut vertex_main(uint vertexID [[vertex_id]],
 
 fragment float4 fragment_main(VertexOut in [[stage_in]]) {
     return in.color;
+}
+
+// --- SDF Text Rendering Shaders ---
+
+struct SDFUniforms {
+    float4 textColor;
+    float4 outlineColor;
+    float outlineWidth;
+    float edgeWidth;
+};
+
+struct VertexOutText {
+    float4 position [[position]];
+    float4 color;
+    float2 texCoord;
+};
+
+vertex VertexOutText sdf_vertex(uint vertexID [[vertex_id]],
+                                constant VertexIn *vertices [[buffer(0)]]) {
+    VertexOutText out;
+    out.position = float4(vertices[vertexID].position, 1.0);
+    out.color = vertices[vertexID].color;
+    out.texCoord = vertices[vertexID].texCoord;
+    return out;
+}
+
+fragment float4 sdf_fragment(VertexOutText in [[stage_in]],
+                             texture2d<float> sdfTexture [[texture(0)]],
+                             constant SDFUniforms &uniforms [[buffer(0)]]) {
+    constexpr sampler linearSampler(coord::normalized,
+                                    address::clamp_to_edge,
+                                    filter::linear);
+                                    
+    // Sample the single-channel distance field
+    float dist = sdfTexture.sample(linearSampler, in.texCoord).r;
+    
+    float edgeWidth = uniforms.edgeWidth;
+    float outlineWidth = uniforms.outlineWidth;
+    
+    // Compute outline and body alpha factors
+    float outlineFactor = smoothstep(0.5 - outlineWidth - edgeWidth, 0.5 - outlineWidth + edgeWidth, dist);
+    float bodyFactor = smoothstep(0.5 - edgeWidth, 0.5 + edgeWidth, dist);
+    
+    // Interpolate between outline color and body color (tinted by vertex color)
+    float4 finalColor = mix(uniforms.outlineColor, uniforms.textColor * in.color, bodyFactor);
+    finalColor.a *= outlineFactor;
+    
+    return finalColor;
 }

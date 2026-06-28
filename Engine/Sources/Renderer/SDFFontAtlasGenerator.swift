@@ -167,7 +167,7 @@ public struct SDFFontAtlasGenerator {
             bytesPerRow: atlasWidth
         )
         
-        let texture = MetalTexture(mtlTexture: mtlTexture)
+        let texture = MetalTexture(texture: mtlTexture)
         return FontAtlas(
             texture: texture,
             glyphs: glyphs,

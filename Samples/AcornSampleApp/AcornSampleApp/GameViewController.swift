@@ -112,6 +112,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         engine.world.addComponent(orbitComponent, to: cameraEntity)
         
         setupTileMap()
+        setupCharacters()
     }
     
     private func setupTileMap() {
@@ -154,6 +155,98 @@ class GameViewController: UIViewController, MTKViewDelegate {
                 }
             } catch {
                 print("Failed to load tilemap: \(error)")
+            }
+        }
+    }
+    
+    private func setupCharacters() {
+        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let pngUrl = docsDir.appendingPathComponent("characters0.png")
+        let jsonUrl = docsDir.appendingPathComponent("characters.json")
+        
+        Task {
+            do {
+                let textureLoader = TextureLoader(device: self.renderer.device)
+                let texture = try await textureLoader.loadTexture(from: pngUrl)
+                let jsonData = try Data(contentsOf: jsonUrl)
+                let decoder = JSONDecoder()
+                let metadata = try decoder.decode(SpriteSheetMetadata.self, from: jsonData)
+                let spriteSheet = SpriteSheet(texture: texture, metadata: metadata)
+                
+                // We will create three entities: Knight, Archer, Mage
+                await MainActor.run {
+                    let knightEntity = self.engine.world.createEntity()
+                    // Place knight on the far left, slightly in front
+                    let knightTransform = TransformComponent(
+                        position: SIMD3<Float>(-0.8, -0.4, -0.3),
+                        scale: SIMD3<Float>(repeating: 0.015)
+                    )
+                    let knightSprite = SpriteComponent(spriteSheet: spriteSheet, frameName: "knight_walk_0")
+                    self.engine.world.addComponent(knightTransform, to: knightEntity)
+                    self.engine.world.addComponent(knightSprite, to: knightEntity)
+                    
+                    let archerEntity = self.engine.world.createEntity()
+                    // Place archer on the far right, slightly in front
+                    let archerTransform = TransformComponent(
+                        position: SIMD3<Float>(0.8, -0.4, -0.3),
+                        scale: SIMD3<Float>(repeating: 0.015)
+                    )
+                    let archerSprite = SpriteComponent(spriteSheet: spriteSheet, frameName: "archer_walk_0")
+                    self.engine.world.addComponent(archerTransform, to: archerEntity)
+                    self.engine.world.addComponent(archerSprite, to: archerEntity)
+                    
+                    let mageEntity = self.engine.world.createEntity()
+                    // Place mage in the center, floating higher up
+                    let mageTransform = TransformComponent(
+                        position: SIMD3<Float>(0.0, 0.4, -0.3),
+                        scale: SIMD3<Float>(repeating: 0.015)
+                    )
+                    let mageSprite = SpriteComponent(spriteSheet: spriteSheet, frameName: "mage_walk_0")
+                    self.engine.world.addComponent(mageTransform, to: mageEntity)
+                    self.engine.world.addComponent(mageSprite, to: mageEntity)
+                    
+                    // Start animation loop task
+                    Task {
+                        let animations = ["walk", "jump", "attack", "die"]
+                        var currentAnimIndex = 0
+                        var currentFrame = 0
+                        
+                        while true {
+                            try? await Task.sleep(nanoseconds: 250_000_000) // 250ms per frame
+                            
+                            let anim = animations[currentAnimIndex]
+                            
+                            // Update Knight frame
+                            if var ks = self.engine.world.component(ofType: SpriteComponent.self, for: knightEntity) {
+                                ks.frameName = "knight_\(anim)_\(currentFrame)"
+                                ks.isDirty = true
+                                self.engine.world.addComponent(ks, to: knightEntity)
+                            }
+                            
+                            // Update Archer frame
+                            if var asComp = self.engine.world.component(ofType: SpriteComponent.self, for: archerEntity) {
+                                asComp.frameName = "archer_\(anim)_\(currentFrame)"
+                                asComp.isDirty = true
+                                self.engine.world.addComponent(asComp, to: archerEntity)
+                            }
+                            
+                            // Update Mage frame
+                            if var ms = self.engine.world.component(ofType: SpriteComponent.self, for: mageEntity) {
+                                ms.frameName = "mage_\(anim)_\(currentFrame)"
+                                ms.isDirty = true
+                                self.engine.world.addComponent(ms, to: mageEntity)
+                            }
+                            
+                            currentFrame += 1
+                            if currentFrame >= 4 {
+                                currentFrame = 0
+                                currentAnimIndex = (currentAnimIndex + 1) % animations.count
+                            }
+                        }
+                    }
+                }
+            } catch {
+                print("Failed to load characters sprite sheet: \(error)")
             }
         }
     }

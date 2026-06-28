@@ -1,0 +1,1025 @@
+{
+  "frames": {
+    
+    
+    "archer_attack_0": {
+      "frame": {
+        "x": 337,
+        "y": 64,
+        "w": 45,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 9,
+        "y": 0,
+        "w": 45,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_attack_1": {
+      "frame": {
+        "x": 99,
+        "y": 64,
+        "w": 48,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 0,
+        "w": 48,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_attack_2": {
+      "frame": {
+        "x": 147,
+        "y": 64,
+        "w": 48,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 0,
+        "w": 48,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_attack_3": {
+      "frame": {
+        "x": 0,
+        "y": 192,
+        "w": 64,
+        "h": 61
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 1,
+        "w": 64,
+        "h": 61
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_die_0": {
+      "frame": {
+        "x": 382,
+        "y": 64,
+        "w": 44,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 10,
+        "y": 0,
+        "w": 44,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_die_1": {
+      "frame": {
+        "x": 128,
+        "y": 192,
+        "w": 63,
+        "h": 55
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 4,
+        "w": 63,
+        "h": 55
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_die_2": {
+      "frame": {
+        "x": 441,
+        "y": 253,
+        "w": 64,
+        "h": 40
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 12,
+        "w": 64,
+        "h": 40
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_die_3": {
+      "frame": {
+        "x": 319,
+        "y": 282,
+        "w": 64,
+        "h": 20
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 22,
+        "w": 64,
+        "h": 20
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_jump_0": {
+      "frame": {
+        "x": 239,
+        "y": 128,
+        "w": 33,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 15,
+        "y": 0,
+        "w": 33,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_jump_1": {
+      "frame": {
+        "x": 204,
+        "y": 128,
+        "w": 35,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 14,
+        "y": 0,
+        "w": 35,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_jump_2": {
+      "frame": {
+        "x": 42,
+        "y": 128,
+        "w": 42,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 11,
+        "y": 0,
+        "w": 42,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_jump_3": {
+      "frame": {
+        "x": 291,
+        "y": 64,
+        "w": 46,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 9,
+        "y": 0,
+        "w": 46,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_walk_0": {
+      "frame": {
+        "x": 316,
+        "y": 191,
+        "w": 43,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 10,
+        "y": 0,
+        "w": 43,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_walk_1": {
+      "frame": {
+        "x": 272,
+        "y": 191,
+        "w": 44,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 10,
+        "y": 0,
+        "w": 44,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_walk_2": {
+      "frame": {
+        "x": 423,
+        "y": 128,
+        "w": 44,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 10,
+        "y": 0,
+        "w": 44,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "archer_walk_3": {
+      "frame": {
+        "x": 467,
+        "y": 128,
+        "w": 44,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 10,
+        "y": 0,
+        "w": 44,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_attack_0": {
+      "frame": {
+        "x": 165,
+        "y": 128,
+        "w": 39,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 12,
+        "y": 0,
+        "w": 39,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_attack_1": {
+      "frame": {
+        "x": 64,
+        "y": 0,
+        "w": 63,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 63,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_attack_2": {
+      "frame": {
+        "x": 191,
+        "y": 192,
+        "w": 64,
+        "h": 53
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 5,
+        "w": 64,
+        "h": 53
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_attack_3": {
+      "frame": {
+        "x": 186,
+        "y": 0,
+        "w": 58,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 3,
+        "y": 0,
+        "w": 58,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_die_0": {
+      "frame": {
+        "x": 441,
+        "y": 191,
+        "w": 63,
+        "h": 62
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 1,
+        "w": 63,
+        "h": 62
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_die_1": {
+      "frame": {
+        "x": 191,
+        "y": 245,
+        "w": 64,
+        "h": 49
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 7,
+        "w": 64,
+        "h": 49
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_die_2": {
+      "frame": {
+        "x": 64,
+        "y": 250,
+        "w": 64,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 8,
+        "w": 64,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_die_3": {
+      "frame": {
+        "x": 319,
+        "y": 254,
+        "w": 64,
+        "h": 28
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 18,
+        "w": 64,
+        "h": 28
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_jump_0": {
+      "frame": {
+        "x": 460,
+        "y": 0,
+        "w": 51,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 6,
+        "y": 0,
+        "w": 51,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_jump_1": {
+      "frame": {
+        "x": 125,
+        "y": 128,
+        "w": 40,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 12,
+        "y": 0,
+        "w": 40,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_jump_2": {
+      "frame": {
+        "x": 84,
+        "y": 128,
+        "w": 41,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 11,
+        "y": 0,
+        "w": 41,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_jump_3": {
+      "frame": {
+        "x": 272,
+        "y": 128,
+        "w": 60,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 2,
+        "y": 0,
+        "w": 60,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_walk_0": {
+      "frame": {
+        "x": 359,
+        "y": 191,
+        "w": 41,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 11,
+        "y": 0,
+        "w": 41,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_walk_1": {
+      "frame": {
+        "x": 332,
+        "y": 128,
+        "w": 46,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 9,
+        "y": 0,
+        "w": 46,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_walk_2": {
+      "frame": {
+        "x": 400,
+        "y": 191,
+        "w": 41,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 11,
+        "y": 0,
+        "w": 41,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "knight_walk_3": {
+      "frame": {
+        "x": 378,
+        "y": 128,
+        "w": 45,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 9,
+        "y": 0,
+        "w": 45,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_attack_0": {
+      "frame": {
+        "x": 355,
+        "y": 0,
+        "w": 53,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 5,
+        "y": 0,
+        "w": 53,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_attack_1": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_attack_2": {
+      "frame": {
+        "x": 64,
+        "y": 192,
+        "w": 64,
+        "h": 58
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 3,
+        "w": 64,
+        "h": 58
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_attack_3": {
+      "frame": {
+        "x": 244,
+        "y": 0,
+        "w": 56,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 4,
+        "y": 0,
+        "w": 56,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_die_0": {
+      "frame": {
+        "x": 300,
+        "y": 0,
+        "w": 55,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 4,
+        "y": 0,
+        "w": 55,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_die_1": {
+      "frame": {
+        "x": 127,
+        "y": 0,
+        "w": 59,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 2,
+        "y": 0,
+        "w": 59,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_die_2": {
+      "frame": {
+        "x": 0,
+        "y": 253,
+        "w": 64,
+        "h": 42
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 11,
+        "w": 64,
+        "h": 42
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_die_3": {
+      "frame": {
+        "x": 255,
+        "y": 254,
+        "w": 64,
+        "h": 29
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 17,
+        "w": 64,
+        "h": 29
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_jump_0": {
+      "frame": {
+        "x": 408,
+        "y": 0,
+        "w": 52,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 6,
+        "y": 0,
+        "w": 52,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_jump_1": {
+      "frame": {
+        "x": 0,
+        "y": 128,
+        "w": 42,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 11,
+        "y": 0,
+        "w": 42,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_jump_2": {
+      "frame": {
+        "x": 469,
+        "y": 64,
+        "w": 42,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 11,
+        "y": 0,
+        "w": 42,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_jump_3": {
+      "frame": {
+        "x": 0,
+        "y": 64,
+        "w": 50,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 7,
+        "y": 0,
+        "w": 50,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_walk_0": {
+      "frame": {
+        "x": 243,
+        "y": 64,
+        "w": 48,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 0,
+        "w": 48,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_walk_1": {
+      "frame": {
+        "x": 50,
+        "y": 64,
+        "w": 49,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 7,
+        "y": 0,
+        "w": 49,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_walk_2": {
+      "frame": {
+        "x": 195,
+        "y": 64,
+        "w": 48,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 8,
+        "y": 0,
+        "w": 48,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    },
+    
+    "mage_walk_3": {
+      "frame": {
+        "x": 426,
+        "y": 64,
+        "w": 43,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 10,
+        "y": 0,
+        "w": 43,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      }
+    }
+    
+  },
+  "meta": {
+    "app": "https://github.com/houmain/spright",
+    "version": "1.0",
+    "image": "Samples/AcornSampleApp/AcornSampleApp/Resources/characters0.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 512,
+      "h": 512
+    },
+    "scale": "1.0"
+  }
+}

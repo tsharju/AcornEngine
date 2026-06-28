@@ -46,3 +46,9 @@ As the codebase grows, organize modules and sources using the following standard
 ## 5. Development Workflows
 * **Build Command**: `swift build`
 * **Test Command**: `swift test`
+
+---
+
+## 6. Agent Orchestration & Task Decomposition
+* **Task Delegation**: For any non-trivial task, aggressively split work across subagents by invoking parallel subagents (e.g., separating research, refactoring, writing unit tests, and validation). Always attempt to delegate isolated sub-tasks to specialized subagents to parallelize work and maintain clean context boundaries.
+

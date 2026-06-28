@@ -63,6 +63,7 @@ struct CameraSystemTests {
             bobbingSpeed: 0.0,
             swayAmplitude: 0.0,
             swaySpeed: 0.0,
+            useAngleSway: false,
             startingAngle: 0.0
         )
         world.addComponent(orbitComponent, to: cameraEntity)

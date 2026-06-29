@@ -46,9 +46,9 @@ public enum TextMeshGenerator {
             
             // Calculate quad corners
             let x0 = penX + glyph.offset.x
-            let y0 = penY + glyph.offset.y - glyph.size.y // Bottom
+            let y0 = penY + glyph.offset.y // Bottom
             let x1 = x0 + glyph.size.x
-            let y1 = penY + glyph.offset.y // Top
+            let y1 = penY + glyph.offset.y + glyph.size.y // Top
             
             // Texture coordinates (UVs)
             let u0 = glyph.uvRect.x

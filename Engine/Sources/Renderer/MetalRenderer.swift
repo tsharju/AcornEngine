@@ -78,9 +78,7 @@ public class MetalRenderer: Renderer {
         }
         self.commandQueue = queue
         
-        guard let shaderURL = Bundle.module.url(forResource: "Shaders.metal", withExtension: "txt"),
-              let shaderSource = try? String(contentsOf: shaderURL),
-              let library = try? device.makeLibrary(source: shaderSource, options: nil) else {
+        guard let library = try? device.makeDefaultLibrary(bundle: Bundle.module) else {
             throw RendererError.libraryNotFound
         }
         

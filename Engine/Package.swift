@@ -20,7 +20,7 @@ let package = Package(
         .target(
             name: "AcornEngine",
             resources: [
-                .process("Renderer/Shaders.metal.txt")
+                .process("Renderer/Shaders.metal")
             ]
         ),
         .testTarget(

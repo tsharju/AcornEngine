@@ -61,28 +61,34 @@ class GameViewController: UIViewController, MTKViewDelegate {
         }
         
         // Setup SDF Text Entity
-        do {
-            let fontAtlas = try SDFFontAtlasGenerator.generate(
-                fontName: "Helvetica-Bold",
-                fontSize: 48,
-                device: renderer.device
-            )
-            
-            let textEntity = engine.world.createEntity()
-            let textTransform = TransformComponent(position: SIMD3<Float>(-0.5, 0, 0))
-            engine.world.addComponent(textTransform, to: textEntity)
-            
-            let textComponent = TextComponent(
-                text: "Acorn SDF Text!",
-                fontAtlas: fontAtlas,
-                textColor: SIMD4<Float>(1.0, 0.8, 0.2, 1.0),     // Gold body
-                outlineColor: SIMD4<Float>(0.1, 0.1, 0.3, 1.0),  // Dark blue outline
-                outlineWidth: 0.12,                              // outline thickness
-                edgeWidth: 0.03                                  // smooth edge
-            )
-            engine.world.addComponent(textComponent, to: textEntity)
-        } catch {
-            print("Failed to initialize SDF FontAtlas: \(error)")
+        let device = self.renderer.device
+        let engine = self.engine!
+        Task.detached(priority: .userInitiated) {
+            do {
+                let fontAtlas = try SDFFontAtlasGenerator.generate(
+                    fontName: "Helvetica-Bold",
+                    fontSize: 48,
+                    device: device
+                )
+                
+                await MainActor.run {
+                    let textEntity = engine.world.createEntity()
+                    let textTransform = TransformComponent(position: SIMD3<Float>(-0.5, 0, 0))
+                    engine.world.addComponent(textTransform, to: textEntity)
+                    
+                    let textComponent = TextComponent(
+                        text: "Acorn SDF Text!",
+                        fontAtlas: fontAtlas,
+                        textColor: SIMD4<Float>(1.0, 0.8, 0.2, 1.0),     // Gold body
+                        outlineColor: SIMD4<Float>(0.1, 0.1, 0.3, 1.0),  // Dark blue outline
+                        outlineWidth: 0.12,                              // outline thickness
+                        edgeWidth: 0.03                                  // smooth edge
+                    )
+                    engine.world.addComponent(textComponent, to: textEntity)
+                }
+            } catch {
+                print("Failed to initialize SDF FontAtlas: \(error)")
+            }
         }
         
         // Setup Camera Entity

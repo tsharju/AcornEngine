@@ -117,10 +117,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
     }
     
     private func setupTileMap() {
-        // We load the generated JSON and PNG from the app's Documents directory
+        // Look in Main Bundle first, fall back to Documents directory
         let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let pngUrl = docsDir.appendingPathComponent("tileset.png")
-        let jsonUrl = docsDir.appendingPathComponent("tileset.json")
+        let pngUrl = Bundle.main.url(forResource: "tileset", withExtension: "png") ?? docsDir.appendingPathComponent("tileset.png")
+        let jsonUrl = Bundle.main.url(forResource: "tileset", withExtension: "json") ?? docsDir.appendingPathComponent("tileset.json")
         
         Task {
             do {
@@ -161,9 +161,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
     }
     
     private func setupCharacters() {
+        // Look in Main Bundle first, fall back to Documents directory
         let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let pngUrl = docsDir.appendingPathComponent("characters0.png")
-        let jsonUrl = docsDir.appendingPathComponent("characters.json")
+        let pngUrl = Bundle.main.url(forResource: "characters0", withExtension: "png") ?? docsDir.appendingPathComponent("characters0.png")
+        let jsonUrl = Bundle.main.url(forResource: "characters", withExtension: "json") ?? docsDir.appendingPathComponent("characters.json")
         
         Task {
             do {
@@ -288,6 +289,11 @@ class GameViewController: UIViewController, MTKViewDelegate {
         context.endEncoding()
         
         commandBuffer.present(drawable)
+        commandBuffer.addCompletedHandler { cb in
+            if let error = cb.error {
+                print("Command buffer error: \(error.localizedDescription) (domain: \((error as NSError).domain), code: \((error as NSError).code))")
+            }
+        }
         commandBuffer.commit()
     }
 }

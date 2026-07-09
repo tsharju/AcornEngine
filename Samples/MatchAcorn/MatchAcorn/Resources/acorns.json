@@ -1,0 +1,143 @@
+{
+  "frames": {
+    
+    
+    "acorn_blue": {
+      "frame": {
+        "x": 208,
+        "y": 184,
+        "w": 138,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 59,
+        "y": 46,
+        "w": 138,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      }
+    },
+    
+    "acorn_green": {
+      "frame": {
+        "x": 208,
+        "y": 0,
+        "w": 140,
+        "h": 184
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 58,
+        "y": 36,
+        "w": 140,
+        "h": 184
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      }
+    },
+    
+    "acorn_purple": {
+      "frame": {
+        "x": 348,
+        "y": 0,
+        "w": 132,
+        "h": 178
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 62,
+        "y": 37,
+        "w": 132,
+        "h": 178
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      }
+    },
+    
+    "acorn_red": {
+      "frame": {
+        "x": 348,
+        "y": 178,
+        "w": 124,
+        "h": 169
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 66,
+        "y": 43,
+        "w": 124,
+        "h": 169
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      }
+    },
+    
+    "acorn_yellow": {
+      "frame": {
+        "x": 0,
+        "y": 207,
+        "w": 104,
+        "h": 142
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 76,
+        "y": 57,
+        "w": 104,
+        "h": 142
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      }
+    },
+    
+    "tile_bg": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 207
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 24,
+        "y": 24,
+        "w": 208,
+        "h": 207
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      }
+    }
+    
+  },
+  "meta": {
+    "app": "https://github.com/houmain/spright",
+    "version": "1.0",
+    "image": "Samples/MatchAcorn/MatchAcorn/Resources/acorns0.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 512,
+      "h": 512
+    },
+    "scale": "1.0"
+  }
+}

@@ -36,6 +36,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
             self.engine = Engine(renderer: self.renderer)
             self.engine.world.registerSystem(CameraSystem())
             self.engine.world.registerSystem(PhysicsSystem())
+            self.engine.world.registerSystem(ParticleSystem())
             mtkView.delegate = self
             setupScene()
             self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
@@ -152,6 +153,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         setupTileMap()
         setupCharacters()
+        setupConfetti()
     }
     
     private func setupTileMap() {
@@ -196,6 +198,49 @@ class GameViewController: UIViewController, MTKViewDelegate {
                 print("Failed to load tilemap: \(error)")
             }
         }
+    }
+    
+    private func setupConfetti() {
+        // Create basic colored quad meshes
+        let colors: [SIMD4<Float>] = [
+            SIMD4<Float>(1, 0, 0, 1), // Red
+            SIMD4<Float>(0, 1, 0, 1), // Green
+            SIMD4<Float>(0, 0, 1, 1), // Blue
+            SIMD4<Float>(1, 1, 0, 1), // Yellow
+            SIMD4<Float>(1, 0, 1, 1)  // Pink
+        ]
+        
+        var meshes: [any Mesh] = []
+        for color in colors {
+            let vertices: [Vertex] = [
+                Vertex(position: SIMD3<Float>(-0.5, 0.5, 0), color: color),
+                Vertex(position: SIMD3<Float>(0.5, 0.5, 0), color: color),
+                Vertex(position: SIMD3<Float>(-0.5, -0.5, 0), color: color),
+                Vertex(position: SIMD3<Float>(0.5, 0.5, 0), color: color),
+                Vertex(position: SIMD3<Float>(0.5, -0.5, 0), color: color),
+                Vertex(position: SIMD3<Float>(-0.5, -0.5, 0), color: color)
+            ]
+            if let mesh = renderer.createMesh(vertices: vertices) {
+                meshes.append(mesh)
+            }
+        }
+        
+        // Setup emitter entity
+        let emitterEntity = engine.world.createEntity()
+        let transform = TransformComponent(position: SIMD3<Float>(0, 2.5, 0))
+        engine.world.addComponent(transform, to: emitterEntity)
+        
+        let emitter = ParticleEmitterComponent(
+            isEmitting: true,
+            emitRate: 30.0, // 30 particles per second
+            meshes: meshes,
+            lifetime: 2.0...4.0,
+            linearVelocityX: -2.0...2.0,
+            linearVelocityY: 1.0...4.0, // Shoot upwards
+            angularVelocity: -5.0...5.0,
+            scale: 0.05...0.1
+        )
+        engine.world.addComponent(emitter, to: emitterEntity)
     }
     
     private func setupCharacters() {

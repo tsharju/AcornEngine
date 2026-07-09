@@ -19,6 +19,7 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "AcornEngine",
+            dependencies: ["box2d"],
             resources: [
                 .process("Renderer/Shaders.metal")
             ]
@@ -26,6 +27,10 @@ let package = Package(
         .testTarget(
             name: "AcornEngineTests",
             dependencies: ["AcornEngine"]
+        ),
+        .target(
+            name: "box2d",
+            publicHeadersPath: "include"
         ),
     ],
     swiftLanguageModes: [.v6]

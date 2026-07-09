@@ -35,6 +35,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
             self.renderer = try MetalRenderer(device: defaultDevice)
             self.engine = Engine(renderer: self.renderer)
             self.engine.world.registerSystem(CameraSystem())
+            self.engine.world.registerSystem(PhysicsSystem())
             mtkView.delegate = self
             setupScene()
             self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
@@ -44,10 +45,16 @@ class GameViewController: UIViewController, MTKViewDelegate {
     }
     
     private func setupScene() {
-        // Setup Triangle Entity
+        // Setup Triangle Entity (Dynamic Physics Body)
         let entity = engine.world.createEntity()
-        let transform = TransformComponent(position: .zero)
+        let transform = TransformComponent(position: SIMD3<Float>(0, 3.0, 0))
         engine.world.addComponent(transform, to: entity)
+        
+        let physicsBody = PhysicsBodyComponent(type: .dynamicBody, angularVelocity: 1.0)
+        engine.world.addComponent(physicsBody, to: entity)
+        
+        let physicsCollider = PhysicsColliderComponent(shapeType: .box(width: 1.0, height: 1.0), restitution: 0.6)
+        engine.world.addComponent(physicsCollider, to: entity)
         
         let vertices: [Vertex] = [
             Vertex(position: SIMD3<Float>(0, 0.5, 0), color: SIMD4<Float>(1, 0, 0, 1)),
@@ -58,6 +65,31 @@ class GameViewController: UIViewController, MTKViewDelegate {
         if let mesh = renderer.createMesh(vertices: vertices) {
             let meshComponent = MeshComponent(mesh: mesh)
             engine.world.addComponent(meshComponent, to: entity)
+        }
+        
+        // Setup Floor Entity (Static Physics Body)
+        let floorEntity = engine.world.createEntity()
+        let floorTransform = TransformComponent(position: SIMD3<Float>(0, -2.0, 0))
+        engine.world.addComponent(floorTransform, to: floorEntity)
+        
+        let floorBody = PhysicsBodyComponent(type: .staticBody)
+        engine.world.addComponent(floorBody, to: floorEntity)
+        
+        let floorCollider = PhysicsColliderComponent(shapeType: .box(width: 10.0, height: 1.0))
+        engine.world.addComponent(floorCollider, to: floorEntity)
+        
+        let floorVertices: [Vertex] = [
+            Vertex(position: SIMD3<Float>(-5.0, 0.5, 0), color: SIMD4<Float>(0.2, 0.5, 0.2, 1)),
+            Vertex(position: SIMD3<Float>(5.0, 0.5, 0), color: SIMD4<Float>(0.2, 0.5, 0.2, 1)),
+            Vertex(position: SIMD3<Float>(-5.0, -0.5, 0), color: SIMD4<Float>(0.2, 0.5, 0.2, 1)),
+            Vertex(position: SIMD3<Float>(5.0, 0.5, 0), color: SIMD4<Float>(0.2, 0.5, 0.2, 1)),
+            Vertex(position: SIMD3<Float>(5.0, -0.5, 0), color: SIMD4<Float>(0.2, 0.5, 0.2, 1)),
+            Vertex(position: SIMD3<Float>(-5.0, -0.5, 0), color: SIMD4<Float>(0.2, 0.5, 0.2, 1))
+        ]
+        
+        if let floorMesh = renderer.createMesh(vertices: floorVertices) {
+            let floorMeshComponent = MeshComponent(mesh: floorMesh)
+            engine.world.addComponent(floorMeshComponent, to: floorEntity)
         }
         
         // Setup SDF Text Entity
@@ -105,12 +137,12 @@ class GameViewController: UIViewController, MTKViewDelegate {
         )
         engine.world.addComponent(cameraComponent, to: cameraEntity)
         
-        // Use a floating orbit component to orbit the triangle entity
+        // Use a floating orbit component to orbit the floor entity
         let orbitComponent = CameraOrbitComponent(
-            target: entity,
-            radius: 4.5,
+            target: floorEntity,
+            radius: 5.5,
             speed: 0.3,          // Elegant slow rotation (0.3 rad/s)
-            baseHeight: 0.8,      // Look from slightly above (0.8 units)
+            baseHeight: 1.5,      // Look from slightly above (1.5 units)
             bobbingAmplitude: 0.25, // Up/down floating (0.25 units)
             bobbingSpeed: 1.0,    // 1.0 rad/s vertical floating speed
             swayAmplitude: 0.15,   // Left/right swaying (0.15 units)

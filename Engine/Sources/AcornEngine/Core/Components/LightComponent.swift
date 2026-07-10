@@ -7,6 +7,8 @@ public enum LightType: Sendable {
     case ambient
     /// Directional light simulates a distant light source (like the sun) with parallel rays.
     case directional
+    /// Point light emits light in all directions from a specific position.
+    case point
 }
 
 /// A component that defines a light source.

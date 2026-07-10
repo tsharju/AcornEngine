@@ -31,6 +31,9 @@ public struct GlobalUniforms: Sendable, Equatable {
     /// The combined model-view-projection matrix.
     public var modelViewProjectionMatrix: simd_float4x4
     
+    /// The model matrix.
+    public var modelMatrix: simd_float4x4
+    
     /// The normal matrix (inverse transpose of model matrix).
     public var normalMatrix: simd_float4x4
     
@@ -43,19 +46,36 @@ public struct GlobalUniforms: Sendable, Equatable {
     /// The directional light direction.
     public var directionalLightDirection: SIMD4<Float>
     
+    /// The point light color.
+    public var pointLightColor: SIMD4<Float>
+    
+    /// The point light position.
+    public var pointLightPosition: SIMD4<Float>
+    
+    /// The mesh color tint.
+    public var meshColor: SIMD4<Float>
+    
     /// Initializes a new set of global uniforms.
     public init(
         modelViewProjectionMatrix: simd_float4x4 = .identity,
+        modelMatrix: simd_float4x4 = .identity,
         normalMatrix: simd_float4x4 = .identity,
         ambientLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
         directionalLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
-        directionalLightDirection: SIMD4<Float> = SIMD4<Float>(0, -1, 0, 0)
+        directionalLightDirection: SIMD4<Float> = SIMD4<Float>(0, -1, 0, 0),
+        pointLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
+        pointLightPosition: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
+        meshColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)
     ) {
         self.modelViewProjectionMatrix = modelViewProjectionMatrix
+        self.modelMatrix = modelMatrix
         self.normalMatrix = normalMatrix
         self.ambientLightColor = ambientLightColor
         self.directionalLightColor = directionalLightColor
         self.directionalLightDirection = directionalLightDirection
+        self.pointLightColor = pointLightColor
+        self.pointLightPosition = pointLightPosition
+        self.meshColor = meshColor
     }
 }
 

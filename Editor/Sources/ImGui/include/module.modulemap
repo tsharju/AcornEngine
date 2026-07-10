@@ -1,0 +1,6 @@
+module ImGui {
+    header "imgui.h"
+    header "imgui_impl_metal.h"
+    header "imgui_impl_osx.h"
+    export *
+}

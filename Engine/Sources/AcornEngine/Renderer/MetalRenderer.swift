@@ -165,6 +165,7 @@ public class MetalRenderer: Renderer {
         
         var mutUniforms = uniforms
         encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<GlobalUniforms>.stride, index: 1)
+        encoder.setFragmentBytes(&mutUniforms, length: MemoryLayout<GlobalUniforms>.stride, index: 0)
         
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
     }

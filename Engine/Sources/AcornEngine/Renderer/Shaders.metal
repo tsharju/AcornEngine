@@ -5,15 +5,21 @@ struct VertexIn {
     float3 position;
     float4 color;
     float2 texCoord;
+    float3 normal;
 };
 
 struct VertexOut {
     float4 position [[position]];
     float4 color;
+    float3 normal;
 };
 
 struct GlobalUniforms {
     float4x4 modelViewProjectionMatrix;
+    float4x4 normalMatrix;
+    float4 ambientLightColor;
+    float4 directionalLightColor;
+    float4 directionalLightDirection;
 };
 
 vertex VertexOut vertex_main(uint vertexID [[vertex_id]],
@@ -23,11 +29,25 @@ vertex VertexOut vertex_main(uint vertexID [[vertex_id]],
     float4 pos = float4(vertices[vertexID].position, 1.0);
     out.position = uniforms.modelViewProjectionMatrix * pos;
     out.color = vertices[vertexID].color;
+    out.normal = (uniforms.normalMatrix * float4(vertices[vertexID].normal, 0.0)).xyz;
     return out;
 }
 
-fragment float4 fragment_main(VertexOut in [[stage_in]]) {
-    return in.color;
+fragment float4 fragment_main(VertexOut in [[stage_in]],
+                              constant GlobalUniforms &uniforms [[buffer(0)]]) {
+    float3 normal = normalize(in.normal);
+    float3 lightDir = normalize(-uniforms.directionalLightDirection.xyz);
+    
+    // Diffuse
+    float nDotL = max(0.0, dot(normal, lightDir));
+    float3 diffuse = uniforms.directionalLightColor.rgb * nDotL;
+    
+    // Ambient
+    float3 ambient = uniforms.ambientLightColor.rgb;
+    
+    float3 finalColor = in.color.rgb * (ambient + diffuse);
+    
+    return float4(finalColor, in.color.a);
 }
 
 // --- SDF Text Rendering Shaders ---

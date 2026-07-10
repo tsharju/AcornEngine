@@ -26,9 +26,31 @@ public struct GlobalUniforms: Sendable, Equatable {
     /// The combined model-view-projection matrix.
     public var modelViewProjectionMatrix: simd_float4x4
     
+    /// The normal matrix (inverse transpose of model matrix).
+    public var normalMatrix: simd_float4x4
+    
+    /// The ambient light color.
+    public var ambientLightColor: SIMD4<Float>
+    
+    /// The directional light color.
+    public var directionalLightColor: SIMD4<Float>
+    
+    /// The directional light direction.
+    public var directionalLightDirection: SIMD4<Float>
+    
     /// Initializes a new set of global uniforms.
-    public init(modelViewProjectionMatrix: simd_float4x4 = .identity) {
+    public init(
+        modelViewProjectionMatrix: simd_float4x4 = .identity,
+        normalMatrix: simd_float4x4 = .identity,
+        ambientLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
+        directionalLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
+        directionalLightDirection: SIMD4<Float> = SIMD4<Float>(0, -1, 0, 0)
+    ) {
         self.modelViewProjectionMatrix = modelViewProjectionMatrix
+        self.normalMatrix = normalMatrix
+        self.ambientLightColor = ambientLightColor
+        self.directionalLightColor = directionalLightColor
+        self.directionalLightDirection = directionalLightDirection
     }
 }
 

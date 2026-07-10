@@ -60,6 +60,17 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         
         let e2 = world.createEntity()
         world.addComponent(TransformComponent(position: SIMD3<Float>(10, 20, 0)), to: e2)
+        
+        // Add ambient light
+        let ambientLight = world.createEntity()
+        world.addComponent(LightComponent(type: .ambient, color: SIMD3<Float>(1, 1, 1), intensity: 0.2), to: ambientLight)
+        
+        // Add directional light
+        let directionalLight = world.createEntity()
+        world.addComponent(LightComponent(type: .directional, color: SIMD3<Float>(1, 1, 1), intensity: 0.8), to: directionalLight)
+        var dirTransform = TransformComponent()
+        dirTransform.rotation = SIMD3<Float>(-.pi / 4, -.pi / 4, 0)
+        world.addComponent(dirTransform, to: directionalLight)
     }
 }
 
@@ -107,9 +118,9 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         
         let entities = world.allEntities.sorted(by: { $0.id < $1.id })
         for entity in entities {
-            var flags: ImGuiTreeNodeFlags = 0 // ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
             let nodeOpen = ImGui.TreeNode("Entity \(entity.id)")
             
+
             // To show selection without TreeNodeEx, we can just highlight text or use Selectable
             if selectedEntity == entity {
                 ImGui.SameLine(0, -1.0)

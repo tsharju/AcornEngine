@@ -30,12 +30,43 @@ public struct RenderSystem {
             }
         }
         
+        // Find lights
+        var ambientColor = SIMD4<Float>(0, 0, 0, 1)
+        var directionalColor = SIMD4<Float>(0, 0, 0, 1)
+        var directionalDirection = SIMD4<Float>(0, -1, 0, 0)
+        
+        for (entity, light) in world.entities(with: LightComponent.self) {
+            if light.type == .ambient {
+                let c = light.color * light.intensity
+                ambientColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
+            } else if light.type == .directional {
+                let c = light.color * light.intensity
+                directionalColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
+                if let transform = world.component(ofType: TransformComponent.self, for: entity) {
+                    let dir = transform.matrix * SIMD4<Float>(0, 0, -1, 0)
+                    let len = simd_length(SIMD3<Float>(dir.x, dir.y, dir.z))
+                    if len > 0.0001 {
+                        directionalDirection = SIMD4<Float>(dir.x / len, dir.y / len, dir.z / len, 0)
+                    }
+                }
+            }
+        }
+        
         // Render mesh components
         let entities = world.entities(with: MeshComponent.self)
         for (entity, meshComponent) in entities {
             if let transform = world.component(ofType: TransformComponent.self, for: entity) {
-                let mvp = matrix_multiply(viewProjectionMatrix, transform.matrix)
-                let uniforms = GlobalUniforms(modelViewProjectionMatrix: mvp)
+                let modelMatrix = transform.matrix
+                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
+                let normalMatrix = modelMatrix.inverse.transpose
+                
+                let uniforms = GlobalUniforms(
+                    modelViewProjectionMatrix: mvp,
+                    normalMatrix: normalMatrix,
+                    ambientLightColor: ambientColor,
+                    directionalLightColor: directionalColor,
+                    directionalLightDirection: directionalDirection
+                )
                 renderer.render(mesh: meshComponent.mesh, uniforms: uniforms, context: context)
             }
         }

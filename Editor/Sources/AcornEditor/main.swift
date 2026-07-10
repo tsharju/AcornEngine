@@ -304,7 +304,7 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             ImGui.DragFloat("Yaw", &editorCameraYaw, 1.0, -180.0, 180.0, "%.1f", 0)
             
             let fov: Float = 60.0 * .pi / 180.0
-            let aspect: Float = 16.0 / 9.0
+            let aspect: Float = workSize.y > 0 ? Float(workSize.x / workSize.y) : (16.0 / 9.0)
             let projection = simd_float4x4(perspectiveFovY: fov, aspect: aspect, nearZ: 0.1, farZ: 1000.0)
             let pitchR = editorCameraPitch * .pi / 180.0
             let yawR = editorCameraYaw * .pi / 180.0
@@ -323,15 +323,13 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         if renderWireframes, validCamera {
             let drawList = ImGui.GetWindowDrawList()!
             
-            let winPos = ImGui.GetWindowPos()
-            let winSize = ImGui.GetWindowSize()
-            
+            // The 3D scene is rendered to the full MTKView, so NDC maps to workSize, not winSize
             func project(_ pt: SIMD3<Float>) -> ImVec2? {
                 let clip = currentViewProj * SIMD4<Float>(pt, 1.0)
                 if clip.w <= 0.1 { return nil }
                 let ndc = SIMD3<Float>(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w)
-                let x = winPos.x + (ndc.x * 0.5 + 0.5) * winSize.x
-                let y = winPos.y + (1.0 - (ndc.y * 0.5 + 0.5)) * winSize.y
+                let x = workPos.x + (ndc.x * 0.5 + 0.5) * workSize.x
+                let y = workPos.y + (1.0 - (ndc.y * 0.5 + 0.5)) * workSize.y
                 return ImVec2(x, y)
             }
             

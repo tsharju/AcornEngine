@@ -65,3 +65,13 @@ For any visual, rendering, or shader-related changes (e.g., changes to `MetalRen
 7. **Iterative Feedback Loop**: If the screenshot reveals bugs (e.g. incorrect colors, misaligned layouts, or rendering artifacts), analyze the issue, update the codebase, and repeat steps 2-6 until the rendering is completely correct.
 8. **Document in Walkthrough**: Embed the final verified screenshot in the `walkthrough.md` report so the user can easily see the verified visual results.
 
+---
+
+## 8. macOS Editor Visual Verification Workflow
+For any macOS Editor-related visual or GUI changes:
+1. Build and run the editor in the background: `swift run --package-path Editor AcornEditor &`
+2. Wait at least 3 seconds for the window to boot.
+3. Capture a screenshot of the main screen: `screencapture <absolute-path-to-artifacts>/editor_screenshot.png`
+4. Inspect the screenshot using the `view_file` tool to verify layout, rendering, and wireframe visualization.
+5. Terminate the editor process by running `killall AcornEditor`.
+6. Embed the final verified screenshot in the `walkthrough.md` report.

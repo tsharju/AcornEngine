@@ -59,6 +59,12 @@ public class MetalRenderer: Renderer {
     /// The render pipeline state.
     private let pipelineState: any MTLRenderPipelineState
     
+    /// The depth stencil state.
+    private let depthStencilState: any MTLDepthStencilState
+    
+    /// The depth stencil state for transparent objects (no depth write).
+    private let transparentDepthStencilState: any MTLDepthStencilState
+    
     /// The SDF text render pipeline state.
     private let sdfTextPipelineState: any MTLRenderPipelineState
     
@@ -108,8 +114,25 @@ public class MetalRenderer: Renderer {
         pipelineDescriptor.vertexFunction = vertexFunction
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         
         self.pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        
+        let depthStencilDesc = MTLDepthStencilDescriptor()
+        depthStencilDesc.depthCompareFunction = .less
+        depthStencilDesc.isDepthWriteEnabled = true
+        guard let depthState = device.makeDepthStencilState(descriptor: depthStencilDesc) else {
+            throw RendererError.initializationFailed
+        }
+        self.depthStencilState = depthState
+        
+        let transparentDepthDesc = MTLDepthStencilDescriptor()
+        transparentDepthDesc.depthCompareFunction = .less
+        transparentDepthDesc.isDepthWriteEnabled = false
+        guard let transparentDepthState = device.makeDepthStencilState(descriptor: transparentDepthDesc) else {
+            throw RendererError.initializationFailed
+        }
+        self.transparentDepthStencilState = transparentDepthState
         
         // Initialize the SDF Text Pipeline
         guard let sdfVertexFunction = library.makeFunction(name: "sdf_vertex"),
@@ -122,6 +145,7 @@ public class MetalRenderer: Renderer {
         sdfPipelineDescriptor.vertexFunction = sdfVertexFunction
         sdfPipelineDescriptor.fragmentFunction = sdfFragmentFunction
         sdfPipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        sdfPipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         
         // Enable alpha blending for text rendering
         let colorAttachment = sdfPipelineDescriptor.colorAttachments[0]
@@ -146,6 +170,7 @@ public class MetalRenderer: Renderer {
         spritePipelineDescriptor.vertexFunction = spriteVertexFunction
         spritePipelineDescriptor.fragmentFunction = spriteFragmentFunction
         spritePipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        spritePipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
         
         // Enable alpha blending for sprite rendering
         let spriteColorAttachment = spritePipelineDescriptor.colorAttachments[0]
@@ -177,10 +202,12 @@ public class MetalRenderer: Renderer {
         }
         
         encoder.setRenderPipelineState(pipelineState)
+        encoder.setDepthStencilState(depthStencilState)
         encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
         
         var mutUniforms = uniforms
         encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<GlobalUniforms>.stride, index: 1)
+        encoder.setFragmentBytes(&mutUniforms, length: MemoryLayout<GlobalUniforms>.stride, index: 0)
         
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
     }
@@ -203,6 +230,7 @@ public class MetalRenderer: Renderer {
         }
         
         encoder.setRenderPipelineState(sdfTextPipelineState)
+        encoder.setDepthStencilState(transparentDepthStencilState)
         encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
         
         // Bind the SDF Font texture atlas
@@ -234,6 +262,7 @@ public class MetalRenderer: Renderer {
         }
         
         encoder.setRenderPipelineState(spritePipelineState)
+        encoder.setDepthStencilState(transparentDepthStencilState)
         encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
         
         // Bind the sprite texture

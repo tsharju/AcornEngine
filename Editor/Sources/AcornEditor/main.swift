@@ -15,8 +15,8 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
     var world: World!
     
     // Editor Camera State
-    var editorCameraPos: [Float] = [0, 20, -60]
-    var editorCameraPitch: Float = 30.0
+    var editorCameraPos: [Float] = [0, 4, -25]
+    var editorCameraPitch: Float = -10.0
     var editorCameraYaw: Float = 0.0
     var useSceneCamera: Bool = false
     
@@ -43,6 +43,7 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         view = MTKView(frame: rect, device: device)
         view.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0)
         view.colorPixelFormat = .bgra8Unorm
+        view.depthStencilPixelFormat = .depth32Float
         view.delegate = self
         
         window.contentView = view
@@ -79,6 +80,24 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         if let mesh = renderer.createMesh(vertices: sphereVertices) {
             world.addComponent(MeshComponent(mesh: mesh), to: sphereEntity)
         }
+        
+        // Add ambient light
+        let ambientLight = world.createEntity()
+        world.addComponent(LightComponent(type: .ambient, color: SIMD3<Float>(1, 1, 1), intensity: 0.2), to: ambientLight)
+        
+        // Add directional light
+        let directionalLight = world.createEntity()
+        world.addComponent(LightComponent(type: .directional, color: SIMD3<Float>(1, 1, 1), intensity: 0.5), to: directionalLight)
+        var dirTransform = TransformComponent()
+        dirTransform.rotation = SIMD3<Float>(-.pi / 4, -.pi / 4, 0)
+        world.addComponent(dirTransform, to: directionalLight)
+        
+        // Add point light
+        let pointLight = world.createEntity()
+        world.addComponent(LightComponent(type: .point, color: SIMD3<Float>(1, 0, 0), intensity: 2.0), to: pointLight)
+        var pointTransform = TransformComponent()
+        pointTransform.position = SIMD3<Float>(0, 2, 0)
+        world.addComponent(pointTransform, to: pointLight)
     }
 }
 
@@ -99,6 +118,9 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         ImGui.NewFrame()
         // Clear the background
         descriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.1, 0.1, 0.1, 1.0)
+        descriptor.depthAttachment.clearDepth = 1.0
+        descriptor.depthAttachment.loadAction = .clear
+        descriptor.depthAttachment.storeAction = .dontCare
         
         // Layout Constants
         let viewport = ImGui.GetMainViewport()
@@ -174,9 +196,9 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         
         let entities = world.allEntities.sorted(by: { $0.id < $1.id })
         for entity in entities {
-            var flags: ImGuiTreeNodeFlags = 0 // ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth
             let nodeOpen = ImGui.TreeNode("Entity \(entity.id)")
             
+
             // To show selection without TreeNodeEx, we can just highlight text or use Selectable
             if selectedEntity == entity {
                 ImGui.SameLine(0, -1.0)
@@ -221,6 +243,23 @@ extension EditorApplicationDelegate: MTKViewDelegate {
                             transform.scale = SIMD3<Float>(scale[0], scale[1], scale[2])
                             world.addComponent(transform, to: selected)
                         }
+                    } else if var meshComp = component as? MeshComponent {
+                        var col: [Float] = [meshComp.color.x, meshComp.color.y, meshComp.color.z, meshComp.color.w]
+                        if ImGui.ColorEdit4("Color", &col, 0) {
+                            meshComp.color = SIMD4<Float>(col[0], col[1], col[2], col[3])
+                            world.addComponent(meshComp, to: selected)
+                        }
+                    } else if var lightComp = component as? LightComponent {
+                        var col: [Float] = [lightComp.color.x, lightComp.color.y, lightComp.color.z]
+                        if ImGui.ColorEdit3("Color", &col, 0) {
+                            lightComp.color = SIMD3<Float>(col[0], col[1], col[2])
+                            world.addComponent(lightComp, to: selected)
+                        }
+                        var intensity = lightComp.intensity
+                        if ImGui.DragFloat("Intensity", &intensity, 0.05, 0.0, 10.0, "%.2f", 0) {
+                            lightComp.intensity = intensity
+                            world.addComponent(lightComp, to: selected)
+                        }
                     } else {
                         // Fallback for components without custom editors
                         ImGui.TextUnformatted("\(component)", nil)
@@ -236,6 +275,7 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         // World View Window
         ImGui.SetNextWindowPos(ImVec2(workPos.x + leftWidth, workPos.y), 0, ImVec2(0, 0))
         ImGui.SetNextWindowSize(ImVec2(workSize.x - leftWidth, workSize.y), 0)
+        ImGui.SetNextWindowBgAlpha(0.0) // Transparent background to see rendered scene
         ImGui.Begin("World View", nil, windowFlags)
         
         ImGui.Checkbox("Use Scene Camera", &useSceneCamera)
@@ -265,55 +305,33 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             
             let fov: Float = 60.0 * .pi / 180.0
             let aspect: Float = 16.0 / 9.0
-            let near: Float = 0.1
-            let far: Float = 1000.0
-            let yScale = 1.0 / tan(fov * 0.5)
-            let xScale = yScale / aspect
-            let zRange = far - near
-            let zScale = -(far + near) / zRange
-            let wzScale = -2.0 * far * near / zRange
-            let projection = simd_float4x4(
-                SIMD4<Float>(xScale, 0, 0, 0),
-                SIMD4<Float>(0, yScale, 0, 0),
-                SIMD4<Float>(0, 0, zScale, -1),
-                SIMD4<Float>(0, 0, wzScale, 0)
-            )
-            
+            let projection = simd_float4x4(perspectiveFovY: fov, aspect: aspect, nearZ: 0.1, farZ: 1000.0)
             let pitchR = editorCameraPitch * .pi / 180.0
             let yawR = editorCameraYaw * .pi / 180.0
             
-            let rotX = simd_float4x4(
-                SIMD4<Float>(1, 0, 0, 0),
-                SIMD4<Float>(0, cos(pitchR), sin(pitchR), 0),
-                SIMD4<Float>(0, -sin(pitchR), cos(pitchR), 0),
-                SIMD4<Float>(0, 0, 0, 1)
-            )
-            let rotY = simd_float4x4(
-                SIMD4<Float>(cos(yawR), 0, -sin(yawR), 0),
-                SIMD4<Float>(0, 1, 0, 0),
-                SIMD4<Float>(sin(yawR), 0, cos(yawR), 0),
-                SIMD4<Float>(0, 0, 0, 1)
-            )
-            let trans = simd_float4x4(
-                SIMD4<Float>(1, 0, 0, 0),
-                SIMD4<Float>(0, 1, 0, 0),
-                SIMD4<Float>(0, 0, 1, 0),
-                SIMD4<Float>(-editorCameraPos[0], -editorCameraPos[1], -editorCameraPos[2], 1)
-            )
-            viewProj = projection * rotX * rotY * trans
+            let pos = SIMD3<Float>(editorCameraPos[0], editorCameraPos[1], editorCameraPos[2])
+            let rot = SIMD3<Float>(pitchR, yawR, 0)
+            let transform = simd_float4x4(position: pos, rotation: rot, scale: SIMD3<Float>(1, 1, 1))
+            let view = transform.inverse
+            viewProj = projection * view
         }
         
         let cursorPos = ImGui.GetCursorScreenPos()
-        let availSize = ImGui.GetContentRegionAvail()
-        let drawListOpt = ImGui.GetWindowDrawList()
-        if let drawList = drawListOpt, validCamera {
-            // Project function
-            func project(_ point3D: SIMD3<Float>) -> ImVec2? {
-                let clip = viewProj * SIMD4<Float>(point3D, 1.0)
+        let currentViewProj = viewProj
+        
+        #if DEBUG
+        if renderWireframes, validCamera {
+            let drawList = ImGui.GetWindowDrawList()!
+            
+            let winPos = ImGui.GetWindowPos()
+            let winSize = ImGui.GetWindowSize()
+            
+            func project(_ pt: SIMD3<Float>) -> ImVec2? {
+                let clip = currentViewProj * SIMD4<Float>(pt, 1.0)
                 if clip.w <= 0.1 { return nil }
-                let ndc = SIMD3<Float>(clip.x, clip.y, clip.z) / clip.w
-                let x = (ndc.x + 1.0) * 0.5 * availSize.x + cursorPos.x
-                let y = (1.0 - ndc.y) * 0.5 * availSize.y + cursorPos.y // Y down
+                let ndc = SIMD3<Float>(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w)
+                let x = winPos.x + (ndc.x * 0.5 + 0.5) * winSize.x
+                let y = winPos.y + (1.0 - (ndc.y * 0.5 + 0.5)) * winSize.y
                 return ImVec2(x, y)
             }
             
@@ -407,14 +425,19 @@ extension EditorApplicationDelegate: MTKViewDelegate {
                 }
             }
         }
+        #endif
         ImGui.End()
         
         ImGui.Render()
         let drawData = ImGui.GetDrawData()
         
-        if let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) {
+        let renderContext = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
+        let renderSystem = RenderSystem(renderer: renderer)
+        renderSystem.render(world: world, context: renderContext, overrideViewProjection: viewProj)
+        
+        if let encoder = renderContext.getOrCreateEncoder() {
             ImGui_ImplMetal_RenderDrawData(drawData, commandBuffer, encoder)
-            encoder.endEncoding()
+            renderContext.endEncoding()
         }
         
         commandBuffer.present(drawable)

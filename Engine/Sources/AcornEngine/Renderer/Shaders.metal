@@ -5,15 +5,26 @@ struct VertexIn {
     float3 position;
     float4 color;
     float2 texCoord;
+    float3 normal;
 };
 
 struct VertexOut {
     float4 position [[position]];
     float4 color;
+    float3 normal;
+    float3 worldPosition;
 };
 
 struct GlobalUniforms {
     float4x4 modelViewProjectionMatrix;
+    float4x4 modelMatrix;
+    float4x4 normalMatrix;
+    float4 ambientLightColor;
+    float4 directionalLightColor;
+    float4 directionalLightDirection;
+    float4 pointLightColor;
+    float4 pointLightPosition;
+    float4 meshColor;
 };
 
 vertex VertexOut vertex_main(uint vertexID [[vertex_id]],
@@ -22,12 +33,39 @@ vertex VertexOut vertex_main(uint vertexID [[vertex_id]],
     VertexOut out;
     float4 pos = float4(vertices[vertexID].position, 1.0);
     out.position = uniforms.modelViewProjectionMatrix * pos;
+    out.worldPosition = (uniforms.modelMatrix * pos).xyz;
     out.color = vertices[vertexID].color;
+    out.normal = (uniforms.normalMatrix * float4(vertices[vertexID].normal, 0.0)).xyz;
     return out;
 }
 
-fragment float4 fragment_main(VertexOut in [[stage_in]]) {
-    return in.color;
+fragment float4 fragment_main(VertexOut in [[stage_in]],
+                              constant GlobalUniforms &uniforms [[buffer(0)]]) {
+    float3 normal = normalize(in.normal);
+    float3 lightDir = normalize(-uniforms.directionalLightDirection.xyz);
+    
+    // Directional Diffuse
+    float nDotL = max(0.0, dot(normal, lightDir));
+    float3 directionalDiffuse = uniforms.directionalLightColor.rgb * nDotL;
+    
+    // Point Light Diffuse
+    float3 pointLightDir = uniforms.pointLightPosition.xyz - in.worldPosition;
+    float distance = length(pointLightDir);
+    float3 pointLightDirNorm = pointLightDir / distance;
+    float pointNDotL = max(0.0, dot(normal, pointLightDirNorm));
+    // Simple quadratic attenuation
+    float attenuation = 1.0 / (1.0 + 0.1 * distance + 0.01 * distance * distance);
+    float3 pointDiffuse = uniforms.pointLightColor.rgb * pointNDotL * attenuation;
+    
+    // Ambient
+    float3 ambient = uniforms.ambientLightColor.rgb;
+    
+    // Multiply vertex color with mesh color tint
+    float4 baseColor = in.color * uniforms.meshColor;
+    
+    float3 finalColor = baseColor.rgb * (ambient + directionalDiffuse + pointDiffuse);
+    
+    return float4(finalColor, baseColor.a);
 }
 
 // --- SDF Text Rendering Shaders ---

@@ -13,11 +13,12 @@ public enum BasicShapeGenerator {
     public static func generatePlane(width: Float = 1.0, height: Float = 1.0, color: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)) -> [Vertex] {
         let hw = width * 0.5
         let hh = height * 0.5
+        let normal = SIMD3<Float>(0, 0, 1)
         
-        let v0 = Vertex(position: SIMD3<Float>(-hw, -hh, 0), color: color, texCoord: SIMD2<Float>(0, 1))
-        let v1 = Vertex(position: SIMD3<Float>(hw, -hh, 0), color: color, texCoord: SIMD2<Float>(1, 1))
-        let v2 = Vertex(position: SIMD3<Float>(-hw, hh, 0), color: color, texCoord: SIMD2<Float>(0, 0))
-        let v3 = Vertex(position: SIMD3<Float>(hw, hh, 0), color: color, texCoord: SIMD2<Float>(1, 0))
+        let v0 = Vertex(position: SIMD3<Float>(-hw, -hh, 0), color: color, texCoord: SIMD2<Float>(0, 1), normal: normal)
+        let v1 = Vertex(position: SIMD3<Float>(hw, -hh, 0), color: color, texCoord: SIMD2<Float>(1, 1), normal: normal)
+        let v2 = Vertex(position: SIMD3<Float>(-hw, hh, 0), color: color, texCoord: SIMD2<Float>(0, 0), normal: normal)
+        let v3 = Vertex(position: SIMD3<Float>(hw, hh, 0), color: color, texCoord: SIMD2<Float>(1, 0), normal: normal)
         
         return [
             v0, v1, v2,
@@ -46,30 +47,30 @@ public enum BasicShapeGenerator {
         var vertices: [Vertex] = []
         
         // Helper to add a quad face with CCW winding looking from the outside
-        func addFace(v0: SIMD3<Float>, v1: SIMD3<Float>, v2: SIMD3<Float>, v3: SIMD3<Float>) {
+        func addFace(v0: SIMD3<Float>, v1: SIMD3<Float>, v2: SIMD3<Float>, v3: SIMD3<Float>, normal: SIMD3<Float>) {
             vertices.append(contentsOf: [
-                Vertex(position: v0, color: color, texCoord: SIMD2<Float>(0, 1)),
-                Vertex(position: v1, color: color, texCoord: SIMD2<Float>(1, 1)),
-                Vertex(position: v2, color: color, texCoord: SIMD2<Float>(0, 0)),
+                Vertex(position: v0, color: color, texCoord: SIMD2<Float>(0, 1), normal: normal),
+                Vertex(position: v1, color: color, texCoord: SIMD2<Float>(1, 1), normal: normal),
+                Vertex(position: v2, color: color, texCoord: SIMD2<Float>(0, 0), normal: normal),
                 
-                Vertex(position: v2, color: color, texCoord: SIMD2<Float>(0, 0)),
-                Vertex(position: v1, color: color, texCoord: SIMD2<Float>(1, 1)),
-                Vertex(position: v3, color: color, texCoord: SIMD2<Float>(1, 0))
+                Vertex(position: v2, color: color, texCoord: SIMD2<Float>(0, 0), normal: normal),
+                Vertex(position: v1, color: color, texCoord: SIMD2<Float>(1, 1), normal: normal),
+                Vertex(position: v3, color: color, texCoord: SIMD2<Float>(1, 0), normal: normal)
             ])
         }
         
         // Front (+Z): bottom-left, bottom-right, top-left, top-right
-        addFace(v0: p001, v1: p101, v2: p011, v3: p111)
+        addFace(v0: p001, v1: p101, v2: p011, v3: p111, normal: SIMD3<Float>(0, 0, 1))
         // Back (-Z) (reverse direction to keep CCW winding from outside)
-        addFace(v0: p100, v1: p000, v2: p110, v3: p010)
+        addFace(v0: p100, v1: p000, v2: p110, v3: p010, normal: SIMD3<Float>(0, 0, -1))
         // Left (-X)
-        addFace(v0: p000, v1: p001, v2: p010, v3: p011)
+        addFace(v0: p000, v1: p001, v2: p010, v3: p011, normal: SIMD3<Float>(-1, 0, 0))
         // Right (+X)
-        addFace(v0: p101, v1: p100, v2: p111, v3: p110)
+        addFace(v0: p101, v1: p100, v2: p111, v3: p110, normal: SIMD3<Float>(1, 0, 0))
         // Top (+Y)
-        addFace(v0: p011, v1: p111, v2: p010, v3: p110)
+        addFace(v0: p011, v1: p111, v2: p010, v3: p110, normal: SIMD3<Float>(0, 1, 0))
         // Bottom (-Y)
-        addFace(v0: p000, v1: p100, v2: p001, v3: p101)
+        addFace(v0: p000, v1: p100, v2: p001, v3: p101, normal: SIMD3<Float>(0, -1, 0))
         
         return vertices
     }
@@ -104,7 +105,9 @@ public enum BasicShapeGenerator {
                 let u = Float(s) / Float(segments)
                 let v = Float(r) / Float(rings)
                 
-                row.append(Vertex(position: SIMD3<Float>(x, y, z), color: color, texCoord: SIMD2<Float>(u, v)))
+                let normal = normalize(SIMD3<Float>(x, y, z))
+                
+                row.append(Vertex(position: SIMD3<Float>(x, y, z), color: color, texCoord: SIMD2<Float>(u, v), normal: normal))
             }
             grid.append(row)
         }
@@ -164,41 +167,46 @@ public enum BasicShapeGenerator {
             let u0 = Float(s) / Float(segments)
             let u1 = Float(nextS) / Float(segments)
             
+            let n0 = normalize(circleVertices[s])
+            let n1 = normalize(circleVertices[nextS])
+            
             // CCW winding
             vertices.append(contentsOf: [
-                Vertex(position: p0, color: color, texCoord: SIMD2<Float>(u0, 1)),
-                Vertex(position: p1, color: color, texCoord: SIMD2<Float>(u1, 1)),
-                Vertex(position: p2, color: color, texCoord: SIMD2<Float>(u0, 0)),
+                Vertex(position: p0, color: color, texCoord: SIMD2<Float>(u0, 1), normal: n0),
+                Vertex(position: p1, color: color, texCoord: SIMD2<Float>(u1, 1), normal: n1),
+                Vertex(position: p2, color: color, texCoord: SIMD2<Float>(u0, 0), normal: n0),
                 
-                Vertex(position: p2, color: color, texCoord: SIMD2<Float>(u0, 0)),
-                Vertex(position: p1, color: color, texCoord: SIMD2<Float>(u1, 1)),
-                Vertex(position: p3, color: color, texCoord: SIMD2<Float>(u1, 0))
+                Vertex(position: p2, color: color, texCoord: SIMD2<Float>(u0, 0), normal: n0),
+                Vertex(position: p1, color: color, texCoord: SIMD2<Float>(u1, 1), normal: n1),
+                Vertex(position: p3, color: color, texCoord: SIMD2<Float>(u1, 0), normal: n1)
             ])
         }
         
         // 2. Top Cap (CCW looking from above)
+        let topNormal = SIMD3<Float>(0, 1, 0)
         for s in 0..<segments {
             let nextS = s + 1
             let pTop0 = circleVertices[s] + SIMD3<Float>(0, hh, 0)
             let pTop1 = circleVertices[nextS] + SIMD3<Float>(0, hh, 0)
             
             vertices.append(contentsOf: [
-                Vertex(position: topCenter, color: color, texCoord: SIMD2<Float>(0.5, 0.5)),
-                Vertex(position: pTop1, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pTop1.x / radius, 0.5 + 0.5 * pTop1.z / radius)),
-                Vertex(position: pTop0, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pTop0.x / radius, 0.5 + 0.5 * pTop0.z / radius))
+                Vertex(position: topCenter, color: color, texCoord: SIMD2<Float>(0.5, 0.5), normal: topNormal),
+                Vertex(position: pTop1, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pTop1.x / radius, 0.5 + 0.5 * pTop1.z / radius), normal: topNormal),
+                Vertex(position: pTop0, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pTop0.x / radius, 0.5 + 0.5 * pTop0.z / radius), normal: topNormal)
             ])
         }
         
         // 3. Bottom Cap (CCW looking from below / CW looking from above)
+        let bottomNormal = SIMD3<Float>(0, -1, 0)
         for s in 0..<segments {
             let nextS = s + 1
             let pBottom0 = circleVertices[s] + SIMD3<Float>(0, -hh, 0)
             let pBottom1 = circleVertices[nextS] + SIMD3<Float>(0, -hh, 0)
             
             vertices.append(contentsOf: [
-                Vertex(position: bottomCenter, color: color, texCoord: SIMD2<Float>(0.5, 0.5)),
-                Vertex(position: pBottom0, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom0.x / radius, 0.5 + 0.5 * pBottom0.z / radius)),
-                Vertex(position: pBottom1, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom1.x / radius, 0.5 + 0.5 * pBottom1.z / radius))
+                Vertex(position: bottomCenter, color: color, texCoord: SIMD2<Float>(0.5, 0.5), normal: bottomNormal),
+                Vertex(position: pBottom0, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom0.x / radius, 0.5 + 0.5 * pBottom0.z / radius), normal: bottomNormal),
+                Vertex(position: pBottom1, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom1.x / radius, 0.5 + 0.5 * pBottom1.z / radius), normal: bottomNormal)
             ])
         }
         
@@ -237,23 +245,31 @@ public enum BasicShapeGenerator {
             let u0 = Float(s) / Float(segments)
             let u1 = Float(nextS) / Float(segments)
             
+            let theta0 = Float(s) * 2.0 * Float.pi / Float(segments)
+            let theta1 = Float(nextS) * 2.0 * Float.pi / Float(segments)
+            
+            let n0 = normalize(SIMD3<Float>(height * cos(theta0), radius, height * sin(theta0)))
+            let n1 = normalize(SIMD3<Float>(height * cos(theta1), radius, height * sin(theta1)))
+            let nApex = normalize((n0 + n1) * 0.5) // Approximate normal at the apex for this triangle
+            
             vertices.append(contentsOf: [
-                Vertex(position: apex, color: color, texCoord: SIMD2<Float>(u0 + 0.5 / Float(segments), 0)),
-                Vertex(position: p0, color: color, texCoord: SIMD2<Float>(u0, 1)),
-                Vertex(position: p1, color: color, texCoord: SIMD2<Float>(u1, 1))
+                Vertex(position: apex, color: color, texCoord: SIMD2<Float>(u0 + 0.5 / Float(segments), 0), normal: nApex),
+                Vertex(position: p0, color: color, texCoord: SIMD2<Float>(u0, 1), normal: n0),
+                Vertex(position: p1, color: color, texCoord: SIMD2<Float>(u1, 1), normal: n1)
             ])
         }
         
         // 2. Bottom Cap
+        let bottomNormal = SIMD3<Float>(0, -1, 0)
         for s in 0..<segments {
             let nextS = s + 1
             let pBottom0 = baseVertices[s]
             let pBottom1 = baseVertices[nextS]
             
             vertices.append(contentsOf: [
-                Vertex(position: bottomCenter, color: color, texCoord: SIMD2<Float>(0.5, 0.5)),
-                Vertex(position: pBottom0, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom0.x / radius, 0.5 + 0.5 * pBottom0.z / radius)),
-                Vertex(position: pBottom1, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom1.x / radius, 0.5 + 0.5 * pBottom1.z / radius))
+                Vertex(position: bottomCenter, color: color, texCoord: SIMD2<Float>(0.5, 0.5), normal: bottomNormal),
+                Vertex(position: pBottom0, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom0.x / radius, 0.5 + 0.5 * pBottom0.z / radius), normal: bottomNormal),
+                Vertex(position: pBottom1, color: color, texCoord: SIMD2<Float>(0.5 + 0.5 * pBottom1.x / radius, 0.5 + 0.5 * pBottom1.z / radius), normal: bottomNormal)
             ])
         }
         

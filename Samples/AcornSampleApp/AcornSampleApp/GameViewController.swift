@@ -23,6 +23,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         mtkView.device = defaultDevice
         mtkView.colorPixelFormat = .bgra8Unorm_srgb
+        mtkView.depthStencilPixelFormat = .depth32Float
         mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.2, blue: 0.3, alpha: 1.0)
         
         guard let queue = defaultDevice.makeCommandQueue() else {
@@ -39,6 +40,17 @@ class GameViewController: UIViewController, MTKViewDelegate {
             self.engine.world.registerSystem(ParticleSystem())
             mtkView.delegate = self
             setupScene()
+            
+            // Add basic lighting
+            let ambientLight = engine.world.createEntity()
+            engine.world.addComponent(LightComponent(type: .ambient, intensity: 0.3), to: ambientLight)
+            
+            let dirLight = engine.world.createEntity()
+            engine.world.addComponent(LightComponent(type: .directional, intensity: 0.7), to: dirLight)
+            var dirTransform = TransformComponent()
+            dirTransform.rotation = SIMD3<Float>(-.pi / 4, -.pi / 4, 0)
+            engine.world.addComponent(dirTransform, to: dirLight)
+            
             self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
         } catch {
             print("Failed to initialize Renderer: \(error)")

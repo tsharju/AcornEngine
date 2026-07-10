@@ -18,10 +18,14 @@ public struct RenderSystem {
     /// - Parameters:
     ///   - world: The ECS world.
     ///   - context: The render context for the current frame.
-    public func render(world: World, context: RenderContext) {
+    ///   - overrideViewProjection: Optional override for the camera matrix.
+    public func render(world: World, context: RenderContext, overrideViewProjection: simd_float4x4? = nil) {
         // Find active camera
         var viewProjectionMatrix = simd_float4x4.identity
-        if let cameraEntity = world.entities(with: CameraComponent.self).first {
+        
+        if let override = overrideViewProjection {
+            viewProjectionMatrix = override
+        } else if let cameraEntity = world.entities(with: CameraComponent.self).first {
             let camera = cameraEntity.1
             if let transform = world.component(ofType: TransformComponent.self, for: cameraEntity.0) {
                 let viewMatrix = transform.matrix.inverse
@@ -30,12 +34,56 @@ public struct RenderSystem {
             }
         }
         
+        // Find lights
+        var ambientColor = SIMD4<Float>(0, 0, 0, 1)
+        var directionalColor = SIMD4<Float>(0, 0, 0, 1)
+        var directionalDirection = SIMD4<Float>(0, -1, 0, 0)
+        var pointColor = SIMD4<Float>(0, 0, 0, 1)
+        var pointPosition = SIMD4<Float>(0, 0, 0, 1)
+        
+        for (entity, light) in world.entities(with: LightComponent.self) {
+            if light.type == .ambient {
+                let c = light.color * light.intensity
+                ambientColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
+            } else if light.type == .directional {
+                let c = light.color * light.intensity
+                directionalColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
+                if let transform = world.component(ofType: TransformComponent.self, for: entity) {
+                    let dir = transform.matrix * SIMD4<Float>(0, 0, -1, 0)
+                    let len = simd_length(SIMD3<Float>(dir.x, dir.y, dir.z))
+                    if len > 0.0001 {
+                        directionalDirection = SIMD4<Float>(dir.x / len, dir.y / len, dir.z / len, 0)
+                    }
+                }
+            } else if light.type == .point {
+                let c = light.color * light.intensity
+                pointColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
+                if let transform = world.component(ofType: TransformComponent.self, for: entity) {
+                    let pos = transform.matrix * SIMD4<Float>(0, 0, 0, 1)
+                    pointPosition = pos
+                }
+            }
+        }
+        
         // Render mesh components
         let entities = world.entities(with: MeshComponent.self)
         for (entity, meshComponent) in entities {
             if let transform = world.component(ofType: TransformComponent.self, for: entity) {
-                let mvp = matrix_multiply(viewProjectionMatrix, transform.matrix)
-                let uniforms = GlobalUniforms(modelViewProjectionMatrix: mvp)
+                let modelMatrix = transform.matrix
+                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
+                let normalMatrix = modelMatrix.inverse.transpose
+                
+                let uniforms = GlobalUniforms(
+                    modelViewProjectionMatrix: mvp,
+                    modelMatrix: modelMatrix,
+                    normalMatrix: normalMatrix,
+                    ambientLightColor: ambientColor,
+                    directionalLightColor: directionalColor,
+                    directionalLightDirection: directionalDirection,
+                    pointLightColor: pointColor,
+                    pointLightPosition: pointPosition,
+                    meshColor: meshComponent.color
+                )
                 renderer.render(mesh: meshComponent.mesh, uniforms: uniforms, context: context)
             }
         }

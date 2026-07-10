@@ -8,3 +8,4 @@ xcuserdata/
 .swiftpm/
 
 build_output/
+imgui.ini

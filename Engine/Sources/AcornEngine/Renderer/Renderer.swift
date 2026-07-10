@@ -16,6 +16,11 @@ public enum RendererError: Error {
 public protocol Mesh: Sendable {
     /// The number of vertices in the mesh.
     var vertexCount: Int { get }
+    
+    #if DEBUG
+    /// The CPU-side vertices of the mesh.
+    var vertices: [Vertex] { get }
+    #endif
 }
 
 /// Opaque protocol representing the context for the current frame (e.g., command buffer, render target).

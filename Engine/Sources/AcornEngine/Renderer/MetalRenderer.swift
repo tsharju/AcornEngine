@@ -78,7 +78,23 @@ public class MetalRenderer: Renderer {
         }
         self.commandQueue = queue
         
-        guard let library = try? device.makeDefaultLibrary(bundle: Bundle.module) else {
+        var metalLibrary: (any MTLLibrary)? = nil
+        if let lib = try? device.makeDefaultLibrary(bundle: Bundle.module) {
+            metalLibrary = lib
+        } else if let shaderURL = Bundle.module.url(forResource: "Shaders", withExtension: "metal"),
+                  let shaderSource = try? String(contentsOf: shaderURL, encoding: .utf8) {
+            do {
+                metalLibrary = try device.makeLibrary(source: shaderSource, options: nil)
+            } catch {
+                print("Failed to compile Shaders.metal at runtime: \(error)")
+            }
+        }
+        
+        if metalLibrary == nil {
+            metalLibrary = device.makeDefaultLibrary()
+        }
+        
+        guard let library = metalLibrary else {
             throw RendererError.libraryNotFound
         }
         

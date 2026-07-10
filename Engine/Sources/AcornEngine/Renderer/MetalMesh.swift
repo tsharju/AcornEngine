@@ -9,12 +9,20 @@ public struct MetalMesh: Mesh, @unchecked Sendable {
     /// The number of vertices in the mesh.
     public let vertexCount: Int
 
+    #if DEBUG
+    /// The CPU-side vertices of the mesh.
+    public let vertices: [Vertex]
+    #endif
+
     /// Creates a mesh from an array of vertices.
     /// - Parameters:
     ///   - device: The Metal device used to create the buffers.
     ///   - vertices: An array of `Vertex` structures.
     /// - Returns: A new `MetalMesh`, or `nil` if buffer creation fails.
     public init?(device: any MTLDevice, vertices: [Vertex]) {
+        #if DEBUG
+        self.vertices = vertices
+        #endif
         self.vertexCount = vertices.count
         let size = vertices.count * MemoryLayout<Vertex>.stride
         guard let buffer = device.makeBuffer(bytes: vertices, length: size, options: .storageModeShared) else {

@@ -23,6 +23,12 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
     // Editor State
     var selectedEntity: Entity?
     
+    // The Metal renderer
+    var renderer: MetalRenderer!
+    
+    // Wireframe setting
+    var renderWireframes: Bool = true
+    
     func applicationDidFinishLaunching(_ notification: Notification) {
         device = MTLCreateSystemDefaultDevice()
         commandQueue = device.makeCommandQueue()
@@ -43,6 +49,11 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         
         setupImGui()
+        do {
+            renderer = try MetalRenderer(device: device)
+        } catch {
+            print("Failed to initialize MetalRenderer in editor: \(error)")
+        }
         setupWorld()
     }
     
@@ -55,11 +66,19 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
     func setupWorld() {
         world = World()
         // Create some initial entities for testing
-        let e1 = world.createEntity()
-        world.addComponent(TransformComponent(), to: e1)
+        let cubeEntity = world.createEntity()
+        world.addComponent(TransformComponent(position: SIMD3<Float>(-5, 0, 0)), to: cubeEntity)
+        let cubeVertices = BasicShapeGenerator.generateCube(size: SIMD3<Float>(4, 4, 4))
+        if let mesh = renderer.createMesh(vertices: cubeVertices) {
+            world.addComponent(MeshComponent(mesh: mesh), to: cubeEntity)
+        }
         
-        let e2 = world.createEntity()
-        world.addComponent(TransformComponent(position: SIMD3<Float>(10, 20, 0)), to: e2)
+        let sphereEntity = world.createEntity()
+        world.addComponent(TransformComponent(position: SIMD3<Float>(5, 0, 0)), to: sphereEntity)
+        let sphereVertices = BasicShapeGenerator.generateSphere(radius: 2.5)
+        if let mesh = renderer.createMesh(vertices: sphereVertices) {
+            world.addComponent(MeshComponent(mesh: mesh), to: sphereEntity)
+        }
         
         // Add ambient light
         let ambientLight = world.createEntity()
@@ -109,9 +128,57 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         ImGui.SetNextWindowSize(ImVec2(leftWidth, sceneTreeHeight), 0)
         ImGui.Begin("Scene Tree", nil, windowFlags)
         
-        if ImGui.Button("Create Entity", ImVec2(0, 0)) {
+        if ImGui.Button("Create Empty", ImVec2(0, 0)) {
             let newEntity = world.createEntity()
             world.addComponent(TransformComponent(), to: newEntity)
+        }
+        ImGui.SameLine(0, -1.0)
+        if ImGui.Button("Create Shape...", ImVec2(0, 0)) {
+            ImGui.OpenPopup("create_shape_popup", 0)
+        }
+        
+        if ImGui.BeginPopup("create_shape_popup", 0) {
+            if ImGui.MenuItem("Cube", nil, false, true) {
+                let newEntity = world.createEntity()
+                world.addComponent(TransformComponent(), to: newEntity)
+                let vertices = BasicShapeGenerator.generateCube()
+                if let mesh = renderer.createMesh(vertices: vertices) {
+                    world.addComponent(MeshComponent(mesh: mesh), to: newEntity)
+                }
+            }
+            if ImGui.MenuItem("Sphere", nil, false, true) {
+                let newEntity = world.createEntity()
+                world.addComponent(TransformComponent(), to: newEntity)
+                let vertices = BasicShapeGenerator.generateSphere()
+                if let mesh = renderer.createMesh(vertices: vertices) {
+                    world.addComponent(MeshComponent(mesh: mesh), to: newEntity)
+                }
+            }
+            if ImGui.MenuItem("Cylinder", nil, false, true) {
+                let newEntity = world.createEntity()
+                world.addComponent(TransformComponent(), to: newEntity)
+                let vertices = BasicShapeGenerator.generateCylinder()
+                if let mesh = renderer.createMesh(vertices: vertices) {
+                    world.addComponent(MeshComponent(mesh: mesh), to: newEntity)
+                }
+            }
+            if ImGui.MenuItem("Cone", nil, false, true) {
+                let newEntity = world.createEntity()
+                world.addComponent(TransformComponent(), to: newEntity)
+                let vertices = BasicShapeGenerator.generateCone()
+                if let mesh = renderer.createMesh(vertices: vertices) {
+                    world.addComponent(MeshComponent(mesh: mesh), to: newEntity)
+                }
+            }
+            if ImGui.MenuItem("Plane", nil, false, true) {
+                let newEntity = world.createEntity()
+                world.addComponent(TransformComponent(), to: newEntity)
+                let vertices = BasicShapeGenerator.generatePlane()
+                if let mesh = renderer.createMesh(vertices: vertices) {
+                    world.addComponent(MeshComponent(mesh: mesh), to: newEntity)
+                }
+            }
+            ImGui.EndPopup()
         }
         
         ImGui.Separator()
@@ -183,6 +250,8 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         ImGui.Begin("World View", nil, windowFlags)
         
         ImGui.Checkbox("Use Scene Camera", &useSceneCamera)
+        ImGui.SameLine(0, -1.0)
+        ImGui.Checkbox("Render Wireframes", &renderWireframes)
         var viewProj = simd_float4x4()
         var validCamera = true
         
@@ -288,6 +357,40 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             for entity in entities {
                 guard let transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
                 let mat = transform.matrix
+                
+                #if DEBUG
+                if renderWireframes, let meshComp = world.component(ofType: MeshComponent.self, for: entity) {
+                    let mesh = meshComp.mesh
+                    let vertices = mesh.vertices
+                    let wireColor: UInt32 = 0xFFCCCCCC // Light grey wireframe
+                    
+                    for i in stride(from: 0, to: vertices.count, by: 3) {
+                        if i + 2 < vertices.count {
+                            let v0 = vertices[i].position
+                            let v1 = vertices[i + 1].position
+                            let v2 = vertices[i + 2].position
+                            
+                            let w0 = mat * SIMD4<Float>(v0, 1.0)
+                            let w1 = mat * SIMD4<Float>(v1, 1.0)
+                            let w2 = mat * SIMD4<Float>(v2, 1.0)
+                            
+                            let p0 = project(SIMD3<Float>(w0.x, w0.y, w0.z))
+                            let p1 = project(SIMD3<Float>(w1.x, w1.y, w1.z))
+                            let p2 = project(SIMD3<Float>(w2.x, w2.y, w2.z))
+                            
+                            if let p0 = p0, let p1 = p1 {
+                                drawList.pointee.AddLine(p0, p1, wireColor, 1.0)
+                            }
+                            if let p1 = p1, let p2 = p2 {
+                                drawList.pointee.AddLine(p1, p2, wireColor, 1.0)
+                            }
+                            if let p2 = p2, let p0 = p0 {
+                                drawList.pointee.AddLine(p2, p0, wireColor, 1.0)
+                            }
+                        }
+                    }
+                }
+                #endif
                 
                 let oClip = mat * SIMD4<Float>(0, 0, 0, 1)
                 let xClip = mat * SIMD4<Float>(5, 0, 0, 1)

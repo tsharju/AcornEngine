@@ -1,3 +1,15 @@
+#if DEBUG
+/// A registry for components, used by the editor to know what component types can be added to an entity.
+@MainActor
+public struct ComponentRegistry {
+    public static var knownComponentTypes: [any Component.Type] = []
+    
+    public static func register<T: Component>(_ type: T.Type) {
+        knownComponentTypes.append(type)
+    }
+}
+#endif
+
 /// The central registry managing all entities, components, and systems.
 @MainActor
 public class World {
@@ -88,4 +100,22 @@ public class World {
             system.update(world: self, deltaTime: deltaTime)
         }
     }
+    
+#if DEBUG
+    /// Retrieves all entities in the world. (Editor-only feature)
+    public var allEntities: [Entity] {
+        Array(entities)
+    }
+    
+    /// Retrieves all components for a given entity. (Editor-only feature)
+    public func allComponents(for entity: Entity) -> [any Component] {
+        var result: [any Component] = []
+        for typeId in components.keys {
+            if let component = components[typeId]?[entity] {
+                result.append(component)
+            }
+        }
+        return result
+    }
+#endif
 }

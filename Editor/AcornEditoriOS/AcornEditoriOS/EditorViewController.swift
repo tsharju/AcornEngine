@@ -1,14 +1,11 @@
-#if os(macOS)
-import Cocoa
+import UIKit
 import Metal
 import MetalKit
 import ImGui
 import AcornEngine
+import simd
 
-@MainActor
-class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
-    var window: NSWindow!
-    var view: MTKView!
+class EditorViewController: UIViewController {
     var device: MTLDevice!
     var commandQueue: MTLCommandQueue!
     
@@ -30,29 +27,34 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
     // Wireframe setting
     var renderWireframes: Bool = true
     
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        device = MTLCreateSystemDefaultDevice()
-        commandQueue = device.makeCommandQueue()
+    // Track frame timing
+    var lastRenderTime: CFTimeInterval = 0
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
         
-        let rect = NSRect(x: 100, y: 100, width: 1280, height: 720)
-        window = NSWindow(contentRect: rect,
-                          styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                          backing: .buffered,
-                          defer: false)
-        window.title = "Acorn Editor"
+        guard let mtkView = view as? MTKView else {
+            print("View of EditorViewController is not an MTKView")
+            return
+        }
         
-        view = MTKView(frame: rect, device: device)
-        view.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0)
-        view.colorPixelFormat = .bgra8Unorm
-        view.depthStencilPixelFormat = .depth32Float
-        view.delegate = self
+        guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
+            print("Metal is not supported")
+            return
+        }
         
-        window.contentView = view
-        window.makeKeyAndOrderFront(nil)
+        self.device = defaultDevice
+        self.commandQueue = defaultDevice.makeCommandQueue()
+        
+        mtkView.device = defaultDevice
+        mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1.0)
+        mtkView.colorPixelFormat = .bgra8Unorm
+        mtkView.depthStencilPixelFormat = .depth32Float
+        mtkView.delegate = self
         
         setupImGui()
         do {
-            renderer = try MetalRenderer(device: device, pixelFormat: view.colorPixelFormat)
+            renderer = try MetalRenderer(device: device, pixelFormat: mtkView.colorPixelFormat)
         } catch {
             print("Failed to initialize MetalRenderer in editor: \(error)")
         }
@@ -61,8 +63,11 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
     
     func setupImGui() {
         ImGui.CreateContext(nil)
-        ImGui_ImplOSX_Init(view)
         ImGui_ImplMetal_Init(device)
+        
+        let io = ImGui.GetIO()
+        // Disable saving/loading of imgui.ini on iOS to avoid sandbox permission warnings
+        io.pointee.IniFilename = nil
     }
     
     func setupWorld() {
@@ -100,9 +105,37 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         pointTransform.position = SIMD3<Float>(0, 2, 0)
         world.addComponent(pointTransform, to: pointLight)
     }
+    
+    // MARK: - Touch Handling for Dear ImGui
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        updateTouch(touches.first)
+    }
+    
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        updateTouch(touches.first)
+    }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        let io = ImGui.GetIO()
+        io.pointee.MouseDown.0 = false
+    }
+    
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        let io = ImGui.GetIO()
+        io.pointee.MouseDown.0 = false
+    }
+    
+    private func updateTouch(_ touch: UITouch?) {
+        guard let touch = touch else { return }
+        let loc = touch.location(in: view)
+        let io = ImGui.GetIO()
+        io.pointee.MousePos = ImVec2(Float(loc.x), Float(loc.y))
+        io.pointee.MouseDown.0 = true
+    }
 }
 
-extension EditorApplicationDelegate: MTKViewDelegate {
+extension EditorViewController: MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         // Handle resize if needed
     }
@@ -114,9 +147,20 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             return
         }
         
+        let currentTime = CACurrentMediaTime()
+        let deltaTime = lastRenderTime == 0 ? 0.016 : currentTime - lastRenderTime
+        lastRenderTime = currentTime
+        
+        // Update ImGui IO parameters for the frame
+        let io = ImGui.GetIO()
+        io.pointee.DisplaySize = ImVec2(Float(view.bounds.width), Float(view.bounds.height))
+        let scale = Float(view.contentScaleFactor)
+        io.pointee.DisplayFramebufferScale = ImVec2(scale, scale)
+        io.pointee.DeltaTime = Float(deltaTime)
+        
         ImGui_ImplMetal_NewFrame(descriptor)
-        ImGui_ImplOSX_NewFrame(view)
         ImGui.NewFrame()
+        
         // Clear the background
         descriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.1, 0.1, 0.1, 1.0)
         descriptor.depthAttachment.clearDepth = 1.0
@@ -126,7 +170,7 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         // Layout Constants
         let viewport = ImGui.GetMainViewport()
         let workPos = viewport != nil ? viewport!.pointee.WorkPos : ImVec2(0, 0)
-        let workSize = viewport != nil ? viewport!.pointee.WorkSize : ImVec2(800, 600)
+        let workSize = viewport != nil ? viewport!.pointee.WorkSize : ImVec2(Float(view.bounds.width), Float(view.bounds.height))
         
         let leftWidth: Float = 300.0
         let leftHeight = workSize.y
@@ -199,7 +243,6 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         for entity in entities {
             let nodeOpen = ImGui.TreeNode("Entity \(entity.id)")
             
-
             // To show selection without TreeNodeEx, we can just highlight text or use Selectable
             if selectedEntity == entity {
                 ImGui.SameLine(0, -1.0)
@@ -290,7 +333,6 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             if let firstCam = cameraEntities.first,
                let transform = world.component(ofType: TransformComponent.self, for: firstCam.0) {
                 let camera = firstCam.1
-                // Use simd_inverse or transform.matrix.inverse. transform.matrix.inverse exists in simd
                 let view = transform.matrix.inverse
                 let proj = camera.projectionMatrix()
                 viewProj = proj * view
@@ -317,14 +359,12 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             viewProj = projection * view
         }
         
-        let cursorPos = ImGui.GetCursorScreenPos()
         let currentViewProj = viewProj
         
         #if DEBUG
         if renderWireframes, validCamera {
             let drawList = ImGui.GetWindowDrawList()!
             
-            // The 3D scene is rendered to the full MTKView, so NDC maps to workSize, not winSize
             func project(_ pt: SIMD3<Float>) -> ImVec2? {
                 let clip = currentViewProj * SIMD4<Float>(pt, 1.0)
                 if clip.w <= 0.1 { return nil }
@@ -334,16 +374,16 @@ extension EditorApplicationDelegate: MTKViewDelegate {
                 return ImVec2(x, y)
             }
             
-            // Draw Grid on XZ plane using small segments to prevent culling the entire line
-            let gridColor: UInt32 = 0x44AAAAAA // ABGR format, semi-transparent light gray
+            // Draw Grid on XZ plane
+            let gridColor: UInt32 = 0x44AAAAAA // ABGR format
             let gridSize: Int = 100
             let gridStep: Float = 10.0
-            let segStep: Float = 10.0 // segmentation length to prevent culling
+            let segStep: Float = 10.0
             
             for i in stride(from: -gridSize, through: gridSize, by: Int(gridStep)) {
                 let f = Float(i)
                 
-                // Lines along Z (constant X)
+                // Lines along Z
                 var prevZ: ImVec2? = nil
                 for j in stride(from: -gridSize, through: gridSize, by: Int(segStep)) {
                     let currZ = project(SIMD3<Float>(f, 0, Float(j)))
@@ -351,7 +391,7 @@ extension EditorApplicationDelegate: MTKViewDelegate {
                     prevZ = currZ
                 }
                 
-                // Lines along X (constant Z)
+                // Lines along X
                 var prevX: ImVec2? = nil
                 for j in stride(from: -gridSize, through: gridSize, by: Int(segStep)) {
                     let currX = project(SIMD3<Float>(Float(j), 0, f))
@@ -364,11 +404,10 @@ extension EditorApplicationDelegate: MTKViewDelegate {
                 guard let transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
                 let mat = transform.matrix
                 
-                #if DEBUG
-                if renderWireframes, let meshComp = world.component(ofType: MeshComponent.self, for: entity) {
+                if let meshComp = world.component(ofType: MeshComponent.self, for: entity) {
                     let mesh = meshComp.mesh
                     let vertices = mesh.vertices
-                    let wireColor: UInt32 = 0xFFCCCCCC // Light grey wireframe
+                    let wireColor: UInt32 = 0xFFCCCCCC
                     
                     for i in stride(from: 0, to: vertices.count, by: 3) {
                         if i + 2 < vertices.count {
@@ -396,7 +435,6 @@ extension EditorApplicationDelegate: MTKViewDelegate {
                         }
                     }
                 }
-                #endif
                 
                 let oClip = mat * SIMD4<Float>(0, 0, 0, 1)
                 let xClip = mat * SIMD4<Float>(5, 0, 0, 1)
@@ -409,15 +447,12 @@ extension EditorApplicationDelegate: MTKViewDelegate {
                 let zAxis = SIMD3<Float>(zClip.x, zClip.y, zClip.z)
                 
                 if let pOrigin = project(origin) {
-                    // Draw X Axis (Red)
                     if let pX = project(xAxis) {
                         drawList.pointee.AddLine(pOrigin, pX, 0xFF0000FF, 2.0)
                     }
-                    // Draw Y Axis (Green)
                     if let pY = project(yAxis) {
                         drawList.pointee.AddLine(pOrigin, pY, 0xFF00FF00, 2.0)
                     }
-                    // Draw Z Axis (Blue)
                     if let pZ = project(zAxis) {
                         drawList.pointee.AddLine(pOrigin, pZ, 0xFFFF0000, 2.0)
                     }
@@ -443,9 +478,3 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         commandBuffer.commit()
     }
 }
-
-let app = NSApplication.shared
-let delegate = EditorApplicationDelegate()
-app.delegate = delegate
-app.run()
-#endif

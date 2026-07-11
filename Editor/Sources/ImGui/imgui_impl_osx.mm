@@ -19,6 +19,9 @@
 // - Documentation        https://dearimgui.com/docs (same as your local docs/ folder).
 // - Introduction, links and more at the top of imgui.cpp
 
+#import <TargetConditionals.h>
+#if TARGET_OS_OSX
+
 #import "imgui.h"
 #ifndef IMGUI_DISABLE
 #import "imgui_impl_osx.h"
@@ -836,3 +839,5 @@ static void ImGui_ImplOSX_AddTrackingArea(NSView* _Nonnull view)
 //-----------------------------------------------------------------------------
 
 #endif // #ifndef IMGUI_DISABLE
+
+#endif // #if TARGET_OS_OSX

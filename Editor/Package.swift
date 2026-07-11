@@ -4,11 +4,15 @@ import PackageDescription
 
 let package = Package(
     name: "AcornEditor",
-    platforms: [.macOS(.v13)],
+    platforms: [.iOS(.v16), .macOS(.v13)],
     products: [
         .executable(
             name: "AcornEditor",
             targets: ["AcornEditor"]
+        ),
+        .library(
+            name: "ImGui",
+            targets: ["ImGui"]
         ),
     ],
     dependencies: [

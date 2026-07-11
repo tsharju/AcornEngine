@@ -1,3 +1,6 @@
+#include <TargetConditionals.h>
+#if TARGET_OS_OSX
+
 // dear imgui: Platform Backend for OSX / Cocoa
 // This needs to be used along with a Renderer (e.g. OpenGL2, OpenGL3, Vulkan, Metal..)
 // - Not well tested. If you want a portable application, prefer using the GLFW or SDL platform Backends on Mac.
@@ -52,3 +55,6 @@ IMGUI_IMPL_API void     ImGui_ImplOSX_NewFrame(void* _Nullable view);
 #endif
 
 #endif // #ifndef IMGUI_DISABLE
+
+#endif // #if TARGET_OS_OSX
+

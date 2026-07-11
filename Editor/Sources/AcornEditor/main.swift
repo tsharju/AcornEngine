@@ -23,6 +23,7 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
     
     // Editor State
     var selectedEntity: Entity?
+    var boldFont: UnsafeMutablePointer<ImFont>? = nil
     
     // The Metal renderer
     var renderer: MetalRenderer!
@@ -63,10 +64,23 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         ImGui.CreateContext(nil)
         ImGui_ImplOSX_Init(view)
         ImGui_ImplMetal_Init(device)
+        
+        let io = ImGui.GetIO()
+        if let fonts = io.pointee.Fonts {
+            let regularPath = "/System/Library/Fonts/Supplemental/Arial.ttf"
+            regularPath.withCString { cPath in
+                _ = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0)
+            }
+            let boldPath = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+            boldPath.withCString { cPath in
+                boldFont = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0)
+            }
+        }
     }
     
     func setupWorld() {
         world = World()
+        registerAllComponents(renderer: renderer)
         // Create some initial entities for testing
         let cubeEntity = world.createEntity()
         world.addComponent(TransformComponent(position: SIMD3<Float>(-5, 0, 0)), to: cubeEntity)
@@ -99,6 +113,8 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         var pointTransform = TransformComponent()
         pointTransform.position = SIMD3<Float>(0, 2, 0)
         world.addComponent(pointTransform, to: pointLight)
+        
+        selectedEntity = cubeEntity
     }
 }
 
@@ -197,13 +213,18 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         
         let entities = world.allEntities.sorted(by: { $0.id < $1.id })
         for entity in entities {
-            let nodeOpen = ImGui.TreeNode("Entity \(entity.id)")
+            let isSelected = selectedEntity == entity
+            if isSelected, let bold = self.boldFont {
+                ImGui.PushFont(bold)
+            }
             
-
-            // To show selection without TreeNodeEx, we can just highlight text or use Selectable
-            if selectedEntity == entity {
-                ImGui.SameLine(0, -1.0)
-                ImGui.TextUnformatted(" <-- Selected", nil)
+            let name = world.name(for: entity)
+            let nodeOpen = "\(name)##\(entity.id)".withCString { cLabel in
+                ImGui.TreeNode(cLabel)
+            }
+            
+            if isSelected, self.boldFont != nil {
+                ImGui.PopFont()
             }
             
             if ImGui.IsItemClicked(0) {
@@ -220,53 +241,49 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         ImGui.SetNextWindowSize(ImVec2(leftWidth, inspectorHeight), 0)
         ImGui.Begin("Inspector", nil, windowFlags)
         if let selected = selectedEntity, entities.contains(selected) {
-            ImGui.TextUnformatted("Entity \(selected.id)", nil)
+            var nameBuffer = [CChar](repeating: 0, count: 128)
+            let currentName = world.name(for: selected)
+            strncpy(&nameBuffer, currentName, nameBuffer.count - 1)
+            
+            let inputChanged = "Name".withCString { cLabel in
+                ImGui.InputText(cLabel, &nameBuffer, nameBuffer.count, 0, nil, nil)
+            }
+            if inputChanged {
+                let newName = nameBuffer.withUnsafeBufferPointer { ptr in
+                    String(cString: ptr.baseAddress!)
+                }.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !newName.isEmpty {
+                    world.setName(newName, for: selected)
+                }
+            }
+            ImGui.TextUnformatted("ID: \(selected.id)", nil)
             ImGui.Separator()
             
             let components = world.allComponents(for: selected)
             for component in components {
                 if ImGui.TreeNode("\(type(of: component))") {
-                    if var transform = component as? TransformComponent {
-                        var pos: [Float] = [transform.position.x, transform.position.y, transform.position.z]
-                        if ImGui.DragFloat3("Position", &pos, 0.1, 0, 0, "%.3f", 0) {
-                            transform.position = SIMD3<Float>(pos[0], pos[1], pos[2])
-                            world.addComponent(transform, to: selected)
-                        }
-                        
-                        var rot: [Float] = [transform.rotation.x, transform.rotation.y, transform.rotation.z]
-                        if ImGui.DragFloat3("Rotation", &rot, 0.1, 0, 0, "%.3f", 0) {
-                            transform.rotation = SIMD3<Float>(rot[0], rot[1], rot[2])
-                            world.addComponent(transform, to: selected)
-                        }
-                        
-                        var scale: [Float] = [transform.scale.x, transform.scale.y, transform.scale.z]
-                        if ImGui.DragFloat3("Scale", &scale, 0.1, 0, 0, "%.3f", 0) {
-                            transform.scale = SIMD3<Float>(scale[0], scale[1], scale[2])
-                            world.addComponent(transform, to: selected)
-                        }
-                    } else if var meshComp = component as? MeshComponent {
-                        var col: [Float] = [meshComp.color.x, meshComp.color.y, meshComp.color.z, meshComp.color.w]
-                        if ImGui.ColorEdit4("Color", &col, 0) {
-                            meshComp.color = SIMD4<Float>(col[0], col[1], col[2], col[3])
-                            world.addComponent(meshComp, to: selected)
-                        }
-                    } else if var lightComp = component as? LightComponent {
-                        var col: [Float] = [lightComp.color.x, lightComp.color.y, lightComp.color.z]
-                        if ImGui.ColorEdit3("Color", &col, 0) {
-                            lightComp.color = SIMD3<Float>(col[0], col[1], col[2])
-                            world.addComponent(lightComp, to: selected)
-                        }
-                        var intensity = lightComp.intensity
-                        if ImGui.DragFloat("Intensity", &intensity, 0.05, 0.0, 10.0, "%.2f", 0) {
-                            lightComp.intensity = intensity
-                            world.addComponent(lightComp, to: selected)
-                        }
+                    if var inspectable = component as? Inspectable {
+                        inspectable.drawInspector(world: world, entity: selected)
                     } else {
-                        // Fallback for components without custom editors
                         ImGui.TextUnformatted("\(component)", nil)
                     }
                     ImGui.TreePop()
                 }
+            }
+            
+            ImGui.Separator()
+            if ImGui.Button("Add Component", ImVec2(-1, 0)) {
+                ImGui.OpenPopup("add_component_popup", 0)
+            }
+            if ImGui.BeginPopup("add_component_popup", 0) {
+                for meta in ComponentRegistry.components {
+                    if ImGui.MenuItem(meta.name, nil, false, true) {
+                        let newComp = meta.factory()
+                        // Implicitly opens existential to call generic addComponent
+                        world.addComponent(newComp, to: selected)
+                    }
+                }
+                ImGui.EndPopup()
             }
         } else {
             ImGui.TextUnformatted("No entity selected", nil)
@@ -317,7 +334,7 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             viewProj = projection * view
         }
         
-        let cursorPos = ImGui.GetCursorScreenPos()
+        // let cursorPos = ImGui.GetCursorScreenPos()
         let currentViewProj = viewProj
         
         #if DEBUG

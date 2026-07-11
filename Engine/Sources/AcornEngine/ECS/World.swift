@@ -1,11 +1,23 @@
 #if DEBUG
+public struct ComponentMetadata: Sendable {
+    public let name: String
+    public let type: any Component.Type
+    public let factory: @Sendable () -> any Component
+    
+    public init(name: String, type: any Component.Type, factory: @escaping @Sendable () -> any Component) {
+        self.name = name
+        self.type = type
+        self.factory = factory
+    }
+}
+
 /// A registry for components, used by the editor to know what component types can be added to an entity.
 @MainActor
 public struct ComponentRegistry {
-    public static var knownComponentTypes: [any Component.Type] = []
+    public static var components: [ComponentMetadata] = []
     
-    public static func register<T: Component>(_ type: T.Type) {
-        knownComponentTypes.append(type)
+    public static func register<T: Component>(name: String, type: T.Type, factory: @escaping @Sendable () -> T) {
+        components.append(ComponentMetadata(name: name, type: type, factory: factory))
     }
 }
 #endif
@@ -41,6 +53,9 @@ public class World {
         for typeId in components.keys {
             components[typeId]?[entity] = nil
         }
+        #if DEBUG
+        entityNames[entity] = nil
+        #endif
     }
     
     /// Adds a component to the specified entity.
@@ -102,6 +117,16 @@ public class World {
     }
     
 #if DEBUG
+    private var entityNames: [Entity: String] = [:]
+    
+    public func name(for entity: Entity) -> String {
+        return entityNames[entity] ?? "Entity \(entity.id)"
+    }
+    
+    public func setName(_ name: String, for entity: Entity) {
+        entityNames[entity] = name
+    }
+
     /// Retrieves all entities in the world. (Editor-only feature)
     public var allEntities: [Entity] {
         Array(entities)

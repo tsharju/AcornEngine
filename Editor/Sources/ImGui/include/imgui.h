@@ -4241,4 +4241,6 @@ typedef ImFontAtlasRect ImFontAtlasCustomRect;
 #endif
 #endif
 
+#include "imgui_swift_helpers.h"
+
 #endif // #ifndef IMGUI_DISABLE

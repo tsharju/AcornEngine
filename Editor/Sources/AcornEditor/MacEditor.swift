@@ -67,13 +67,30 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         
         let io = ImGui.GetIO()
         if let fonts = io.pointee.Fonts {
-            let regularPath = "/System/Library/Fonts/Supplemental/Arial.ttf"
-            regularPath.withCString { cPath in
-                _ = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0)
+            let fm = FileManager.default
+            var regularPath = Bundle.main.path(forResource: "JetBrainsMono-Regular", ofType: "ttf")
+            var boldPath = Bundle.main.path(forResource: "JetBrainsMono-Bold", ofType: "ttf")
+            
+            // Fallback for command line run
+            if regularPath == nil || !fm.fileExists(atPath: regularPath!) {
+                if fm.fileExists(atPath: "Fonts/JetBrainsMono-Regular.ttf") {
+                    regularPath = "Fonts/JetBrainsMono-Regular.ttf"
+                    boldPath = "Fonts/JetBrainsMono-Bold.ttf"
+                } else if fm.fileExists(atPath: "Editor/Fonts/JetBrainsMono-Regular.ttf") {
+                    regularPath = "Editor/Fonts/JetBrainsMono-Regular.ttf"
+                    boldPath = "Editor/Fonts/JetBrainsMono-Bold.ttf"
+                }
             }
-            let boldPath = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
-            boldPath.withCString { cPath in
-                boldFont = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0)
+            
+            if let rPath = regularPath {
+                rPath.withCString { cPath in
+                    _ = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0)
+                }
+            }
+            if let bPath = boldPath {
+                bPath.withCString { cPath in
+                    boldFont = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0)
+                }
             }
         }
     }
@@ -461,8 +478,14 @@ extension EditorApplicationDelegate: MTKViewDelegate {
     }
 }
 
-let app = NSApplication.shared
-let delegate = EditorApplicationDelegate()
-app.delegate = delegate
-app.run()
+@main
+struct AcornEditorApp {
+    @MainActor
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = EditorApplicationDelegate()
+        app.delegate = delegate
+        app.run()
+    }
+}
 #endif

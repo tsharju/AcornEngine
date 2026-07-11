@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 import AcornEngine
 import ImGui
@@ -250,4 +249,3 @@ func registerAllComponents(renderer: MetalRenderer, dummySpriteSheet: SpriteShee
         }
     }
 }
-#endif

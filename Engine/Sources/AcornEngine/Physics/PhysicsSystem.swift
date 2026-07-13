@@ -105,9 +105,33 @@ public final class PhysicsSystem: System {
                 let position = b2Body_GetPosition(b2Body)
                 let rotation = b2Body_GetRotation(b2Body)
                 
-                transform.position.x = position.x
-                transform.position.y = position.y
-                transform.rotation.z = b2Rot_GetAngle(rotation)
+                if let parentComp = world.component(ofType: ParentComponent.self, for: entity) {
+                    let parentMatrix = world.worldMatrix(for: parentComp.parent)
+                    let parentInv = parentMatrix.inverse
+                    let worldPos = SIMD4<Float>(position.x, position.y, 0.0, 1.0)
+                    let localPos = parentInv * worldPos
+                    
+                    transform.position.x = localPos.x
+                    transform.position.y = localPos.y
+                    
+                    var parentAngle: Float = 0.0
+                    var curr = parentComp.parent
+                    while true {
+                        if let pt = world.component(ofType: TransformComponent.self, for: curr) {
+                            parentAngle += pt.rotation.z
+                        }
+                        if let p = world.component(ofType: ParentComponent.self, for: curr) {
+                            curr = p.parent
+                        } else {
+                            break
+                        }
+                    }
+                    transform.rotation.z = b2Rot_GetAngle(rotation) - parentAngle
+                } else {
+                    transform.position.x = position.x
+                    transform.position.y = position.y
+                    transform.rotation.z = b2Rot_GetAngle(rotation)
+                }
                 
                 world.addComponent(transform, to: entity)
             }

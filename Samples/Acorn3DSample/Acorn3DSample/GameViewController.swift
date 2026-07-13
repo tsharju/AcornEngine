@@ -120,9 +120,41 @@ class GameViewController: UIViewController, MTKViewDelegate {
                 }
                 
                 await MainActor.run {
-                    if let firstMesh = loaded.meshes.first {
-                        let meshComponent = MeshComponent(mesh: firstMesh, color: SIMD4<Float>(1, 1, 1, 1), texture: texture)
-                        self.engine.world.addComponent(meshComponent, to: self.avocadoEntity)
+                    var modelEntities: [Entity] = []
+                    
+                    for node in loaded.nodes {
+                        let entity = self.engine.world.createEntity()
+                        self.engine.world.setName(node.name, for: entity)
+                        
+                        let localTransform = TransformComponent(
+                            position: node.translation,
+                            rotation: quaternionToEuler(node.rotation),
+                            scale: node.scale
+                        )
+                        self.engine.world.addComponent(localTransform, to: entity)
+                        
+                        if let meshIdx = node.meshIndex, meshIdx < loaded.meshes.count {
+                            let meshComponent = MeshComponent(mesh: loaded.meshes[meshIdx], color: SIMD4<Float>(1, 1, 1, 1), texture: texture)
+                            self.engine.world.addComponent(meshComponent, to: entity)
+                        }
+                        modelEntities.append(entity)
+                    }
+                    
+                    var rootEntities: [Entity] = []
+                    for (index, node) in loaded.nodes.enumerated() {
+                        if let parentIdx = node.parentIndex, parentIdx < modelEntities.count {
+                            let childEntity = modelEntities[index]
+                            let parentEntity = modelEntities[parentIdx]
+                            self.engine.world.addComponent(ParentComponent(parent: parentEntity), to: childEntity)
+                        } else {
+                            rootEntities.append(modelEntities[index])
+                        }
+                    }
+                    
+                    if let rootAvocado = self.avocadoEntity {
+                        for rootEntity in rootEntities {
+                            self.engine.world.addComponent(ParentComponent(parent: rootAvocado), to: rootEntity)
+                        }
                     }
                 }
             } catch {

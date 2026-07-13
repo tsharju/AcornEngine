@@ -27,8 +27,8 @@ public struct RenderSystem {
             viewProjectionMatrix = override
         } else if let cameraEntity = world.entities(with: CameraComponent.self).first {
             let camera = cameraEntity.1
-            if let transform = world.component(ofType: TransformComponent.self, for: cameraEntity.0) {
-                let viewMatrix = transform.matrix.inverse
+            if world.component(ofType: TransformComponent.self, for: cameraEntity.0) != nil {
+                let viewMatrix = world.worldMatrix(for: cameraEntity.0).inverse
                 let projectionMatrix = camera.projectionMatrix()
                 viewProjectionMatrix = matrix_multiply(projectionMatrix, viewMatrix)
             }
@@ -48,8 +48,8 @@ public struct RenderSystem {
             } else if light.type == .directional {
                 let c = light.color * light.intensity
                 directionalColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
-                if let transform = world.component(ofType: TransformComponent.self, for: entity) {
-                    let dir = transform.matrix * SIMD4<Float>(0, 0, -1, 0)
+                if world.component(ofType: TransformComponent.self, for: entity) != nil {
+                    let dir = world.worldMatrix(for: entity) * SIMD4<Float>(0, 0, -1, 0)
                     let len = simd_length(SIMD3<Float>(dir.x, dir.y, dir.z))
                     if len > 0.0001 {
                         directionalDirection = SIMD4<Float>(dir.x / len, dir.y / len, dir.z / len, 0)
@@ -58,8 +58,8 @@ public struct RenderSystem {
             } else if light.type == .point {
                 let c = light.color * light.intensity
                 pointColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
-                if let transform = world.component(ofType: TransformComponent.self, for: entity) {
-                    let pos = transform.matrix * SIMD4<Float>(0, 0, 0, 1)
+                if world.component(ofType: TransformComponent.self, for: entity) != nil {
+                    let pos = world.worldMatrix(for: entity) * SIMD4<Float>(0, 0, 0, 1)
                     pointPosition = pos
                 }
             }
@@ -68,8 +68,8 @@ public struct RenderSystem {
         // Render mesh components
         let entities = world.entities(with: MeshComponent.self)
         for (entity, meshComponent) in entities {
-            if let transform = world.component(ofType: TransformComponent.self, for: entity) {
-                let modelMatrix = transform.matrix
+            if world.component(ofType: TransformComponent.self, for: entity) != nil {
+                let modelMatrix = world.worldMatrix(for: entity)
                 let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
                 let normalMatrix = modelMatrix.inverse.transpose
                 
@@ -91,7 +91,7 @@ public struct RenderSystem {
         // Render tile map components
         let tileMapEntities = world.entities(with: TileMapComponent.self)
         for (entity, tileMapComponent) in tileMapEntities {
-            guard let transform = world.component(ofType: TransformComponent.self, for: entity) else {
+            guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
                 continue
             }
             
@@ -106,7 +106,7 @@ public struct RenderSystem {
             }
             
             if let mesh = currentComponent.mesh {
-                let modelMatrix = transform.matrix
+                let modelMatrix = world.worldMatrix(for: entity)
                 let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
                 let uniforms = SpriteUniforms(modelViewProjectionMatrix: mvp, colorTint: SIMD4<Float>(1, 1, 1, 1))
                 
@@ -127,7 +127,7 @@ public struct RenderSystem {
             return posA < posB
         }
         for (entity, spriteComponent) in spriteEntities {
-            guard let transform = world.component(ofType: TransformComponent.self, for: entity) else {
+            guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
                 continue
             }
             
@@ -146,7 +146,7 @@ public struct RenderSystem {
             }
             
             if let mesh = currentComponent.mesh {
-                let modelMatrix = transform.matrix
+                let modelMatrix = world.worldMatrix(for: entity)
                 let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
                 let uniforms = SpriteUniforms(modelViewProjectionMatrix: mvp, colorTint: SIMD4<Float>(1, 1, 1, 1))
                 
@@ -185,12 +185,20 @@ public struct RenderSystem {
                 let baseScale: Float = 0.003
                 let finalScale = transform.scale * SIMD3<Float>(repeating: baseScale)
                 
-                let modelMatrix = simd_float4x4(
+                let localMatrix = simd_float4x4(
                     position: transform.position,
                     rotation: transform.rotation,
                     scale: finalScale
                 )
                 
+                let parentMatrix: simd_float4x4
+                if let parentComp = world.component(ofType: ParentComponent.self, for: entity) {
+                    parentMatrix = world.worldMatrix(for: parentComp.parent)
+                } else {
+                    parentMatrix = .identity
+                }
+                
+                let modelMatrix = matrix_multiply(parentMatrix, localMatrix)
                 let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
                 
                 let uniforms = SDFUniforms(

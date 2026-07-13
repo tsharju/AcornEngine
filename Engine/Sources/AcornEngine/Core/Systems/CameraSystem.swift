@@ -20,11 +20,11 @@ public struct CameraSystem: System {
                 continue
             }
             
-            guard let targetTransform = world.component(ofType: TransformComponent.self, for: tracking.target) else {
+            guard world.component(ofType: TransformComponent.self, for: tracking.target) != nil else {
                 continue
             }
             
-            let targetPosition = targetTransform.position + tracking.offset
+            let targetPosition = world.worldPosition(for: tracking.target) + tracking.offset
             
             // Interpolate towards the target position
             // Uses simple linear interpolation for smoothing
@@ -56,8 +56,8 @@ public struct CameraSystem: System {
             
             // Get target position
             let targetPos: SIMD3<Float>
-            if let targetTransform = world.component(ofType: TransformComponent.self, for: orbit.target) {
-                targetPos = targetTransform.position
+            if world.component(ofType: TransformComponent.self, for: orbit.target) != nil {
+                targetPos = world.worldPosition(for: orbit.target)
             } else {
                 targetPos = .zero
             }

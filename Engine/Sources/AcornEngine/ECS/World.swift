@@ -1,3 +1,5 @@
+import simd
+
 #if DEBUG
 public struct ComponentMetadata: Sendable {
     public let name: String
@@ -114,6 +116,31 @@ public class World {
         for system in systems {
             system.update(world: self, deltaTime: deltaTime)
         }
+    }
+    
+    /// Computes the world transformation matrix for the given entity by traversing its parent chain.
+    public func worldMatrix(for entity: Entity) -> simd_float4x4 {
+        var currentEntity = entity
+        var accumulatedMatrix = simd_float4x4.identity
+        
+        while true {
+            if let transform = self.component(ofType: TransformComponent.self, for: currentEntity) {
+                accumulatedMatrix = matrix_multiply(transform.matrix, accumulatedMatrix)
+            }
+            if let parentComp = self.component(ofType: ParentComponent.self, for: currentEntity) {
+                currentEntity = parentComp.parent
+            } else {
+                break
+            }
+        }
+        
+        return accumulatedMatrix
+    }
+
+    /// Computes the world position for the given entity.
+    public func worldPosition(for entity: Entity) -> SIMD3<Float> {
+        let matrix = worldMatrix(for: entity)
+        return SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
     }
     
 #if DEBUG

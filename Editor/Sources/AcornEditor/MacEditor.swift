@@ -1,4 +1,4 @@
-#ivxf os(macOS)
+#if os(macOS)
 import Cocoa
 import Metal
 import MetalKit
@@ -197,25 +197,48 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
                                 }
                             }
                             
-                            if loaded.meshes.count == 1, let firstMesh = loaded.meshes.first {
+                            var entities: [Entity] = []
+                            entities.reserveCapacity(loaded.nodes.count)
+                            
+                            for node in loaded.nodes {
                                 let entity = self.world.createEntity()
-                                self.world.setName(modelName, for: entity)
-                                self.world.addComponent(TransformComponent(position: targetPosition, scale: targetScale), to: entity)
-                                self.world.addComponent(MeshComponent(mesh: firstMesh, texture: texture), to: entity)
-                                self.selectedEntity = entity
-                            } else if loaded.meshes.count > 1 {
-                                let rootEntity = self.world.createEntity()
-                                self.world.setName(modelName, for: rootEntity)
-                                self.world.addComponent(TransformComponent(position: .zero, scale: .one), to: rootEntity)
+                                self.world.setName(node.name, for: entity)
                                 
-                                for (index, mesh) in loaded.meshes.enumerated() {
-                                    let childEntity = self.world.createEntity()
-                                    self.world.setName("\(modelName)_mesh_\(index)", for: childEntity)
-                                    self.world.addComponent(TransformComponent(position: targetPosition, scale: targetScale), to: childEntity)
-                                    self.world.addComponent(MeshComponent(mesh: mesh, texture: texture), to: childEntity)
+                                let localTransform = TransformComponent(
+                                    position: node.translation,
+                                    rotation: quaternionToEuler(node.rotation),
+                                    scale: node.scale
+                                )
+                                self.world.addComponent(localTransform, to: entity)
+                                
+                                if let meshIdx = node.meshIndex, meshIdx < loaded.meshes.count {
+                                    let meshComponent = MeshComponent(mesh: loaded.meshes[meshIdx], texture: texture)
+                                    self.world.addComponent(meshComponent, to: entity)
                                 }
-                                self.selectedEntity = rootEntity
+                                
+                                entities.append(entity)
                             }
+                            
+                            var rootEntities: [Entity] = []
+                            for (index, node) in loaded.nodes.enumerated() {
+                                if let parentIdx = node.parentIndex, parentIdx < entities.count {
+                                    let childEntity = entities[index]
+                                    let parentEntity = entities[parentIdx]
+                                    self.world.addComponent(ParentComponent(parent: parentEntity), to: childEntity)
+                                } else {
+                                    rootEntities.append(entities[index])
+                                }
+                            }
+                            
+                            let modelRoot = self.world.createEntity()
+                            self.world.setName(modelName, for: modelRoot)
+                            self.world.addComponent(TransformComponent(position: targetPosition, scale: targetScale), to: modelRoot)
+                            
+                            for rootEntity in rootEntities {
+                                self.world.addComponent(ParentComponent(parent: modelRoot), to: rootEntity)
+                            }
+                            
+                            self.selectedEntity = modelRoot
                         }
                     } catch {
                         print("Failed to load glTF: \(error)")
@@ -323,16 +346,52 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         
         ImGui.Separator()
         
-        let entities = world.allEntities.sorted(by: { $0.id < $1.id })
-        for entity in entities {
-            let isSelected = selectedEntity == entity
+        struct TreeNodeFlags {
+            static let none: Int32 = 0
+            static let selected: Int32 = 1 << 0
+            static let openOnArrow: Int32 = 1 << 7
+            static let leaf: Int32 = 1 << 8
+            static let spanAvailWidth: Int32 = 1 << 11
+        }
+        
+        let allEntitiesList = world.allEntities; let entities = allEntitiesList
+        var childrenMap: [Entity: [Entity]] = [:]
+        var rootEntities: [Entity] = []
+        
+        for entity in allEntitiesList {
+            if let parentComp = world.component(ofType: ParentComponent.self, for: entity),
+               allEntitiesList.contains(parentComp.parent) {
+                childrenMap[parentComp.parent, default: []].append(entity)
+            } else {
+                rootEntities.append(entity)
+            }
+        }
+        
+        rootEntities.sort(by: { $0.id < $1.id })
+        for parent in childrenMap.keys {
+            childrenMap[parent]?.sort(by: { $0.id < $1.id })
+        }
+        
+        var drawEntityNode: ((Entity) -> Void)! = nil
+        drawEntityNode = { entity in
+            let isSelected = self.selectedEntity == entity
             if isSelected, let bold = self.boldFont {
                 ImGui.PushFont(bold)
             }
             
-            let name = world.name(for: entity)
+            let name = self.world.name(for: entity)
+            let children = childrenMap[entity] ?? []
+            
+            var flags = TreeNodeFlags.openOnArrow | TreeNodeFlags.spanAvailWidth
+            if children.isEmpty {
+                flags |= TreeNodeFlags.leaf
+            }
+            if isSelected {
+                flags |= TreeNodeFlags.selected
+            }
+            
             let nodeOpen = "\(name)##\(entity.id)".withCString { cLabel in
-                ImGui.TreeNode(cLabel)
+                ImGui.TreeNodeEx(cLabel, flags)
             }
             
             if isSelected, self.boldFont != nil {
@@ -340,12 +399,19 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             }
             
             if ImGui.IsItemClicked(0) {
-                selectedEntity = entity
+                self.selectedEntity = entity
             }
             
             if nodeOpen {
+                for child in children {
+                    drawEntityNode(child)
+                }
                 ImGui.TreePop()
             }
+        }
+        
+        for rootEntity in rootEntities {
+            drawEntityNode(rootEntity)
         }
         ImGui.End()
         
@@ -417,10 +483,10 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         if useSceneCamera {
             let cameraEntities = world.entities(with: CameraComponent.self)
             if let firstCam = cameraEntities.first,
-               let transform = world.component(ofType: TransformComponent.self, for: firstCam.0) {
+               world.component(ofType: TransformComponent.self, for: firstCam.0) != nil {
                 let camera = firstCam.1
                 // Use simd_inverse or transform.matrix.inverse. transform.matrix.inverse exists in simd
-                let view = transform.matrix.inverse
+                let view = world.worldMatrix(for: firstCam.0).inverse
                 let proj = camera.projectionMatrix()
                 viewProj = proj * view
                 ImGui.TextUnformatted("Using Entity \(firstCam.0.id) as Scene Camera", nil)
@@ -490,8 +556,8 @@ extension EditorApplicationDelegate: MTKViewDelegate {
             }
             
             for entity in entities {
-                guard let transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
-                let mat = transform.matrix
+                guard world.component(ofType: TransformComponent.self, for: entity) != nil else { continue }
+                let mat = world.worldMatrix(for: entity)
                 
                 #if DEBUG
                 if renderWireframes, let meshComp = world.component(ofType: MeshComponent.self, for: entity) {

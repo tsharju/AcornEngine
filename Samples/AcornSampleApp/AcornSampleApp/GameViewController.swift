@@ -365,28 +365,58 @@ class GameViewController: UIViewController, MTKViewDelegate {
                 }
                 
                 await MainActor.run {
-                    if let firstMesh = loaded.meshes.first {
-                        let avocadoEntity = self.engine.world.createEntity()
-                        let transform = TransformComponent(
-                            position: SIMD3<Float>(0.0, -0.5, 0.0),
-                            rotation: SIMD3<Float>(0, 0, 0),
-                            scale: SIMD3<Float>(15.0, 15.0, 15.0)
+                    var modelEntities: [Entity] = []
+                    
+                    for node in loaded.nodes {
+                        let entity = self.engine.world.createEntity()
+                        self.engine.world.setName(node.name, for: entity)
+                        
+                        let localTransform = TransformComponent(
+                            position: node.translation,
+                            rotation: quaternionToEuler(node.rotation),
+                            scale: node.scale
                         )
-                        self.engine.world.addComponent(transform, to: avocadoEntity)
+                        self.engine.world.addComponent(localTransform, to: entity)
                         
-                        let meshComponent = MeshComponent(mesh: firstMesh, texture: texture)
-                        self.engine.world.addComponent(meshComponent, to: avocadoEntity)
-                        
-                        // Slowly rotate the Avocado model to show it off in 3D
-                        Task {
-                            var angle: Float = 0
-                            while true {
-                                try? await Task.sleep(nanoseconds: 16_000_000) // ~60fps
-                                angle += 0.02
-                                if var t = self.engine.world.component(ofType: TransformComponent.self, for: avocadoEntity) {
-                                    t.rotation = SIMD3<Float>(0, angle, 0)
-                                    self.engine.world.addComponent(t, to: avocadoEntity)
-                                }
+                        if let meshIdx = node.meshIndex, meshIdx < loaded.meshes.count {
+                            let meshComponent = MeshComponent(mesh: loaded.meshes[meshIdx], texture: texture)
+                            self.engine.world.addComponent(meshComponent, to: entity)
+                        }
+                        modelEntities.append(entity)
+                    }
+                    
+                    var rootEntities: [Entity] = []
+                    for (index, node) in loaded.nodes.enumerated() {
+                        if let parentIdx = node.parentIndex, parentIdx < modelEntities.count {
+                            let childEntity = modelEntities[index]
+                            let parentEntity = modelEntities[parentIdx]
+                            self.engine.world.addComponent(ParentComponent(parent: parentEntity), to: childEntity)
+                        } else {
+                            rootEntities.append(modelEntities[index])
+                        }
+                    }
+                    
+                    let avocadoEntity = self.engine.world.createEntity()
+                    self.engine.world.setName("Avocado", for: avocadoEntity)
+                    let baseTransform = TransformComponent(
+                        position: SIMD3<Float>(0.0, -0.5, 0.0),
+                        rotation: SIMD3<Float>(0, 0, 0),
+                        scale: SIMD3<Float>(15.0, 15.0, 15.0)
+                    )
+                    self.engine.world.addComponent(baseTransform, to: avocadoEntity)
+                    
+                    for rootEntity in rootEntities {
+                        self.engine.world.addComponent(ParentComponent(parent: avocadoEntity), to: rootEntity)
+                    }
+                    
+                    Task {
+                        var angle: Float = 0
+                        while true {
+                            try? await Task.sleep(nanoseconds: 16_000_000) // ~60fps
+                            angle += 0.02
+                            if var t = self.engine.world.component(ofType: TransformComponent.self, for: avocadoEntity) {
+                                t.rotation = SIMD3<Float>(0, angle, 0)
+                                self.engine.world.addComponent(t, to: avocadoEntity)
                             }
                         }
                     }

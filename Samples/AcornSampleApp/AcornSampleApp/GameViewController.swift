@@ -166,6 +166,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         setupTileMap()
         setupCharacters()
         setupConfetti()
+        setupGLTF()
     }
     
     private func setupTileMap() {
@@ -344,6 +345,47 @@ class GameViewController: UIViewController, MTKViewDelegate {
                 }
             } catch {
                 print("Failed to load characters sprite sheet: \(error)")
+            }
+        }
+    }
+
+    private func setupGLTF() {
+        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let avocadoUrl = Bundle.main.url(forResource: "Avocado", withExtension: "glb") ?? docsDir.appendingPathComponent("Avocado.glb")
+        
+        Task {
+            do {
+                let loader = GLTFModelLoader(device: self.renderer.device)
+                let meshes = try loader.load(from: avocadoUrl)
+                if let firstMesh = meshes.first {
+                    await MainActor.run {
+                        let avocadoEntity = self.engine.world.createEntity()
+                        let transform = TransformComponent(
+                            position: SIMD3<Float>(0.0, -0.5, 0.0),
+                            rotation: SIMD3<Float>(0, 0, 0),
+                            scale: SIMD3<Float>(15.0, 15.0, 15.0)
+                        )
+                        self.engine.world.addComponent(transform, to: avocadoEntity)
+                        
+                        let meshComponent = MeshComponent(mesh: firstMesh)
+                        self.engine.world.addComponent(meshComponent, to: avocadoEntity)
+                        
+                        // Slowly rotate the Avocado model to show it off in 3D
+                        Task {
+                            var angle: Float = 0
+                            while true {
+                                try? await Task.sleep(nanoseconds: 16_000_000) // ~60fps
+                                angle += 0.02
+                                if var t = self.engine.world.component(ofType: TransformComponent.self, for: avocadoEntity) {
+                                    t.rotation = SIMD3<Float>(0, angle, 0)
+                                    self.engine.world.addComponent(t, to: avocadoEntity)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                print("Failed to load glTF model: \(error)")
             }
         }
     }

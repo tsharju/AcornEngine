@@ -27,7 +27,8 @@ let package = Package(
         ),
         .testTarget(
             name: "AcornEngineTests",
-            dependencies: ["AcornEngine"]
+            dependencies: ["AcornEngine"],
+            swiftSettings: [.interoperabilityMode(.Cxx)]
         ),
         .target(
             name: "box2d",

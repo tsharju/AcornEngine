@@ -12,6 +12,20 @@ public final class MetalMesh: Mesh, @unchecked Sendable {
         return Int(cxxMesh.pointee.getVertexCount())
     }
 
+    /// The underlying Metal vertex buffer.
+    public var vertexBuffer: any MTLBuffer {
+        let rawBuf = cxxMesh.pointee.getVertexBuffer()!
+        return Unmanaged<any MTLBuffer>.fromOpaque(rawBuf).takeUnretainedValue()
+    }
+
+    /// The underlying Metal index buffer, if any.
+    public var indexBuffer: (any MTLBuffer)? {
+        guard let rawBuf = cxxMesh.pointee.getIndexBuffer() else {
+            return nil
+        }
+        return Unmanaged<any MTLBuffer>.fromOpaque(rawBuf).takeUnretainedValue()
+    }
+
     #if DEBUG
     /// The CPU-side vertices of the mesh.
     public var vertices: [Vertex] {

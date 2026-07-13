@@ -16,6 +16,12 @@ public final class MetalTexture: Texture, @unchecked Sendable {
     public var height: Int {
         return Int(cxxTexture.pointee.getHeight())
     }
+
+    /// The underlying Metal texture.
+    public var texture: any MTLTexture {
+        let rawTex = cxxTexture.pointee.getTexture()!
+        return Unmanaged<any MTLTexture>.fromOpaque(rawTex).takeUnretainedValue()
+    }
     
     /// Initializes a new MetalTexture wrapping the given MTLTexture.
     /// - Parameter texture: The Metal texture to wrap.

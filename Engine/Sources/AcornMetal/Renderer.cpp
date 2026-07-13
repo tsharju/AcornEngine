@@ -140,7 +140,7 @@ namespace Acorn {
         return state; // Caller must release this or we leak. Proper caching needed.
     }
 
-    void AcornMetalRenderer::render(AcornMetalMesh* mesh, const GlobalUniforms& uniforms, void* encoderPtr) {
+    void AcornMetalRenderer::render(AcornMetalMesh* mesh, AcornMetalTexture* texture, const GlobalUniforms& uniforms, void* encoderPtr) {
         MTL::RenderCommandEncoder* encoder = (MTL::RenderCommandEncoder*)encoderPtr;
         if (!mesh || !encoder) return;
         
@@ -159,6 +159,10 @@ namespace Acorn {
         
         encoder->setVertexBytes(&uniforms, sizeof(GlobalUniforms), 1);
         encoder->setFragmentBytes(&uniforms, sizeof(GlobalUniforms), 0);
+        
+        if (texture) {
+            encoder->setFragmentTexture((MTL::Texture*)texture->getTexture(), 0);
+        }
         
         if (mesh->getIndexBuffer()) {
             encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, mesh->getIndexCount(), MTL::IndexTypeUInt32, (MTL::Buffer*)mesh->getIndexBuffer(), 0);

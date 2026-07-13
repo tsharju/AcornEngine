@@ -1,3 +1,7 @@
 [submodule "Engine/Dependencies/fastgltf"]
 	path = Engine/Dependencies/fastgltf
 	url = https://github.com/spnda/fastgltf.git
+
+[submodule "Engine/Dependencies/metal-cpp"]
+	path = Engine/Dependencies/metal-cpp
+	url = https://github.com/apple/metal-cpp.git

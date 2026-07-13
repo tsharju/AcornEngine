@@ -84,7 +84,7 @@ public struct RenderSystem {
                     pointLightPosition: pointPosition,
                     meshColor: meshComponent.color
                 )
-                renderer.render(mesh: meshComponent.mesh, uniforms: uniforms, context: context)
+                renderer.render(mesh: meshComponent.mesh, texture: meshComponent.texture, uniforms: uniforms, context: context)
             }
         }
         

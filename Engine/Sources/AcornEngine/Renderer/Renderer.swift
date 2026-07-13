@@ -135,9 +135,10 @@ public protocol Renderer: Sendable {
     /// Renders a mesh using the given frame context.
     /// - Parameters:
     ///   - mesh: The mesh to render.
+    ///   - texture: An optional texture to map onto the mesh.
     ///   - uniforms: The global uniforms (e.g. view-projection).
     ///   - context: The render context for the current frame.
-    func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext)
+    func render(mesh: Mesh, texture: (any Texture)?, uniforms: GlobalUniforms, context: RenderContext)
     
     /// Renders text using signed distance field shaders.
     /// - Parameters:
@@ -164,4 +165,10 @@ public protocol Renderer: Sendable {
         uniforms: SpriteUniforms,
         context: RenderContext
     )
+}
+
+public extension Renderer {
+    func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {
+        render(mesh: mesh, texture: nil, uniforms: uniforms, context: context)
+    }
 }

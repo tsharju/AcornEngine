@@ -15,9 +15,9 @@ public final class GLTFModelLoader: Sendable {
 
     /// Loads a glTF model from a local file URL.
     /// - Parameter url: The file URL of the model (.glb or .gltf).
-    /// - Returns: An array of `MetalMesh` objects.
+    /// - Returns: A tuple containing the loaded meshes and the raw texture data, if any.
     /// - Throws: An error if loading fails.
-    public func load(from url: URL) throws -> [MetalMesh] {
+    public func load(from url: URL) throws -> (meshes: [MetalMesh], textureData: Data?) {
         guard url.isFileURL else {
             throw NSError(domain: "GLTFModelLoaderErrorDomain", code: 1, userInfo: [NSLocalizedDescriptionKey: "Only file URLs are supported."])
         }
@@ -27,7 +27,10 @@ public final class GLTFModelLoader: Sendable {
 
         // Allocate a buffer to store output meshes
         var meshesPtrs = [UnsafeMutableRawPointer?](repeating: nil, count: 128)
-        let count = Int(Acorn.GLTFLoader.loadRaw(path, devicePtr, &meshesPtrs, 128))
+        var textureDataPtr: UnsafeRawPointer? = nil
+        var textureSize: Int32 = 0
+        
+        let count = Int(Acorn.GLTFLoader.loadRaw(path, devicePtr, &meshesPtrs, 128, &textureDataPtr, &textureSize))
 
         guard count > 0 else {
             throw NSError(domain: "GLTFModelLoaderErrorDomain", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to load glTF meshes or file not found: \(path)"])
@@ -42,6 +45,11 @@ public final class GLTFModelLoader: Sendable {
             }
         }
 
-        return meshes
+        var textureData: Data? = nil
+        if let texPtr = textureDataPtr, textureSize > 0 {
+            textureData = Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: texPtr), count: Int(textureSize), deallocator: .free)
+        }
+
+        return (meshes, textureData)
     }
 }

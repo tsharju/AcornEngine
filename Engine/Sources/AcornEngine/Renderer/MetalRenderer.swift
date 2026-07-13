@@ -53,6 +53,7 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
     public let device: any MTLDevice
     
     private let cxxRenderer: UnsafeMutablePointer<Acorn.AcornMetalRenderer>
+    private let defaultWhiteTexture: MetalTexture
     
     /// Initializes a new Metal renderer.
     /// - Parameters:
@@ -89,6 +90,26 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
             throw RendererError.initializationFailed
         }
         self.cxxRenderer = renderer
+        
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm,
+            width: 1,
+            height: 1,
+            mipmapped: false
+        )
+        descriptor.usage = .shaderRead
+        descriptor.storageMode = .shared
+        guard let defaultTex = device.makeTexture(descriptor: descriptor) else {
+            throw RendererError.initializationFailed
+        }
+        let whitePixel: [UInt8] = [255, 255, 255, 255]
+        defaultTex.replace(
+            region: MTLRegionMake2D(0, 0, 1, 1),
+            mipmapLevel: 0,
+            withBytes: whitePixel,
+            bytesPerRow: 4
+        )
+        self.defaultWhiteTexture = MetalTexture(texture: defaultTex)
     }
     
     deinit {
@@ -101,7 +122,7 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
     }
     
     /// Renders a mesh using the given Metal frame context.
-    public func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {
+    public func render(mesh: Mesh, texture: (any Texture)?, uniforms: GlobalUniforms, context: RenderContext) {
         guard let metalContext = context as? MetalRenderContext,
               let metalMesh = mesh as? MetalMesh else {
             return
@@ -124,7 +145,10 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         cxxUniforms.pointLightPosition = uniforms.pointLightPosition
         cxxUniforms.meshColor = uniforms.meshColor
         
-        cxxRenderer.pointee.render(metalMesh.cxxMesh, cxxUniforms, encoderPtr)
+        let targetTexture = texture ?? defaultWhiteTexture
+        let cxxTexture = (targetTexture as? MetalTexture)?.cxxTexture
+        
+        cxxRenderer.pointee.render(metalMesh.cxxMesh, cxxTexture, cxxUniforms, encoderPtr)
     }
     
     /// Renders text using signed distance field shaders.

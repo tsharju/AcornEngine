@@ -13,6 +13,7 @@ struct VertexOut {
     float4 color;
     float3 normal;
     float3 worldPosition;
+    float2 texCoord;
 };
 
 struct GlobalUniforms {
@@ -36,11 +37,18 @@ vertex VertexOut vertex_main(uint vertexID [[vertex_id]],
     out.worldPosition = (uniforms.modelMatrix * pos).xyz;
     out.color = vertices[vertexID].color;
     out.normal = (uniforms.normalMatrix * float4(vertices[vertexID].normal, 0.0)).xyz;
+    out.texCoord = vertices[vertexID].texCoord;
     return out;
 }
 
 fragment float4 fragment_main(VertexOut in [[stage_in]],
-                              constant GlobalUniforms &uniforms [[buffer(0)]]) {
+                              constant GlobalUniforms &uniforms [[buffer(0)]],
+                              texture2d<float> meshTexture [[texture(0)]]) {
+    constexpr sampler linearSampler(coord::normalized,
+                                    address::clamp_to_edge,
+                                    filter::linear);
+                                    
+    float4 texColor = meshTexture.sample(linearSampler, in.texCoord);
     float3 normal = normalize(in.normal);
     float3 lightDir = normalize(-uniforms.directionalLightDirection.xyz);
     
@@ -60,8 +68,8 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
     // Ambient
     float3 ambient = uniforms.ambientLightColor.rgb;
     
-    // Multiply vertex color with mesh color tint
-    float4 baseColor = in.color * uniforms.meshColor;
+    // Multiply texture color with vertex color and mesh color tint
+    float4 baseColor = texColor * in.color * uniforms.meshColor;
     
     float3 finalColor = baseColor.rgb * (ambient + directionalDiffuse + pointDiffuse);
     

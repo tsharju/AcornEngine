@@ -8,9 +8,12 @@
 #include <cstddef>
 
 namespace Acorn {
-    std::vector<AcornMetalMesh*> GLTFLoader::load(const std::string& path, void* devicePtr) {
+    std::vector<AcornMetalMesh*> GLTFLoader::load(const std::string& path, void* devicePtr, const void** outTextureData, int* outTextureSize) {
         MTL::Device* device = (MTL::Device*)devicePtr;
         std::vector<AcornMetalMesh*> meshes;
+        
+        if (outTextureData) *outTextureData = nullptr;
+        if (outTextureSize) *outTextureSize = 0;
         
         fastgltf::Parser parser(fastgltf::Extensions::None);
         
@@ -137,12 +140,51 @@ namespace Acorn {
         vertexBuffer->release();
         if (indexBuffer) indexBuffer->release();
 
+        // Extract texture data if requested
+        if (outTextureData && outTextureSize) {
+            const void* texBytes = nullptr;
+            size_t texSize = 0;
+            
+            if (!asset->images.empty()) {
+                auto& image = asset->images[0];
+                
+                if (auto* bufferViewSource = std::get_if<fastgltf::sources::BufferView>(&image.data)) {
+                    auto& bufferView = asset->bufferViews[bufferViewSource->bufferViewIndex];
+                    auto& buffer = asset->buffers[bufferView.bufferIndex];
+                    
+                    if (auto* arr = std::get_if<fastgltf::sources::Array>(&buffer.data)) {
+                        texBytes = arr->bytes.data() + bufferView.byteOffset;
+                        texSize = bufferView.byteLength;
+                    } else if (auto* vec = std::get_if<fastgltf::sources::Vector>(&buffer.data)) {
+                        texBytes = vec->bytes.data() + bufferView.byteOffset;
+                        texSize = bufferView.byteLength;
+                    } else if (auto* byteView = std::get_if<fastgltf::sources::ByteView>(&buffer.data)) {
+                        texBytes = byteView->bytes.data() + bufferView.byteOffset;
+                        texSize = bufferView.byteLength;
+                    }
+                } else if (auto* vec = std::get_if<fastgltf::sources::Vector>(&image.data)) {
+                    texBytes = vec->bytes.data();
+                    texSize = vec->bytes.size();
+                } else if (auto* arr = std::get_if<fastgltf::sources::Array>(&image.data)) {
+                    texBytes = arr->bytes.data();
+                    texSize = arr->bytes.size();
+                }
+            }
+            
+            if (texBytes && texSize > 0) {
+                void* copy = malloc(texSize);
+                memcpy(copy, texBytes, texSize);
+                *outTextureData = copy;
+                *outTextureSize = static_cast<int>(texSize);
+            }
+        }
+
         meshes.push_back(resultMesh);
         return meshes;
     }
 
-    int GLTFLoader::loadRaw(const char* path, void* devicePtr, void** outMeshes, int maxMeshes) {
-        std::vector<AcornMetalMesh*> loaded = load(std::string(path), devicePtr);
+    int GLTFLoader::loadRaw(const char* path, void* devicePtr, void** outMeshes, int maxMeshes, const void** outTextureData, int* outTextureSize) {
+        std::vector<AcornMetalMesh*> loaded = load(std::string(path), devicePtr, outTextureData, outTextureSize);
         int count = std::min(static_cast<int>(loaded.size()), maxMeshes);
         for (int i = 0; i < count; ++i) {
             outMeshes[i] = loaded[i];

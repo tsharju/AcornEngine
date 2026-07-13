@@ -356,9 +356,16 @@ class GameViewController: UIViewController, MTKViewDelegate {
         Task {
             do {
                 let loader = GLTFModelLoader(device: self.renderer.device)
-                let meshes = try loader.load(from: avocadoUrl)
-                if let firstMesh = meshes.first {
-                    await MainActor.run {
+                let loaded = try loader.load(from: avocadoUrl)
+                
+                var texture: Texture? = nil
+                if let texData = loaded.textureData {
+                    let textureLoader = TextureLoader(device: self.renderer.device)
+                    texture = try await textureLoader.loadTexture(from: texData)
+                }
+                
+                await MainActor.run {
+                    if let firstMesh = loaded.meshes.first {
                         let avocadoEntity = self.engine.world.createEntity()
                         let transform = TransformComponent(
                             position: SIMD3<Float>(0.0, -0.5, 0.0),
@@ -367,7 +374,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
                         )
                         self.engine.world.addComponent(transform, to: avocadoEntity)
                         
-                        let meshComponent = MeshComponent(mesh: firstMesh)
+                        let meshComponent = MeshComponent(mesh: firstMesh, texture: texture)
                         self.engine.world.addComponent(meshComponent, to: avocadoEntity)
                         
                         // Slowly rotate the Avocado model to show it off in 3D

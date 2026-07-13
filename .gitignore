@@ -9,3 +9,6 @@ xcuserdata/
 
 build_output/
 imgui.ini
+build_matchacorn/
+fix_pbxproj.py
+test_renderer.swift

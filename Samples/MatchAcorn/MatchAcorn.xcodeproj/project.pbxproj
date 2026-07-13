@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		99600D544CBD423F5A93E275 /* AcornEngine in Frameworks */ = {isa = PBXBuildFile; productRef = D36DAD5D73EFCD8B90478D5A /* AcornEngine */; };
+		4B3363B23004F26200890E18 /* AcornEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 4B3363B33004F26200890E18 /* AcornEngine */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -16,50 +16,50 @@
 			containerPortal = 4BC3730D2FEFA33500A1DCB4 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4BC373142FEFA33500A1DCB4;
-			remoteInfo = AcornSampleApp;
+			remoteInfo = MatchAcorn;
 		};
 		4BC373382FEFA33600A1DCB4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4BC3730D2FEFA33500A1DCB4 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4BC373142FEFA33500A1DCB4;
-			remoteInfo = AcornSampleApp;
+			remoteInfo = MatchAcorn;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		4BC373152FEFA33500A1DCB4 /* AcornSampleApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AcornSampleApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4BC3732D2FEFA33600A1DCB4 /* AcornSampleAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AcornSampleAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		4BC373372FEFA33600A1DCB4 /* AcornSampleAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AcornSampleAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4BC373152FEFA33500A1DCB4 /* MatchAcorn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MatchAcorn.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4BC3732D2FEFA33600A1DCB4 /* MatchAcornTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MatchAcornTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4BC373372FEFA33600A1DCB4 /* MatchAcornUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MatchAcornUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		4BC3733F2FEFA33600A1DCB4 /* Exceptions for "AcornSampleApp" folder in "AcornSampleApp" target */ = {
+		4BC3733F2FEFA33600A1DCB4 /* Exceptions for "MatchAcorn" folder in "MatchAcorn" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 4BC373142FEFA33500A1DCB4 /* AcornSampleApp */;
+			target = 4BC373142FEFA33500A1DCB4 /* MatchAcorn */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		4BC373172FEFA33500A1DCB4 /* AcornSampleApp */ = {
+		4BC373172FEFA33500A1DCB4 /* MatchAcorn */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				4BC3733F2FEFA33600A1DCB4 /* Exceptions for "AcornSampleApp" folder in "AcornSampleApp" target */,
+				4BC3733F2FEFA33600A1DCB4 /* Exceptions for "MatchAcorn" folder in "MatchAcorn" target */,
 			);
-			path = AcornSampleApp;
+			path = MatchAcorn;
 			sourceTree = "<group>";
 		};
-		4BC373302FEFA33600A1DCB4 /* AcornSampleAppTests */ = {
+		4BC373302FEFA33600A1DCB4 /* MatchAcornTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AcornSampleAppTests;
+			path = MatchAcornTests;
 			sourceTree = "<group>";
 		};
-		4BC3733A2FEFA33600A1DCB4 /* AcornSampleAppUITests */ = {
+		4BC3733A2FEFA33600A1DCB4 /* MatchAcornUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AcornSampleAppUITests;
+			path = MatchAcornUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,7 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				99600D544CBD423F5A93E275 /* AcornEngine in Frameworks */,
+				4B3363B23004F26200890E18 /* AcornEngine in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,12 +90,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		4B3363AE3004F21B00890E18 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		4BC3730C2FEFA33500A1DCB4 = {
 			isa = PBXGroup;
 			children = (
-				4BC373172FEFA33500A1DCB4 /* AcornSampleApp */,
-				4BC373302FEFA33600A1DCB4 /* AcornSampleAppTests */,
-				4BC3733A2FEFA33600A1DCB4 /* AcornSampleAppUITests */,
+				4BC373172FEFA33500A1DCB4 /* MatchAcorn */,
+				4BC373302FEFA33600A1DCB4 /* MatchAcornTests */,
+				4BC3733A2FEFA33600A1DCB4 /* MatchAcornUITests */,
+				4B3363AE3004F21B00890E18 /* Frameworks */,
 				4BC373162FEFA33500A1DCB4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -103,9 +111,9 @@
 		4BC373162FEFA33500A1DCB4 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4BC373152FEFA33500A1DCB4 /* AcornSampleApp.app */,
-				4BC3732D2FEFA33600A1DCB4 /* AcornSampleAppTests.xctest */,
-				4BC373372FEFA33600A1DCB4 /* AcornSampleAppUITests.xctest */,
+				4BC373152FEFA33500A1DCB4 /* MatchAcorn.app */,
+				4BC3732D2FEFA33600A1DCB4 /* MatchAcornTests.xctest */,
+				4BC373372FEFA33600A1DCB4 /* MatchAcornUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -113,9 +121,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		4BC373142FEFA33500A1DCB4 /* AcornSampleApp */ = {
+		4BC373142FEFA33500A1DCB4 /* MatchAcorn */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4BC373402FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "AcornSampleApp" */;
+			buildConfigurationList = 4BC373402FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "MatchAcorn" */;
 			buildPhases = (
 				4BC373112FEFA33500A1DCB4 /* Sources */,
 				4BC373122FEFA33500A1DCB4 /* Frameworks */,
@@ -126,19 +134,19 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				4BC373172FEFA33500A1DCB4 /* AcornSampleApp */,
+				4BC373172FEFA33500A1DCB4 /* MatchAcorn */,
 			);
-			name = AcornSampleApp;
+			name = MatchAcorn;
 			packageProductDependencies = (
-				D36DAD5D73EFCD8B90478D5A /* AcornEngine */,
+				4B3363B33004F26200890E18 /* AcornEngine */,
 			);
-			productName = AcornSampleApp;
-			productReference = 4BC373152FEFA33500A1DCB4 /* AcornSampleApp.app */;
+			productName = MatchAcorn;
+			productReference = 4BC373152FEFA33500A1DCB4 /* MatchAcorn.app */;
 			productType = "com.apple.product-type.application";
 		};
-		4BC3732C2FEFA33600A1DCB4 /* AcornSampleAppTests */ = {
+		4BC3732C2FEFA33600A1DCB4 /* MatchAcornTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4BC373452FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "AcornSampleAppTests" */;
+			buildConfigurationList = 4BC373452FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "MatchAcornTests" */;
 			buildPhases = (
 				4BC373292FEFA33600A1DCB4 /* Sources */,
 				4BC3732A2FEFA33600A1DCB4 /* Frameworks */,
@@ -150,18 +158,18 @@
 				4BC3732F2FEFA33600A1DCB4 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4BC373302FEFA33600A1DCB4 /* AcornSampleAppTests */,
+				4BC373302FEFA33600A1DCB4 /* MatchAcornTests */,
 			);
-			name = AcornSampleAppTests;
+			name = MatchAcornTests;
 			packageProductDependencies = (
 			);
-			productName = AcornSampleAppTests;
-			productReference = 4BC3732D2FEFA33600A1DCB4 /* AcornSampleAppTests.xctest */;
+			productName = MatchAcornTests;
+			productReference = 4BC3732D2FEFA33600A1DCB4 /* MatchAcornTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		4BC373362FEFA33600A1DCB4 /* AcornSampleAppUITests */ = {
+		4BC373362FEFA33600A1DCB4 /* MatchAcornUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4BC373482FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "AcornSampleAppUITests" */;
+			buildConfigurationList = 4BC373482FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "MatchAcornUITests" */;
 			buildPhases = (
 				4BC373332FEFA33600A1DCB4 /* Sources */,
 				4BC373342FEFA33600A1DCB4 /* Frameworks */,
@@ -173,13 +181,13 @@
 				4BC373392FEFA33600A1DCB4 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4BC3733A2FEFA33600A1DCB4 /* AcornSampleAppUITests */,
+				4BC3733A2FEFA33600A1DCB4 /* MatchAcornUITests */,
 			);
-			name = AcornSampleAppUITests;
+			name = MatchAcornUITests;
 			packageProductDependencies = (
 			);
-			productName = AcornSampleAppUITests;
-			productReference = 4BC373372FEFA33600A1DCB4 /* AcornSampleAppUITests.xctest */;
+			productName = MatchAcornUITests;
+			productReference = 4BC373372FEFA33600A1DCB4 /* MatchAcornUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -190,7 +198,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2650;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					4BC373142FEFA33500A1DCB4 = {
 						CreatedOnToolsVersion = 26.5;
@@ -205,7 +213,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 4BC373102FEFA33500A1DCB4 /* Build configuration list for PBXProject "AcornSampleApp" */;
+			buildConfigurationList = 4BC373102FEFA33500A1DCB4 /* Build configuration list for PBXProject "MatchAcorn" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -215,16 +223,16 @@
 			mainGroup = 4BC3730C2FEFA33500A1DCB4;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				8214607DD01A65456E1D6807 /* XCLocalSwiftPackageReference "../../Engine" */,
+				4B3363B13004F26200890E18 /* XCLocalSwiftPackageReference "../../Engine" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4BC373162FEFA33500A1DCB4 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				4BC373142FEFA33500A1DCB4 /* AcornSampleApp */,
-				4BC3732C2FEFA33600A1DCB4 /* AcornSampleAppTests */,
-				4BC373362FEFA33600A1DCB4 /* AcornSampleAppUITests */,
+				4BC373142FEFA33500A1DCB4 /* MatchAcorn */,
+				4BC3732C2FEFA33600A1DCB4 /* MatchAcornTests */,
+				4BC373362FEFA33600A1DCB4 /* MatchAcornUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -280,12 +288,12 @@
 /* Begin PBXTargetDependency section */
 		4BC3732F2FEFA33600A1DCB4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 4BC373142FEFA33500A1DCB4 /* AcornSampleApp */;
+			target = 4BC373142FEFA33500A1DCB4 /* MatchAcorn */;
 			targetProxy = 4BC3732E2FEFA33600A1DCB4 /* PBXContainerItemProxy */;
 		};
 		4BC373392FEFA33600A1DCB4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 4BC373142FEFA33500A1DCB4 /* AcornSampleApp */;
+			target = 4BC373142FEFA33500A1DCB4 /* MatchAcorn */;
 			targetProxy = 4BC373382FEFA33600A1DCB4 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -294,15 +302,13 @@
 		4BC373412FEFA33600A1DCB4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5N645UMVDP;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AcornSampleApp/Info.plist;
+				INFOPLIST_FILE = MatchAcorn/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = metal;
@@ -314,10 +320,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.AcornSampleApp;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
+				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.MatchAcorn;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -329,15 +337,13 @@
 		4BC373422FEFA33600A1DCB4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5N645UMVDP;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AcornSampleApp/Info.plist;
+				INFOPLIST_FILE = MatchAcorn/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = metal;
@@ -349,10 +355,12 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.AcornSampleApp;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
+				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.MatchAcorn;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -364,8 +372,6 @@
 		4BC373432FEFA33600A1DCB4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -421,8 +427,11 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -430,8 +439,6 @@
 		4BC373442FEFA33600A1DCB4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -480,8 +487,11 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -489,8 +499,6 @@
 		4BC373462FEFA33600A1DCB4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -498,23 +506,23 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.AcornSampleAppTests;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
+				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.MatchAcornTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AcornSampleApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AcornSampleApp";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MatchAcorn.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MatchAcorn";
 			};
 			name = Debug;
 		};
 		4BC373472FEFA33600A1DCB4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -522,66 +530,68 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.AcornSampleAppTests;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
+				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.MatchAcornTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AcornSampleApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AcornSampleApp";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MatchAcorn.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MatchAcorn";
 			};
 			name = Release;
 		};
 		4BC373492FEFA33600A1DCB4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5N645UMVDP;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.AcornSampleAppUITests;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
+				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.MatchAcornUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = AcornSampleApp;
+				TEST_TARGET_NAME = MatchAcorn;
 			};
 			name = Debug;
 		};
 		4BC3734A2FEFA33600A1DCB4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
-				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5N645UMVDP;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.AcornSampleAppUITests;
+				OTHER_SWIFT_FLAGS = "-cxx-interoperability-mode=default";
+				PRODUCT_BUNDLE_IDENTIFIER = im.teemu.MatchAcornUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_CXX_INTEROPERABILITY_MODE = default;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = AcornSampleApp;
+				TEST_TARGET_NAME = MatchAcorn;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		4BC373102FEFA33500A1DCB4 /* Build configuration list for PBXProject "AcornSampleApp" */ = {
+		4BC373102FEFA33500A1DCB4 /* Build configuration list for PBXProject "MatchAcorn" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4BC373432FEFA33600A1DCB4 /* Debug */,
@@ -590,7 +600,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4BC373402FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "AcornSampleApp" */ = {
+		4BC373402FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "MatchAcorn" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4BC373412FEFA33600A1DCB4 /* Debug */,
@@ -599,7 +609,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4BC373452FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "AcornSampleAppTests" */ = {
+		4BC373452FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "MatchAcornTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4BC373462FEFA33600A1DCB4 /* Debug */,
@@ -608,7 +618,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4BC373482FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "AcornSampleAppUITests" */ = {
+		4BC373482FEFA33600A1DCB4 /* Build configuration list for PBXNativeTarget "MatchAcornUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4BC373492FEFA33600A1DCB4 /* Debug */,
@@ -619,20 +629,20 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCSwiftPackageProductDependency section */
+		4B3363B33004F26200890E18 /* AcornEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4B3363B13004F26200890E18 /* XCLocalSwiftPackageReference "../../Engine" */;
+			productName = AcornEngine;
+		};
+/* End XCSwiftPackageProductDependency section */
+
 /* Begin XCLocalSwiftPackageReference section */
-		8214607DD01A65456E1D6807 /* XCLocalSwiftPackageReference "../../Engine" */ = {
+		4B3363B13004F26200890E18 /* XCLocalSwiftPackageReference "../../Engine" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../Engine;
 		};
 /* End XCLocalSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		D36DAD5D73EFCD8B90478D5A /* AcornEngine */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8214607DD01A65456E1D6807 /* XCLocalSwiftPackageReference "../../Engine" */;
-			productName = AcornEngine;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4BC3730D2FEFA33500A1DCB4 /* Project object */;
 }

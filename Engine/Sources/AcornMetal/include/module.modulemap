@@ -1,0 +1,5 @@
+module AcornMetal {
+    umbrella header "AcornMetal.hpp"
+    requires cplusplus
+    export *
+}

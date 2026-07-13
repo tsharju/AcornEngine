@@ -1,9 +1,10 @@
-#if os(macOS)
+#ivxf os(macOS)
 import Cocoa
 import Metal
 import MetalKit
 import ImGui
 import AcornEngine
+import UniformTypeIdentifiers
 
 @MainActor
 class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
@@ -133,6 +134,96 @@ class EditorApplicationDelegate: NSObject, NSApplicationDelegate {
         
         selectedEntity = cubeEntity
     }
+    
+    func importGLTF() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Import glTF / GLB Model"
+        if let gltfType = UTType(filenameExtension: "gltf"),
+           let glbType = UTType(filenameExtension: "glb") {
+            openPanel.allowedContentTypes = [gltfType, glbType]
+        } else {
+            openPanel.allowedFileTypes = ["gltf", "glb"]
+        }
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        
+        openPanel.begin { [weak self] response in
+            guard let self = self else { return }
+            if response == .OK, let url = openPanel.url {
+                Task {
+                    do {
+                        let loader = GLTFModelLoader(device: self.device)
+                        let loaded = try loader.load(from: url)
+                        
+                        var texture: (any Texture)? = nil
+                        if let texData = loaded.textureData {
+                            let textureLoader = TextureLoader(device: self.device)
+                            texture = try await textureLoader.loadTexture(from: texData)
+                        }
+                        
+                        await MainActor.run {
+                            let modelName = url.deletingPathExtension().lastPathComponent
+                            
+                            // Calculate bounding box across all loaded meshes to auto-scale/center
+                            var minPos = SIMD3<Float>(repeating: Float.greatestFiniteMagnitude)
+                            var maxPos = SIMD3<Float>(repeating: -Float.greatestFiniteMagnitude)
+                            var hasVertices = false
+                            
+                            for mesh in loaded.meshes {
+                                #if DEBUG
+                                for vertex in mesh.vertices {
+                                    minPos = simd_min(minPos, vertex.position)
+                                    maxPos = simd_max(maxPos, vertex.position)
+                                    hasVertices = true
+                                }
+                                #endif
+                            }
+                            
+                            var targetScale = SIMD3<Float>(1, 1, 1)
+                            var targetPosition = SIMD3<Float>(0, 0, 0)
+                            
+                            if hasVertices && minPos.x < maxPos.x {
+                                let center = (minPos + maxPos) * 0.5
+                                let size = maxPos - minPos
+                                let maxDim = max(size.x, max(size.y, size.z))
+                                if maxDim > 0 {
+                                    // Normalize model size to a standard scale (e.g. 5.0 units)
+                                    let targetSize: Float = 5.0
+                                    let scaleFactor = targetSize / maxDim
+                                    targetScale = SIMD3<Float>(repeating: scaleFactor)
+                                    targetPosition = -center * scaleFactor
+                                    print("Auto-scaled glTF model '\(modelName)' (bounds: \(size), maxDim: \(maxDim)) with factor \(scaleFactor) and center \(center)")
+                                }
+                            }
+                            
+                            if loaded.meshes.count == 1, let firstMesh = loaded.meshes.first {
+                                let entity = self.world.createEntity()
+                                self.world.setName(modelName, for: entity)
+                                self.world.addComponent(TransformComponent(position: targetPosition, scale: targetScale), to: entity)
+                                self.world.addComponent(MeshComponent(mesh: firstMesh, texture: texture), to: entity)
+                                self.selectedEntity = entity
+                            } else if loaded.meshes.count > 1 {
+                                let rootEntity = self.world.createEntity()
+                                self.world.setName(modelName, for: rootEntity)
+                                self.world.addComponent(TransformComponent(position: .zero, scale: .one), to: rootEntity)
+                                
+                                for (index, mesh) in loaded.meshes.enumerated() {
+                                    let childEntity = self.world.createEntity()
+                                    self.world.setName("\(modelName)_mesh_\(index)", for: childEntity)
+                                    self.world.addComponent(TransformComponent(position: targetPosition, scale: targetScale), to: childEntity)
+                                    self.world.addComponent(MeshComponent(mesh: mesh, texture: texture), to: childEntity)
+                                }
+                                self.selectedEntity = rootEntity
+                            }
+                        }
+                    } catch {
+                        print("Failed to load glTF: \(error)")
+                    }
+                }
+            }
+        }
+    }
 }
 
 extension EditorApplicationDelegate: MTKViewDelegate {
@@ -180,6 +271,10 @@ extension EditorApplicationDelegate: MTKViewDelegate {
         ImGui.SameLine(0, -1.0)
         if ImGui.Button("Create Shape...", ImVec2(0, 0)) {
             ImGui.OpenPopup("create_shape_popup", 0)
+        }
+        ImGui.SameLine(0, -1.0)
+        if ImGui.Button("Load glTF...", ImVec2(0, 0)) {
+            importGLTF()
         }
         
         if ImGui.BeginPopup("create_shape_popup", 0) {

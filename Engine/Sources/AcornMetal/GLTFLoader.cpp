@@ -4,6 +4,8 @@
 #include <fastgltf/types.hpp>
 #include <fastgltf/tools.hpp>
 #include <iostream>
+#include <filesystem>
+#include <cstddef>
 
 namespace Acorn {
     std::vector<AcornMetalMesh*> GLTFLoader::load(const std::string& path, void* devicePtr) {
@@ -18,12 +20,17 @@ namespace Acorn {
             return meshes;
         }
         
-        auto asset = parser.loadGltfBinary(data.get(), path, fastgltf::Options::LoadExternalBuffers);
+        auto directory = std::filesystem::path(path).parent_path();
+        
+        auto asset = parser.loadGltfBinary(data.get(), directory, fastgltf::Options::LoadExternalBuffers);
         if (asset.error() != fastgltf::Error::None) {
+            auto binaryError = asset.error();
             // fallback to parsing as standard gltf if binary fails
-            asset = parser.loadGltfJson(data.get(), path, fastgltf::Options::LoadExternalBuffers);
+            asset = parser.loadGltfJson(data.get(), directory, fastgltf::Options::LoadExternalBuffers);
             if (asset.error() != fastgltf::Error::None) {
-                std::cerr << "Failed to parse gltf: " << path << std::endl;
+                std::cerr << "Failed to parse gltf: " << path 
+                          << " (Binary error: " << fastgltf::getErrorName(binaryError) 
+                          << ", JSON error: " << fastgltf::getErrorName(asset.error()) << ")" << std::endl;
                 return meshes;
             }
         }
@@ -49,12 +56,20 @@ namespace Acorn {
         // so it matches the default Shaders.metal if possible, or construct the buffer dynamically.
         // Let's use fastgltf::iterateAccessor to build a packed buffer.
         
-        struct DefaultVertex {
+        struct alignas(16) DefaultVertex {
             float position[3];
+            float _pad1; // Pad position to 16 bytes
             float color[4];
             float texCoord[2];
+            float _pad2[2]; // Pad normal to 16-byte boundary (offset 48)
             float normal[3];
+            float _pad3; // Pad normal to 16 bytes (total 64 bytes)
         };
+        
+        static_assert(sizeof(DefaultVertex) == 64, "DefaultVertex size must be 64 bytes");
+        static_assert(offsetof(DefaultVertex, color) == 16, "color must be at offset 16");
+        static_assert(offsetof(DefaultVertex, texCoord) == 32, "texCoord must be at offset 32");
+        static_assert(offsetof(DefaultVertex, normal) == 48, "normal must be at offset 48");
         
         // We will fallback to building DefaultVertex array to ensure it works immediately with Renderer
         auto* positionAccessor = asset->accessors.data() + primitive.findAttribute("POSITION")->accessorIndex;
@@ -124,5 +139,14 @@ namespace Acorn {
 
         meshes.push_back(resultMesh);
         return meshes;
+    }
+
+    int GLTFLoader::loadRaw(const char* path, void* devicePtr, void** outMeshes, int maxMeshes) {
+        std::vector<AcornMetalMesh*> loaded = load(std::string(path), devicePtr);
+        int count = std::min(static_cast<int>(loaded.size()), maxMeshes);
+        for (int i = 0; i < count; ++i) {
+            outMeshes[i] = loaded[i];
+        }
+        return count;
     }
 }

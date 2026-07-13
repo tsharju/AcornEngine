@@ -1,5 +1,6 @@
 import Foundation
 import Metal
+import AcornMetal
 
 /// A Metal-specific render context.
 public final class MetalRenderContext: RenderContext, @unchecked Sendable {
@@ -47,29 +48,11 @@ public final class MetalRenderContext: RenderContext, @unchecked Sendable {
 }
 
 /// A renderer implementation that uses the Metal API.
-@MainActor
-public class MetalRenderer: Renderer {
+public final class MetalRenderer: Renderer, @unchecked Sendable {
     /// The Metal device.
     public let device: any MTLDevice
     
-    /// The command queue for submitting rendering work.
-    private let commandQueue: any MTLCommandQueue
-    
-    
-    /// The render pipeline state.
-    private let pipelineState: any MTLRenderPipelineState
-    
-    /// The depth stencil state.
-    private let depthStencilState: any MTLDepthStencilState
-    
-    /// The depth stencil state for transparent objects (no depth write).
-    private let transparentDepthStencilState: any MTLDepthStencilState
-    
-    /// The SDF text render pipeline state.
-    private let sdfTextPipelineState: any MTLRenderPipelineState
-    
-    /// The sprite render pipeline state.
-    private let spritePipelineState: any MTLRenderPipelineState
+    private let cxxRenderer: UnsafeMutablePointer<Acorn.AcornMetalRenderer>
     
     /// Initializes a new Metal renderer.
     /// - Parameters:
@@ -78,11 +61,6 @@ public class MetalRenderer: Renderer {
     /// - Throws: `RendererError` if initialization fails.
     public init(device: any MTLDevice, pixelFormat: MTLPixelFormat = .bgra8Unorm_srgb) throws {
         self.device = device
-        
-        guard let queue = device.makeCommandQueue() else {
-            throw RendererError.initializationFailed
-        }
-        self.commandQueue = queue
         
         var metalLibrary: (any MTLLibrary)? = nil
         if let lib = try? device.makeDefaultLibrary(bundle: Bundle.module) {
@@ -104,94 +82,26 @@ public class MetalRenderer: Renderer {
             throw RendererError.libraryNotFound
         }
         
-        guard let vertexFunction = library.makeFunction(name: "vertex_main"),
-              let fragmentFunction = library.makeFunction(name: "fragment_main") else {
-            throw RendererError.functionNotFound
-        }
+        let devicePtr = Unmanaged.passUnretained(device).toOpaque()
+        let libraryPtr = Unmanaged.passUnretained(library).toOpaque()
         
-        let pipelineDescriptor = MTLRenderPipelineDescriptor()
-        pipelineDescriptor.label = "Forward Pipeline"
-        pipelineDescriptor.vertexFunction = vertexFunction
-        pipelineDescriptor.fragmentFunction = fragmentFunction
-        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
-        
-        self.pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
-        
-        let depthStencilDesc = MTLDepthStencilDescriptor()
-        depthStencilDesc.depthCompareFunction = .less
-        depthStencilDesc.isDepthWriteEnabled = true
-        guard let depthState = device.makeDepthStencilState(descriptor: depthStencilDesc) else {
+        guard let renderer = Acorn.AcornMetalRenderer.create(devicePtr, libraryPtr, UInt(pixelFormat.rawValue)) else {
             throw RendererError.initializationFailed
         }
-        self.depthStencilState = depthState
-        
-        let transparentDepthDesc = MTLDepthStencilDescriptor()
-        transparentDepthDesc.depthCompareFunction = .less
-        transparentDepthDesc.isDepthWriteEnabled = false
-        guard let transparentDepthState = device.makeDepthStencilState(descriptor: transparentDepthDesc) else {
-            throw RendererError.initializationFailed
-        }
-        self.transparentDepthStencilState = transparentDepthState
-        
-        // Initialize the SDF Text Pipeline
-        guard let sdfVertexFunction = library.makeFunction(name: "sdf_vertex"),
-              let sdfFragmentFunction = library.makeFunction(name: "sdf_fragment") else {
-            throw RendererError.functionNotFound
-        }
-        
-        let sdfPipelineDescriptor = MTLRenderPipelineDescriptor()
-        sdfPipelineDescriptor.label = "SDF Text Pipeline"
-        sdfPipelineDescriptor.vertexFunction = sdfVertexFunction
-        sdfPipelineDescriptor.fragmentFunction = sdfFragmentFunction
-        sdfPipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        sdfPipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
-        
-        // Enable alpha blending for text rendering
-        let colorAttachment = sdfPipelineDescriptor.colorAttachments[0]
-        colorAttachment?.isBlendingEnabled = true
-        colorAttachment?.sourceRGBBlendFactor = .sourceAlpha
-        colorAttachment?.destinationRGBBlendFactor = .oneMinusSourceAlpha
-        colorAttachment?.rgbBlendOperation = .add
-        colorAttachment?.sourceAlphaBlendFactor = .sourceAlpha
-        colorAttachment?.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        colorAttachment?.alphaBlendOperation = .add
-        
-        self.sdfTextPipelineState = try device.makeRenderPipelineState(descriptor: sdfPipelineDescriptor)
-        
-        // Initialize the Sprite Pipeline
-        guard let spriteVertexFunction = library.makeFunction(name: "sprite_vertex"),
-              let spriteFragmentFunction = library.makeFunction(name: "sprite_fragment") else {
-            throw RendererError.functionNotFound
-        }
-        
-        let spritePipelineDescriptor = MTLRenderPipelineDescriptor()
-        spritePipelineDescriptor.label = "Sprite Pipeline"
-        spritePipelineDescriptor.vertexFunction = spriteVertexFunction
-        spritePipelineDescriptor.fragmentFunction = spriteFragmentFunction
-        spritePipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        spritePipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
-        
-        // Enable alpha blending for sprite rendering
-        let spriteColorAttachment = spritePipelineDescriptor.colorAttachments[0]
-        spriteColorAttachment?.isBlendingEnabled = true
-        spriteColorAttachment?.sourceRGBBlendFactor = .sourceAlpha
-        spriteColorAttachment?.destinationRGBBlendFactor = .oneMinusSourceAlpha
-        spriteColorAttachment?.rgbBlendOperation = .add
-        spriteColorAttachment?.sourceAlphaBlendFactor = .sourceAlpha
-        spriteColorAttachment?.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        spriteColorAttachment?.alphaBlendOperation = .add
-        
-        self.spritePipelineState = try device.makeRenderPipelineState(descriptor: spritePipelineDescriptor)
+        self.cxxRenderer = renderer
+    }
+    
+    deinit {
+        cxxRenderer.pointee.destroy()
     }
     
     /// Creates a Metal mesh from vertices.
-    public nonisolated func createMesh(vertices: [Vertex]) -> Mesh? {
+    public func createMesh(vertices: [Vertex]) -> Mesh? {
         return MetalMesh(device: device, vertices: vertices)
     }
     
     /// Renders a mesh using the given Metal frame context.
-    public nonisolated func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {
+    public func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {
         guard let metalContext = context as? MetalRenderContext,
               let metalMesh = mesh as? MetalMesh else {
             return
@@ -201,19 +111,24 @@ public class MetalRenderer: Renderer {
             return
         }
         
-        encoder.setRenderPipelineState(pipelineState)
-        encoder.setDepthStencilState(depthStencilState)
-        encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
         
-        var mutUniforms = uniforms
-        encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<GlobalUniforms>.stride, index: 1)
-        encoder.setFragmentBytes(&mutUniforms, length: MemoryLayout<GlobalUniforms>.stride, index: 0)
+        var cxxUniforms = Acorn.GlobalUniforms()
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix
+        cxxUniforms.modelMatrix = uniforms.modelMatrix
+        cxxUniforms.normalMatrix = uniforms.normalMatrix
+        cxxUniforms.ambientLightColor = uniforms.ambientLightColor
+        cxxUniforms.directionalLightColor = uniforms.directionalLightColor
+        cxxUniforms.directionalLightDirection = uniforms.directionalLightDirection
+        cxxUniforms.pointLightColor = uniforms.pointLightColor
+        cxxUniforms.pointLightPosition = uniforms.pointLightPosition
+        cxxUniforms.meshColor = uniforms.meshColor
         
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
+        cxxRenderer.pointee.render(metalMesh.cxxMesh, cxxUniforms, encoderPtr)
     }
     
     /// Renders text using signed distance field shaders.
-    public nonisolated func renderText(
+    public func renderText(
         mesh: Mesh,
         texture: any Texture,
         uniforms: SDFUniforms,
@@ -229,23 +144,21 @@ public class MetalRenderer: Renderer {
             return
         }
         
-        encoder.setRenderPipelineState(sdfTextPipelineState)
-        encoder.setDepthStencilState(transparentDepthStencilState)
-        encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
         
-        // Bind the SDF Font texture atlas
-        encoder.setFragmentTexture(metalTexture.texture, index: 0)
+        var cxxUniforms = Acorn.SDFUniforms()
+        cxxUniforms.textColor = uniforms.textColor
+        cxxUniforms.outlineColor = uniforms.outlineColor
+        cxxUniforms.outlineWidth = uniforms.outlineWidth
+        cxxUniforms.edgeWidth = uniforms.edgeWidth
+        cxxUniforms.padding = uniforms.padding
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix
         
-        // Bind the SDF parameters in uniform buffer to fragment and vertex shaders
-        var mutUniforms = uniforms
-        encoder.setFragmentBytes(&mutUniforms, length: MemoryLayout<SDFUniforms>.stride, index: 0)
-        encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<SDFUniforms>.stride, index: 1)
-        
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
+        cxxRenderer.pointee.renderText(metalMesh.cxxMesh, metalTexture.cxxTexture, cxxUniforms, encoderPtr)
     }
     
     /// Renders a sprite or tile map using a sprite sheet texture.
-    public nonisolated func renderSprite(
+    public func renderSprite(
         mesh: Mesh,
         texture: any Texture,
         uniforms: SpriteUniforms,
@@ -261,17 +174,12 @@ public class MetalRenderer: Renderer {
             return
         }
         
-        encoder.setRenderPipelineState(spritePipelineState)
-        encoder.setDepthStencilState(transparentDepthStencilState)
-        encoder.setVertexBuffer(metalMesh.vertexBuffer, offset: 0, index: 0)
+        let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
         
-        // Bind the sprite texture
-        encoder.setFragmentTexture(metalTexture.texture, index: 0)
+        var cxxUniforms = Acorn.SpriteUniforms()
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix
+        cxxUniforms.colorTint = uniforms.colorTint
         
-        // Bind uniforms
-        var mutUniforms = uniforms
-        encoder.setVertexBytes(&mutUniforms, length: MemoryLayout<SpriteUniforms>.stride, index: 1)
-        
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: metalMesh.vertexCount)
+        cxxRenderer.pointee.renderSprite(metalMesh.cxxMesh, metalTexture.cxxTexture, cxxUniforms, encoderPtr)
     }
 }

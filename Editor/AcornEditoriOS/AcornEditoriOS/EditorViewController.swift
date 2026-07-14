@@ -75,7 +75,19 @@ class EditorViewController: UIViewController {
             var regularPath = Bundle.main.path(forResource: "JetBrainsMono-Regular", ofType: "ttf")
             var boldPath = Bundle.main.path(forResource: "JetBrainsMono-Bold", ofType: "ttf")
             
-            // Fallback
+            // Fallback 1: Resolve relative to source file location (#filePath) for development runs in Xcode
+            if regularPath == nil || !fm.fileExists(atPath: regularPath!) {
+                let sourceURL = URL(fileURLWithPath: #filePath)
+                let editorDir = sourceURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                let rPath = editorDir.appendingPathComponent("Fonts/JetBrainsMono-Regular.ttf").path
+                let bPath = editorDir.appendingPathComponent("Fonts/JetBrainsMono-Bold.ttf").path
+                if fm.fileExists(atPath: rPath) {
+                    regularPath = rPath
+                    boldPath = bPath
+                }
+            }
+            
+            // Fallback 2: Command line / relative path check
             if regularPath == nil || !fm.fileExists(atPath: regularPath!) {
                 if fm.fileExists(atPath: "Fonts/JetBrainsMono-Regular.ttf") {
                     regularPath = "Fonts/JetBrainsMono-Regular.ttf"
@@ -88,7 +100,9 @@ class EditorViewController: UIViewController {
             
             if let rPath = regularPath {
                 rPath.withCString { cPath in
-                    _ = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0)
+                    if let font = ImGui_AddFontFromFileTTF(fonts, cPath, 14.0) {
+                        io.pointee.FontDefault = font
+                    }
                 }
             }
             if let bPath = boldPath {
@@ -316,7 +330,7 @@ extension EditorViewController: MTKViewDelegate {
                 ImGui.PushFont(bold)
             }
             
-            let name = world.name(for: entity)
+            let name = self.world.name(for: entity)
             let children = childrenMap[entity] ?? []
             
             var flags = TreeNodeFlags.openOnArrow | TreeNodeFlags.spanAvailWidth

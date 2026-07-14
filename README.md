@@ -7,20 +7,22 @@
 # AcornEngine
 
 
-AcornEngine is a modern, high-performance 2D/3D game engine targetting Apple platforms (**iOS 16+** and **macOS 13+**). It is built from the ground up using **Swift 6** with strict concurrency safety (`Sendable` conformance and `@MainActor` isolation where appropriate) and leverages the **Metal** graphics API for hardware-accelerated rendering.
+AcornEngine is a modern, high-performance 2D/3D game engine targeting Apple platforms (**iOS 16+** and **macOS 13+**). It is built from the ground up using **Swift 6** with strict concurrency safety (`Sendable` conformance and `@MainActor` isolation where appropriate) and leverages the **Metal** graphics API for hardware-accelerated rendering.
 
 ---
 
 ## Key Features
 
-* **Entity Component System (ECS)**: Type-safe, data-oriented architecture designed with strict separation between data ([Component](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/Component.swift) structs) and logic ([System](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/System.swift) classes). The ECS [World](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/World.swift) handles thread-safe lifecycle ticks and queries.
-* **Metal Rendering Backend**: Low-overhead hardware-accelerated graphics API. Includes optimized shader pipelines for:
-  - Standard 3D mesh rendering with vertex colors.
+* **Entity Component System (ECS)**: Type-safe, data-oriented architecture designed with strict separation between data ([Component](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/Component.swift) structs) and logic ([System](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/System.swift) classes). Includes a hierarchical **Parent-Child Transform System** (`ParentComponent`) for tree-like coordinate propagation.
+* **Metal Rendering Backend & glTF Support**: Low-overhead hardware-accelerated graphics API supporting:
+  - Textured 3D mesh rendering with lighting (ambient & point light sources).
+  - High-performance **glTF (.gltf / .glb) model loading** with texture maps and parent-child node structures.
   - Trimmed, rotated, and tinted 2D sprites backed by packed sprite sheets.
   - High-quality, scalable **Signed Distance Field (SDF) Text Rendering** supporting runtime font generation, outlines, and anti-aliasing.
+* **GPS Coordinate Mapping**: Real-world geographical location sync (`GPSPositionComponent` and `GPSCoordinateSystem`) converting latitude, longitude, and altitude to 3D world coordinates using the Web Mercator projection.
 * **2D Physics Engine**: Direct native integration of the industry-standard **Box2D v3** library, driving fast rigid body dynamics with automatic synchronization back to ECS transforms.
 * **2D Particle System**: Fully integrated with the ECS & Physics system. Particles are fully realized entities that can collide with physical geometry and bounce, scale, or fade dynamically.
-* **Native macOS Editor**: A companion Cocoa desktop editor rendering interactive scene trees, editable inspectors, and 3D line grids using **Dear ImGui** (wrapped using Swift C++ interop).
+* **Native macOS & iOS Editor**: A companion Dear ImGui editor featuring scene hierarchies, editable inspectors, dynamic component injection, and 3D line grids. Supports macOS and iPad builds with UIKit touch-to-mouse mapping, Retina display scaling, and safe area layouts.
 * **Metal-Optimized Math**: Coordinate transformations and perspective/orthographic projections tailored for Metal's standard NDC depth ranges ($[0, 1]$).
 
 ---

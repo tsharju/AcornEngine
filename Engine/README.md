@@ -103,8 +103,8 @@ An abstraction over the graphic device APIs, facilitating potential future multi
 ### [MetalRenderer](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/MetalRenderer.swift)
 The concrete implementation of the renderer using Apple's Metal API.
 * **Pipelines**: Initializes three separate pipeline states from [Shaders.metal](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Shaders.metal):
-  1. **Standard Pipeline**: Simple rendering using vertex colors.
-  2. **Sprite Pipeline**: Alpha-blended texture rendering with color tints.
+  1. **Standard Pipeline**: 3D mesh rendering supporting vertex colors, textures, and diffuse lighting (Ambient + multiple Point Lights).
+  2. **Sprite Pipeline**: Alpha-blended 2D texture rendering with color tints.
   3. **SDF Text Pipeline**: Alpha-blended rendering mapping distance values to smooth characters and outlines.
 * **Context**: Uses `MetalRenderContext` to hold the current command buffer and render pass descriptor. It safely manages a command encoder per frame using locking.
 
@@ -113,11 +113,17 @@ The concrete implementation of the renderer using Apple's Metal API.
 * **[MetalTexture](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/MetalTexture.swift)**: Wraps a Metal `MTLTexture`.
 * **[TextureLoader](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/TextureLoader.swift)**: Decodes images asynchronously from `URL` or `Data` using `MTKTextureLoader`, or uploads raw `[UInt8]` pixel arrays (supporting single-channel `.r8Unorm` for fonts or 4-channel `.rgba8Unorm` formats).
 
+### [GLTFModelLoader](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/GLTFModelLoader.swift)
+Responsible for parsing and loading glTF models (`.glb` / `.gltf`) from disk.
+* **Implementation**: Wraps a C++ backend (`AcornMetal` parser) built on top of `fastgltf` and `simdjson`.
+* **Output**: Extracts arrays of `MetalMesh` buffers, `GLTFNode` structural configurations (translation, rotation, scale, parents), and embedded texture image binary payloads.
+
 ### Mesh & Geometry Basics
 * **[Vertex](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Vertex.swift)**: A struct containing:
   * `position: SIMD3<Float>`: 3D position vector.
   * `color: SIMD4<Float>`: Vertex RGBA color.
-  * `texCoord: SIMD2<Float>`: Texture coordinate (UV).
+  * `texCoord: SIMD2<Float>`: Texture coordinate (UV) for model mapping.
+  * `normal: SIMD3<Float>`: 3D normal vector for surface shading calculations.
 * **[MetalMesh](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/MetalMesh.swift)**: Implements the opaque `Mesh` protocol, managing an underlying `MTLBuffer` with shared storage.
 
 ---
@@ -174,6 +180,11 @@ Stores the physical placement of an entity in the virtual world.
   * `rotation: SIMD3<Float>`: Euler rotation angles in radians.
   * `scale: SIMD3<Float>`: Scaling factor (default is `[1.0, 1.0, 1.0]`).
   * `matrix: simd_float4x4`: Derived 4x4 model matrix computed via Translation * Rotation * Scale.
+
+### [ParentComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/ParentComponent.swift)
+Establishes a hierarchical relationship between entities, forming a scene tree hierarchy.
+* **Properties**:
+  * `parent: Entity`: The parent entity to inherit world transformations from.
 
 ### [MeshComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/MeshComponent.swift)
 Assigns a pre-built static 3D geometry to an entity for rendering.
@@ -282,6 +293,18 @@ Describes particle spawning behavior and randomized template ranges.
   * `angularVelocity: ClosedRange<Float>`: Initial rotation velocity bounds.
   * `scale: ClosedRange<Float>`: Unified scale boundaries.
 
+### [GPSPositionComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/GPSPositionComponent.swift)
+Tracks an entity's real-world geographical coordinates.
+* **Properties**:
+  * `coordinate: GPSCoordinate`: The latitude, longitude, and altitude of the entity.
+
+### [LightComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/LightComponent.swift)
+Defines a light source used for 3D shading calculations.
+* **Properties**:
+  * `type: LightType`: The type of light source (`.ambient`, `.directional`, or `.point`).
+  * `color: SIMD3<Float>`: The color of the light (RGB).
+  * `intensity: Float`: The intensity/brightness of the light source.
+
 ---
 
 ## 5. ECS Systems
@@ -293,16 +316,24 @@ Updates camera positions and orientations.
 * **Operation**:
   * **Standard Tracking**: For entities with `CameraTrackingComponent` and `TransformComponent`, it fetches the target's transform and linearly interpolates (LERP) the camera's position:
     $$\vec{p}_{cam} = \text{mix}(\vec{p}_{cam}, \vec{p}_{target} + \vec{o}_{offset}, s_{smoothing})$$
-  * **Orbit & Sway**: For entities with `CameraOrbitComponent` and `TransformComponent`, it accumulates elapsed time, calculates orbit angles (optionally using `sin` for angular sway), applies vertical bobbing/horizontal sway offsets, and positions the camera. Finally, it calculates pitch and yaw Euler angles to keep the camera pointing directly at the target.
+    If the target is part of a hierarchy, tracking calculates coordinates using the accumulated world position `worldPosition(for:)`.
+  * **Orbit & Sway**: For entities with `CameraOrbitComponent` and `TransformComponent`, it accumulates elapsed time, calculates orbit angles, applies vertical bobbing/horizontal sway offsets, and positions the camera. Finally, it calculates pitch and yaw Euler angles to keep the camera pointing directly at the target (using world positions if nested).
+
+### [GPSCoordinateSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/GPSCoordinateSystem.swift)
+Coordinates real-world GPS coordinates with local game transforms.
+* **Operation**:
+  * **Two-way Sync**: Detects changes between `TransformComponent` positions and `GPSPositionComponent` GPS coordinates. If an entity moves in the local world, it translates the coordinates back to GPS. If the GPS coordinates are modified, it updates the transform.
+  * **Web Mercator Projection**: Projects latitude and longitude coordinates onto a 2D plane relative to a reference coordinate origin representing $(0,0,0)$ in the game world.
 
 ### [RenderSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/RenderSystem.swift)
 The pipeline bridge that retrieves visible components, updates dynamic buffers, and builds render commands.
 * **Operation**:
-  1. **View-Projection Extraction**: Searches for the first active `CameraComponent` in the world. If present, it retrieves its parent entity's `TransformComponent` matrix, takes its inverse to produce the *View Matrix*, and multiplies it by the camera's *Projection Matrix* to get the combined `viewProjectionMatrix`.
+  1. **View-Projection Extraction**: Searches for the first active `CameraComponent` in the world. If present, it retrieves its parent entity's world matrix via `worldMatrix(for:)`, takes its inverse to produce the *View Matrix*, and multiplies it by the camera's *Projection Matrix* to get the combined `viewProjectionMatrix`.
   2. **Mesh Rebuilding**: Inspects all `SpriteComponent`, `TextComponent`, and `TileMapComponent` entities. If the `isDirty` flag is true, it triggers generation algorithms to produce a new set of vertices, uploads them to the GPU via `renderer.createMesh(vertices:)`, caches the returned mesh, and resets the dirty flag.
   3. **Z-Sorting Support**: Prior to generating draw commands, the `RenderSystem` automatically queries all `SpriteComponent` entities and sorts them based on their Z coordinate in `TransformComponent` (ascending). This provides correct back-to-front rendering order for 2D sprites.
-  4. **Uniform Packaging & Drawing**:
-     * Iterates over `MeshComponent` entities, calculates the MVP matrix, and submits them to `renderer.render`.
+  4. **Light Gathering**: Collects all active `LightComponent` entities, extracting their positions (via `worldPosition(for:)`) and properties to populate the lighting uniforms passed to the Metal shaders.
+  5. **Uniform Packaging & Drawing**:
+     * Iterates over `MeshComponent` entities, calculates the MVP matrix utilizing `worldMatrix(for:)` to correctly apply hierarchical parent transforms, and submits them to `renderer.render`.
      * Iterates over `TextComponent` entities, scales them down by a base scaling factor (`0.003`), binds the atlas texture, packages outline parameters into `SDFUniforms`, and calls `renderer.renderText`.
      * Iterates over `SpriteComponent` and `TileMapComponent` entities, binds their sprite sheet texture, packages colors into `SpriteUniforms`, and calls `renderer.renderSprite`.
 
@@ -311,7 +342,7 @@ Orchestrates Box2D physics updates and ECS synchronization.
 * **Operation**:
   1. **Body Creation**: Automatically constructs Box2D `b2BodyId` and `b2ShapeId` wrappers for entities newly receiving a `PhysicsBodyComponent` and optionally a `PhysicsColliderComponent`.
   2. **Simulation Step**: Advances the Box2D engine context via `b2World_Step` using a set `timeStep` (default `1/60`s) and `subStepCount` (default `4`).
-  3. **Transform Sync**: Copies physical states (2D positions and rotations) back to the entities' `TransformComponent` after simulation steps.
+  3. **Transform Sync**: Copies physical states (2D positions and rotations) back to the entities' local `TransformComponent` after simulation steps. If the entity has a parent, it converts the Box2D world position back to parent-relative local coordinates before updating the `TransformComponent`.
 
 ### [ParticleSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/ParticleSystem.swift)
 Manages dynamic lifecycle loops for emission particles.
@@ -405,3 +436,13 @@ Extends `simd_float4x4` with projection and transform helpers tailored for Metal
 * **Perspective Projection**:
   $$\mathbf{P}_{persp} = \begin{bmatrix} \frac{1}{a \tan(\theta/2)} & 0 & 0 & 0 \\ 0 & \frac{1}{\tan(\theta/2)} & 0 & 0 \\ 0 & 0 & \frac{f}{f-n} & 1 \\ 0 & 0 & -\frac{n f}{f-n} & 0 \end{bmatrix}$$
   *(Note the transposed columns layout mapping to SIMD structures)*
+
+### GPS Web Mercator Projection
+Located under [GPSCoordinateSystem.swift](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/GPSCoordinateSystem.swift), latitude ($\phi$) and longitude ($\lambda$) in radians are projected using:
+$$x = R \lambda$$
+$$y = R \ln\left(\tan\left(\frac{\pi}{4} + \frac{\phi}{2}\right)\right)$$
+where $R = 6378137.0$ meters represents the equatorial radius of the Earth.
+
+Inverse Web Mercator projection maps local projected coordinate positions back into geographical coordinates via:
+$$\lambda = \frac{x}{R}$$
+$$\phi = 2 \arctan\left(e^{y/R}\right) - \frac{\pi}{2}$$

@@ -49,8 +49,9 @@ AcornEngine/
 
 For more details on how to build, run, and modify individual components, refer to their respective READMEs:
 
-* [Engine Documentation](file:///Users/tsharju/Code/AcornEngine/Engine/README.md) – Deep dive into the Entity Component System, Metal Renderer pipelines, Box2D physics simulation, 2D particle emitter, and coordinate geometry math.
-* [Editor Documentation](file:///Users/tsharju/Code/AcornEngine/Editor/README.md) – In-depth guide on the macOS desktop workspace, Dear ImGui interop structure, Cocoa and Metal integration delegates, and interactive line-projection drawing.
+* [Engine Documentation](Engine/README.md) – Deep dive into the Entity Component System, Metal Renderer pipelines, Box2D physics simulation, 2D particle emitter, and coordinate geometry math.
+* [Editor Documentation](Editor/README.md) – In-depth guide on the macOS desktop workspace, Dear ImGui interop structure, Cocoa and Metal integration delegates, and interactive line-projection drawing.
+* [Roadmap & TODO List](TODO.md) – Feature roadmap, technical priorities, and planned subsystems.
 
 ---
 

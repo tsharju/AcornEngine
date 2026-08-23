@@ -33,11 +33,16 @@ public class World {
     /// A dictionary mapping the component type's identifier to a dictionary of entity to component.
     private var components: [ObjectIdentifier: [Entity: any Component]] = [:]
     
+    /// The event bus for decoupled message publishing and subscriptions.
+    public let eventBus: EventBus
+    
     /// The systems registered in the world.
     private var systems: [any System] = []
     
     /// Creates a new, empty world.
-    public init() {}
+    public init(eventBus: EventBus = EventBus()) {
+        self.eventBus = eventBus
+    }
     
     /// Creates a new entity and adds it to the world.
     /// - Returns: The newly created entity.
@@ -113,9 +118,11 @@ public class World {
     /// Updates all registered systems.
     /// - Parameter deltaTime: The time elapsed since the last update.
     public func update(deltaTime: Double) {
+        eventBus.publish(EngineTickEvent(deltaTime: deltaTime))
         for system in systems {
             system.update(world: self, deltaTime: deltaTime)
         }
+        eventBus.clear()
     }
     
     /// Computes the world transformation matrix for the given entity by traversing its parent chain.

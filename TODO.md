@@ -6,10 +6,10 @@ This document tracks upcoming features, architectural improvements, and roadmap 
 
 ## 🎯 Priority 1: Core Systems & Foundational Gameplay
 
-- [ ] **Unified Input System & Event Dispatcher**
-  - [ ] Implement `InputSystem` managing keyboard, mouse, and touch pointer states.
-  - [ ] Integrate Apple's `GameController` framework for MFi, Xbox, and PlayStation gamepads.
-  - [ ] Add an ECS `EventBus` / message stream for decoupled event handling (e.g. input actions, lifecycle events).
+- [x] **Unified Input System & Event Dispatcher**
+  - [x] Implement `InputSystem` managing keyboard, mouse, and touch pointer states.
+  - [x] Integrate Apple's `GameController` framework for MFi, Xbox, and PlayStation gamepads.
+  - [x] Add an ECS `EventBus` / message stream for decoupled event handling (e.g. input actions, lifecycle events).
 - [ ] **Physics Contact Events & Callbacks**
   - [ ] Bridge Box2D v3 contact events (`b2ContactEvents`) into Swift ECS.
   - [ ] Add `CollisionEnterEvent`, `CollisionStayEvent`, and `CollisionExitEvent`.

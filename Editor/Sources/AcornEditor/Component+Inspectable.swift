@@ -189,6 +189,88 @@ extension PhysicsColliderComponent: Inspectable {
     }
 }
 
+extension AudioSourceComponent: Inspectable {
+    public mutating func drawInspector(world: World, entity: Entity) {
+        var currentVolume = volume
+        if ImGui.SliderFloat("Volume", &currentVolume, 0.0, 1.0, "%.2f", 0) {
+            volume = currentVolume
+            world.addComponent(self, to: entity)
+        }
+        
+        var currentPitch = pitch
+        if ImGui.SliderFloat("Pitch", &currentPitch, 0.5, 2.0, "%.2f", 0) {
+            pitch = currentPitch
+            world.addComponent(self, to: entity)
+        }
+        
+        var looping = isLooping
+        if ImGui.Checkbox("Is Looping", &looping) {
+            isLooping = looping
+            world.addComponent(self, to: entity)
+        }
+        
+        var spatial = isSpatial
+        if ImGui.Checkbox("Is Spatial", &spatial) {
+            isSpatial = spatial
+            world.addComponent(self, to: entity)
+        }
+        
+        var awake = playOnAwake
+        if ImGui.Checkbox("Play On Awake", &awake) {
+            playOnAwake = awake
+            world.addComponent(self, to: entity)
+        }
+        
+        var currentReverb = reverbBlend
+        if ImGui.SliderFloat("Reverb Blend", &currentReverb, 0.0, 1.0, "%.2f", 0) {
+            reverbBlend = currentReverb
+            world.addComponent(self, to: entity)
+        }
+        
+        if ImGui.Button("Play", ImVec2(0, 0)) {
+            play()
+            world.addComponent(self, to: entity)
+        }
+        ImGui.SameLine(0, -1)
+        if ImGui.Button("Pause", ImVec2(0, 0)) {
+            pause()
+            world.addComponent(self, to: entity)
+        }
+        ImGui.SameLine(0, -1)
+        if ImGui.Button("Stop", ImVec2(0, 0)) {
+            stop()
+            world.addComponent(self, to: entity)
+        }
+    }
+}
+
+extension AudioListenerComponent: Inspectable {
+    public mutating func drawInspector(world: World, entity: Entity) {
+        var primary = isPrimary
+        if ImGui.Checkbox("Is Primary", &primary) {
+            isPrimary = primary
+            world.addComponent(self, to: entity)
+        }
+        
+        var master = masterVolume
+        if ImGui.SliderFloat("Master Volume", &master, 0.0, 1.0, "%.2f", 0) {
+            masterVolume = master
+            world.addComponent(self, to: entity)
+        }
+    }
+}
+
+@MainActor
+public func registerDefaultComponents() {
+    ComponentRegistry.register(name: "AudioSource", type: AudioSourceComponent.self) {
+        AudioSourceComponent()
+    }
+    
+    ComponentRegistry.register(name: "AudioListener", type: AudioListenerComponent.self) {
+        AudioListenerComponent()
+    }
+}
+
 @MainActor
 func registerAllComponents(renderer: MetalRenderer, dummySpriteSheet: SpriteSheet? = nil, defaultFont: FontAtlas? = nil) {
     ComponentRegistry.register(name: "Transform", type: TransformComponent.self) {
@@ -232,6 +314,8 @@ func registerAllComponents(renderer: MetalRenderer, dummySpriteSheet: SpriteShee
     ComponentRegistry.register(name: "PhysicsCollider", type: PhysicsColliderComponent.self) {
         PhysicsColliderComponent(shapeType: .box(width: 1, height: 1))
     }
+    
+    registerDefaultComponents()
     
     if let sheet = dummySpriteSheet {
         ComponentRegistry.register(name: "Sprite", type: SpriteComponent.self) {

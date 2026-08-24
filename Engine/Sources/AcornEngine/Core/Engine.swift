@@ -16,17 +16,27 @@ public class Engine {
     /// The system responsible for rendering meshes.
     public let renderSystem: RenderSystem
     
+    /// The system responsible for audio playback and 3D spatial sound.
+    public let audioSystem: AudioSystem
+    
     /// Initializes a new engine.
     /// - Parameters:
     ///   - renderer: The renderer.
     ///   - inputSystem: The input system (defaults to standard InputSystem).
-    public init(renderer: any Renderer, inputSystem: InputSystem = InputSystem()) {
+    ///   - audioSystem: The audio system (defaults to standard AudioSystem).
+    public init(
+        renderer: any Renderer,
+        inputSystem: InputSystem = InputSystem(),
+        audioSystem: AudioSystem = AudioSystem()
+    ) {
         self.world = World()
         self.renderer = renderer
         self.inputSystem = inputSystem
         self.renderSystem = RenderSystem(renderer: self.renderer)
+        self.audioSystem = audioSystem
         
         self.world.registerSystem(self.inputSystem)
+        self.world.registerSystem(self.audioSystem)
     }
     
     /// Ticks the engine, updating the world.

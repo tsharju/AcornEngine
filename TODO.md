@@ -14,10 +14,10 @@ This document tracks upcoming features, architectural improvements, and roadmap 
   - [x] Bridge Box2D v3 contact events (`b2ContactEvents`) into Swift ECS.
   - [x] Add `CollisionEnterEvent`, `CollisionStayEvent`, and `CollisionExitEvent`.
   - [x] Implement `SensorTriggerComponent` for trigger zones and non-solid volume queries.
-- [ ] **Audio Subsystem (`AudioSystem`)**
-  - [ ] Implement `AudioSystem` backed by `AVAudioEngine`.
-  - [ ] Create `AudioSourceComponent` (audio clips, volume, pitch, looping, spatial 3D attenuation).
-  - [ ] Create `AudioListenerComponent` attached to the active camera or player entity.
+- [x] **Audio Subsystem (`AudioSystem`)**
+  - [x] Implement `AudioSystem` backed by `AVAudioEngine`.
+  - [x] Create `AudioSourceComponent` (audio clips, volume, pitch, looping, spatial 3D attenuation).
+  - [x] Create `AudioListenerComponent` attached to the active camera or player entity.
 
 ---
 

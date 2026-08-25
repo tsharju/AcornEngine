@@ -4,6 +4,32 @@ import simd
 /// Utility for generating meshes for sprites and tile maps.
 public enum SpriteMeshGenerator {
     
+    /// Generates a standard unit quad (6 vertices forming 2 triangles) centered at origin `[-0.5, 0.5]` with UVs `[0, 1]`.
+    public static func generateUnitQuad() -> [Vertex] {
+        // Triangle 1: (-0.5, -0.5), (0.5, -0.5), (0.5, 0.5)
+        // Triangle 2: (-0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)
+        let v0 = Vertex(position: SIMD3<Float>(-0.5, -0.5, 0), color: SIMD4<Float>(1, 1, 1, 1), texCoord: SIMD2<Float>(0, 1))
+        let v1 = Vertex(position: SIMD3<Float>(0.5, -0.5, 0), color: SIMD4<Float>(1, 1, 1, 1), texCoord: SIMD2<Float>(1, 1))
+        let v2 = Vertex(position: SIMD3<Float>(0.5, 0.5, 0), color: SIMD4<Float>(1, 1, 1, 1), texCoord: SIMD2<Float>(1, 0))
+        let v3 = Vertex(position: SIMD3<Float>(-0.5, -0.5, 0), color: SIMD4<Float>(1, 1, 1, 1), texCoord: SIMD2<Float>(0, 1))
+        let v4 = Vertex(position: SIMD3<Float>(0.5, 0.5, 0), color: SIMD4<Float>(1, 1, 1, 1), texCoord: SIMD2<Float>(1, 0))
+        let v5 = Vertex(position: SIMD3<Float>(-0.5, 0.5, 0), color: SIMD4<Float>(1, 1, 1, 1), texCoord: SIMD2<Float>(0, 0))
+        return [v0, v1, v2, v3, v4, v5]
+    }
+    
+    /// Computes the normalized UV bounds `(uMin, vMin, uMax, vMax)` for a frame name within a sprite sheet.
+    public static func uvRect(for frameName: String, in spriteSheet: SpriteSheet) -> SIMD4<Float> {
+        guard let frame = spriteSheet.frame(named: frameName) else {
+            return SIMD4<Float>(0, 0, 1, 1)
+        }
+        let uv = spriteSheet.uvRect(for: frame)
+        let uMin = uv.origin.x
+        let vMin = uv.origin.y
+        let uMax = uv.origin.x + uv.size.x
+        let vMax = uv.origin.y + uv.size.y
+        return SIMD4<Float>(uMin, vMin, uMax, vMax)
+    }
+    
     /// Generates vertices for a single sprite.
     /// - Parameters:
     ///   - spriteSheet: The sprite sheet containing the sprite.

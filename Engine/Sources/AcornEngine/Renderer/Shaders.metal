@@ -162,3 +162,101 @@ fragment float4 sprite_fragment(VertexOutSprite in [[stage_in]],
     float4 texColor = spriteTexture.sample(linearSampler, in.texCoord);
     return texColor * in.color;
 }
+
+// --- Instanced Rendering Shaders ---
+
+struct FrameUniforms {
+    float4x4 viewProjectionMatrix;
+    float4 ambientLightColor;
+    float4 directionalLightColor;
+    float4 directionalLightDirection;
+    float4 pointLightColor;
+    float4 pointLightPosition;
+};
+
+struct MeshInstanceData {
+    float4x4 modelMatrix;
+    float4x4 normalMatrix;
+    float4 color;
+};
+
+struct SpriteFrameUniforms {
+    float4x4 viewProjectionMatrix;
+};
+
+struct SpriteInstanceData {
+    float4x4 modelMatrix;
+    float4 colorTint;
+    float4 uvRect; // (uMin, vMin, uMax, vMax)
+};
+
+vertex VertexOut instanced_vertex_main(uint vertexID [[vertex_id]],
+                                       uint instanceID [[instance_id]],
+                                       constant VertexIn *vertices [[buffer(0)]],
+                                       constant MeshInstanceData *instances [[buffer(1)]],
+                                       constant FrameUniforms &frameUniforms [[buffer(2)]]) {
+    VertexOut out;
+    MeshInstanceData inst = instances[instanceID];
+    float4 pos = float4(vertices[vertexID].position, 1.0);
+    float4 worldPos = inst.modelMatrix * pos;
+    
+    out.position = frameUniforms.viewProjectionMatrix * worldPos;
+    out.worldPosition = worldPos.xyz;
+    out.color = vertices[vertexID].color * inst.color;
+    out.normal = (inst.normalMatrix * float4(vertices[vertexID].normal, 0.0)).xyz;
+    out.texCoord = vertices[vertexID].texCoord;
+    return out;
+}
+
+fragment float4 instanced_fragment_main(VertexOut in [[stage_in]],
+                                        constant FrameUniforms &uniforms [[buffer(0)]],
+                                        texture2d<float> meshTexture [[texture(0)]]) {
+    constexpr sampler linearSampler(coord::normalized,
+                                    address::clamp_to_edge,
+                                    filter::linear);
+                                    
+    float4 texColor = meshTexture.sample(linearSampler, in.texCoord);
+    float3 normal = normalize(in.normal);
+    float3 lightDir = normalize(-uniforms.directionalLightDirection.xyz);
+    
+    // Directional Diffuse
+    float nDotL = max(0.0, dot(normal, lightDir));
+    float3 directionalDiffuse = uniforms.directionalLightColor.rgb * nDotL;
+    
+    // Point Light Diffuse
+    float3 pointLightDir = uniforms.pointLightPosition.xyz - in.worldPosition;
+    float distance = length(pointLightDir);
+    float3 pointLightDirNorm = pointLightDir / max(distance, 0.0001);
+    float pointNDotL = max(0.0, dot(normal, pointLightDirNorm));
+    float attenuation = 1.0 / (1.0 + 0.1 * distance + 0.01 * distance * distance);
+    float3 pointDiffuse = uniforms.pointLightColor.rgb * pointNDotL * attenuation;
+    
+    // Ambient
+    float3 ambient = uniforms.ambientLightColor.rgb;
+    
+    float4 baseColor = texColor * in.color;
+    float3 finalColor = baseColor.rgb * (ambient + directionalDiffuse + pointDiffuse);
+    
+    return float4(finalColor, baseColor.a);
+}
+
+vertex VertexOutSprite sprite_vertex_instanced(uint vertexID [[vertex_id]],
+                                               uint instanceID [[instance_id]],
+                                               constant VertexIn *vertices [[buffer(0)]],
+                                               constant SpriteInstanceData *instances [[buffer(1)]],
+                                               constant SpriteFrameUniforms &uniforms [[buffer(2)]]) {
+    VertexOutSprite out;
+    SpriteInstanceData inst = instances[instanceID];
+    float4 pos = float4(vertices[vertexID].position, 1.0);
+    out.position = uniforms.viewProjectionMatrix * (inst.modelMatrix * pos);
+    out.color = vertices[vertexID].color * inst.colorTint;
+    
+    // Interpolate unit quad UVs (0..1) into the sprite sheet frame uvRect
+    float2 unitUV = vertices[vertexID].texCoord;
+    out.texCoord = float2(
+        mix(inst.uvRect.x, inst.uvRect.z, unitUV.x),
+        mix(inst.uvRect.y, inst.uvRect.w, unitUV.y)
+    );
+    return out;
+}
+

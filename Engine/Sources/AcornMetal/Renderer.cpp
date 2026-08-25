@@ -12,7 +12,8 @@ namespace Acorn {
     }
 
     AcornMetalRenderer::AcornMetalRenderer(void* devicePtr, void* libraryPtr, unsigned long pixelFormat)
-        : device((MTL::Device*)devicePtr), library((MTL::Library*)libraryPtr), pixelFormat(pixelFormat), defaultPipelineState(nullptr) {
+        : device((MTL::Device*)devicePtr), library((MTL::Library*)libraryPtr), pixelFormat(pixelFormat), defaultPipelineState(nullptr),
+          instancedMeshPipelineState(nullptr), instancedSpritePipelineState(nullptr) {
         
         if (this->device) ((MTL::Device*)this->device)->retain();
         if (this->library) ((MTL::Library*)this->library)->retain();
@@ -103,6 +104,54 @@ namespace Acorn {
         spritePipelineDescriptor->release();
         spriteVertexFunction->release();
         spriteFragmentFunction->release();
+
+        // Instanced Mesh Pipeline
+        MTL::Function* instancedMeshVertexFunction = ((MTL::Library*)library)->newFunction(NS::String::string("instanced_vertex_main", NS::UTF8StringEncoding));
+        MTL::Function* instancedMeshFragmentFunction = ((MTL::Library*)library)->newFunction(NS::String::string("instanced_fragment_main", NS::UTF8StringEncoding));
+        
+        MTL::RenderPipelineDescriptor* instancedMeshPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+        instancedMeshPipelineDescriptor->setLabel(NS::String::string("Instanced Mesh Pipeline", NS::UTF8StringEncoding));
+        instancedMeshPipelineDescriptor->setVertexFunction(instancedMeshVertexFunction);
+        instancedMeshPipelineDescriptor->setFragmentFunction(instancedMeshFragmentFunction);
+        instancedMeshPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat((MTL::PixelFormat)pixelFormat);
+        instancedMeshPipelineDescriptor->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
+        
+        instancedMeshPipelineState = ((MTL::Device*)device)->newRenderPipelineState(instancedMeshPipelineDescriptor, &error);
+        if (error) {
+            std::cerr << "Failed to create instanced mesh pipeline state: " << error->localizedDescription()->utf8String() << std::endl;
+        }
+        instancedMeshPipelineDescriptor->release();
+        if (instancedMeshVertexFunction) instancedMeshVertexFunction->release();
+        if (instancedMeshFragmentFunction) instancedMeshFragmentFunction->release();
+
+        // Instanced Sprite Pipeline
+        MTL::Function* instancedSpriteVertexFunction = ((MTL::Library*)library)->newFunction(NS::String::string("sprite_vertex_instanced", NS::UTF8StringEncoding));
+        MTL::Function* instancedSpriteFragmentFunction = ((MTL::Library*)library)->newFunction(NS::String::string("sprite_fragment", NS::UTF8StringEncoding));
+        
+        MTL::RenderPipelineDescriptor* instancedSpritePipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+        instancedSpritePipelineDescriptor->setLabel(NS::String::string("Instanced Sprite Pipeline", NS::UTF8StringEncoding));
+        instancedSpritePipelineDescriptor->setVertexFunction(instancedSpriteVertexFunction);
+        instancedSpritePipelineDescriptor->setFragmentFunction(instancedSpriteFragmentFunction);
+        
+        MTL::RenderPipelineColorAttachmentDescriptor* instancedSpriteColorAttachment = instancedSpritePipelineDescriptor->colorAttachments()->object(0);
+        instancedSpriteColorAttachment->setPixelFormat((MTL::PixelFormat)pixelFormat);
+        instancedSpriteColorAttachment->setBlendingEnabled(true);
+        instancedSpriteColorAttachment->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+        instancedSpriteColorAttachment->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+        instancedSpriteColorAttachment->setRgbBlendOperation(MTL::BlendOperationAdd);
+        instancedSpriteColorAttachment->setSourceAlphaBlendFactor(MTL::BlendFactorSourceAlpha);
+        instancedSpriteColorAttachment->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+        instancedSpriteColorAttachment->setAlphaBlendOperation(MTL::BlendOperationAdd);
+        
+        instancedSpritePipelineDescriptor->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
+        
+        instancedSpritePipelineState = ((MTL::Device*)device)->newRenderPipelineState(instancedSpritePipelineDescriptor, &error);
+        if (error) {
+            std::cerr << "Failed to create instanced sprite pipeline state: " << error->localizedDescription()->utf8String() << std::endl;
+        }
+        instancedSpritePipelineDescriptor->release();
+        if (instancedSpriteVertexFunction) instancedSpriteVertexFunction->release();
+        if (instancedSpriteFragmentFunction) instancedSpriteFragmentFunction->release();
     }
 
     AcornMetalRenderer::~AcornMetalRenderer() {
@@ -112,6 +161,8 @@ namespace Acorn {
         if (this->transparentDepthStencilState) ((MTL::DepthStencilState*)this->transparentDepthStencilState)->release();
         if (this->sdfTextPipelineState) ((MTL::RenderPipelineState*)this->sdfTextPipelineState)->release();
         if (this->spritePipelineState) ((MTL::RenderPipelineState*)this->spritePipelineState)->release();
+        if (this->instancedMeshPipelineState) ((MTL::RenderPipelineState*)this->instancedMeshPipelineState)->release();
+        if (this->instancedSpritePipelineState) ((MTL::RenderPipelineState*)this->instancedSpritePipelineState)->release();
         if (this->defaultPipelineState) ((MTL::RenderPipelineState*)this->defaultPipelineState)->release();
         if (this->vertexFunction) ((MTL::Function*)this->vertexFunction)->release();
         if (this->fragmentFunction) ((MTL::Function*)this->fragmentFunction)->release();
@@ -208,5 +259,60 @@ namespace Acorn {
         encoder->setVertexBytes(&uniforms, sizeof(SpriteUniforms), 1);
         
         encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, (NS::UInteger)0, (NS::UInteger)mesh->getVertexCount());
+    }
+
+    void AcornMetalRenderer::renderInstanced(AcornMetalMesh* mesh, AcornMetalTexture* texture, const MeshInstanceData* instances, size_t instanceCount, const FrameUniforms& uniforms, void* encoderPtr) {
+        MTL::RenderCommandEncoder* encoder = (MTL::RenderCommandEncoder*)encoderPtr;
+        if (!mesh || !encoder || !instances || instanceCount == 0) return;
+        
+        encoder->setRenderPipelineState((MTL::RenderPipelineState*)instancedMeshPipelineState);
+        encoder->setDepthStencilState((MTL::DepthStencilState*)depthStencilState);
+        
+        encoder->setVertexBuffer((MTL::Buffer*)mesh->getVertexBuffer(), 0, 0);
+        size_t instancesByteSize = sizeof(MeshInstanceData) * instanceCount;
+        if (instancesByteSize <= 4096) {
+            encoder->setVertexBytes(instances, instancesByteSize, 1);
+        } else {
+            MTL::Buffer* instanceBuffer = ((MTL::Device*)device)->newBuffer(instances, instancesByteSize, MTL::ResourceStorageModeShared);
+            encoder->setVertexBuffer(instanceBuffer, 0, 1);
+            instanceBuffer->release();
+        }
+        encoder->setVertexBytes(&uniforms, sizeof(FrameUniforms), 2);
+        encoder->setFragmentBytes(&uniforms, sizeof(FrameUniforms), 0);
+        
+        if (texture) {
+            encoder->setFragmentTexture((MTL::Texture*)texture->getTexture(), 0);
+        }
+        
+        if (mesh->getIndexBuffer()) {
+            encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, mesh->getIndexCount(), MTL::IndexTypeUInt32, (MTL::Buffer*)mesh->getIndexBuffer(), 0, instanceCount);
+        } else {
+            encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, (NS::UInteger)0, (NS::UInteger)mesh->getVertexCount(), instanceCount);
+        }
+    }
+
+    void AcornMetalRenderer::renderSpritesInstanced(AcornMetalMesh* mesh, AcornMetalTexture* texture, const SpriteInstanceData* instances, size_t instanceCount, const SpriteFrameUniforms& uniforms, void* encoderPtr) {
+        MTL::RenderCommandEncoder* encoder = (MTL::RenderCommandEncoder*)encoderPtr;
+        if (!mesh || !encoder || !instances || instanceCount == 0) return;
+        
+        encoder->setRenderPipelineState((MTL::RenderPipelineState*)instancedSpritePipelineState);
+        encoder->setDepthStencilState((MTL::DepthStencilState*)transparentDepthStencilState);
+        
+        encoder->setVertexBuffer((MTL::Buffer*)mesh->getVertexBuffer(), 0, 0);
+        size_t instancesByteSize = sizeof(SpriteInstanceData) * instanceCount;
+        if (instancesByteSize <= 4096) {
+            encoder->setVertexBytes(instances, instancesByteSize, 1);
+        } else {
+            MTL::Buffer* instanceBuffer = ((MTL::Device*)device)->newBuffer(instances, instancesByteSize, MTL::ResourceStorageModeShared);
+            encoder->setVertexBuffer(instanceBuffer, 0, 1);
+            instanceBuffer->release();
+        }
+        encoder->setVertexBytes(&uniforms, sizeof(SpriteFrameUniforms), 2);
+        
+        if (texture) {
+            encoder->setFragmentTexture((MTL::Texture*)texture->getTexture(), 0);
+        }
+        
+        encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, (NS::UInteger)0, (NS::UInteger)mesh->getVertexCount(), instanceCount);
     }
 }

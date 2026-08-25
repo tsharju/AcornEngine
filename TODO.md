@@ -23,9 +23,9 @@ This document tracks upcoming features, architectural improvements, and roadmap 
 
 ## 🚀 Priority 2: Rendering Pipeline & Performance
 
-- [ ] **Instanced Rendering & Draw Call Batching**
-  - [ ] Implement dynamic instance buffers for `SpriteComponent` and `ParticleEmitterComponent`.
-  - [ ] Add instanced mesh rendering (`drawIndexedPrimitives:instanceCount:`) for repeated 3D geometry.
+- [x] **Instanced Rendering & Draw Call Batching**
+  - [x] Implement dynamic instance buffers for `SpriteComponent` and `ParticleEmitterComponent`.
+  - [x] Add instanced mesh rendering (`drawIndexedPrimitives:instanceCount:`) for repeated 3D geometry.
 - [ ] **Physically Based Rendering (PBR) & Multi-Light Support**
   - [ ] Implement glTF 2.0 Metallic-Roughness PBR pipeline in Metal shaders.
   - [ ] Support normal maps, roughness/metallic maps, ambient occlusion (AO), and emissive textures.

@@ -27,4 +27,29 @@ namespace Acorn {
         simd_float2 padding;
         simd_float4x4 modelViewProjectionMatrix;
     };
+    
+    struct FrameUniforms {
+        simd_float4x4 viewProjectionMatrix;
+        simd_float4 ambientLightColor;
+        simd_float4 directionalLightColor;
+        simd_float4 directionalLightDirection;
+        simd_float4 pointLightColor;
+        simd_float4 pointLightPosition;
+    };
+
+    struct MeshInstanceData {
+        simd_float4x4 modelMatrix;
+        simd_float4x4 normalMatrix;
+        simd_float4 color;
+    };
+
+    struct SpriteFrameUniforms {
+        simd_float4x4 viewProjectionMatrix;
+    };
+
+    struct SpriteInstanceData {
+        simd_float4x4 modelMatrix;
+        simd_float4 colorTint;
+        simd_float4 uvRect;
+    };
 }

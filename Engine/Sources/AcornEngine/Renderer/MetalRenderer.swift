@@ -206,4 +206,117 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         
         cxxRenderer.pointee.renderSprite(metalMesh.cxxMesh, metalTexture.cxxTexture, cxxUniforms, encoderPtr)
     }
+    
+    private let meshLock = NSLock()
+    private var _unitQuadMesh: (any Mesh)?
+    
+    /// A shared lazily-initialized unit quad mesh for sprite batch rendering.
+    public var unitQuadMesh: (any Mesh)? {
+        meshLock.lock()
+        defer { meshLock.unlock() }
+        if let mesh = _unitQuadMesh {
+            return mesh
+        }
+        let quadVertices = SpriteMeshGenerator.generateUnitQuad()
+        let mesh = createMesh(vertices: quadVertices)
+        _unitQuadMesh = mesh
+        return mesh
+    }
+    
+    /// Renders multiple instances of a 3D mesh in a single instanced draw call.
+    public func renderInstanced(
+        mesh: any Mesh,
+        texture: (any Texture)?,
+        instances: [MeshInstanceData],
+        uniforms: FrameUniforms,
+        context: any RenderContext
+    ) {
+        guard !instances.isEmpty else { return }
+        guard let metalContext = context as? MetalRenderContext,
+              let metalMesh = mesh as? MetalMesh else {
+            return
+        }
+        
+        guard let encoder = metalContext.getOrCreateEncoder() else {
+            return
+        }
+        
+        let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
+        
+        var cxxUniforms = Acorn.FrameUniforms()
+        cxxUniforms.viewProjectionMatrix = uniforms.viewProjectionMatrix
+        cxxUniforms.ambientLightColor = uniforms.ambientLightColor
+        cxxUniforms.directionalLightColor = uniforms.directionalLightColor
+        cxxUniforms.directionalLightDirection = uniforms.directionalLightDirection
+        cxxUniforms.pointLightColor = uniforms.pointLightColor
+        cxxUniforms.pointLightPosition = uniforms.pointLightPosition
+        
+        let targetTexture = texture ?? defaultWhiteTexture
+        let cxxTexture = (targetTexture as? MetalTexture)?.cxxTexture
+        
+        let cxxInstances = instances.map { inst -> Acorn.MeshInstanceData in
+            var d = Acorn.MeshInstanceData()
+            d.modelMatrix = inst.modelMatrix
+            d.normalMatrix = inst.normalMatrix
+            d.color = inst.color
+            return d
+        }
+        
+        cxxInstances.withUnsafeBufferPointer { bufferPtr in
+            guard let baseAddress = bufferPtr.baseAddress else { return }
+            cxxRenderer.pointee.renderInstanced(
+                metalMesh.cxxMesh,
+                cxxTexture,
+                baseAddress,
+                instances.count,
+                cxxUniforms,
+                encoderPtr
+            )
+        }
+    }
+    
+    /// Renders multiple sprite instances in a single instanced draw call.
+    public func renderSpritesInstanced(
+        mesh: any Mesh,
+        texture: any Texture,
+        instances: [SpriteInstanceData],
+        uniforms: SpriteFrameUniforms,
+        context: any RenderContext
+    ) {
+        guard !instances.isEmpty else { return }
+        guard let metalContext = context as? MetalRenderContext,
+              let metalMesh = mesh as? MetalMesh,
+              let metalTexture = texture as? MetalTexture else {
+            return
+        }
+        
+        guard let encoder = metalContext.getOrCreateEncoder() else {
+            return
+        }
+        
+        let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
+        
+        var cxxUniforms = Acorn.SpriteFrameUniforms()
+        cxxUniforms.viewProjectionMatrix = uniforms.viewProjectionMatrix
+        
+        let cxxInstances = instances.map { inst -> Acorn.SpriteInstanceData in
+            var d = Acorn.SpriteInstanceData()
+            d.modelMatrix = inst.modelMatrix
+            d.colorTint = inst.colorTint
+            d.uvRect = inst.uvRect
+            return d
+        }
+        
+        cxxInstances.withUnsafeBufferPointer { bufferPtr in
+            guard let baseAddress = bufferPtr.baseAddress else { return }
+            cxxRenderer.pointee.renderSpritesInstanced(
+                metalMesh.cxxMesh,
+                metalTexture.cxxTexture,
+                baseAddress,
+                instances.count,
+                cxxUniforms,
+                encoderPtr
+            )
+        }
+    }
 }

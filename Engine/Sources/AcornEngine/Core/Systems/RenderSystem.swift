@@ -65,26 +65,66 @@ public struct RenderSystem {
             }
         }
         
-        // Render mesh components
-        let entities = world.entities(with: MeshComponent.self)
-        for (entity, meshComponent) in entities {
-            if world.component(ofType: TransformComponent.self, for: entity) != nil {
-                let modelMatrix = world.worldMatrix(for: entity)
-                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
-                let normalMatrix = modelMatrix.inverse.transpose
+        let frameUniforms = FrameUniforms(
+            viewProjectionMatrix: viewProjectionMatrix,
+            ambientLightColor: ambientColor,
+            directionalLightColor: directionalColor,
+            directionalLightDirection: directionalDirection,
+            pointLightColor: pointColor,
+            pointLightPosition: pointPosition
+        )
+        
+        // Render mesh components (batched instanced draw calls)
+        let meshEntities = world.entities(with: MeshComponent.self)
+        if !meshEntities.isEmpty {
+            struct MeshBatchKey: Hashable {
+                let meshID: ObjectIdentifier
+                let textureID: ObjectIdentifier?
+            }
+            
+            struct MeshBatch {
+                let mesh: any Mesh
+                let texture: (any Texture)?
+                var instances: [MeshInstanceData]
+            }
+            
+            var batches: [MeshBatchKey: MeshBatch] = [:]
+            var batchOrder: [MeshBatchKey] = []
+            
+            for (entity, meshComponent) in meshEntities {
+                guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
+                    continue
+                }
                 
-                let uniforms = GlobalUniforms(
-                    modelViewProjectionMatrix: mvp,
+                let modelMatrix = world.worldMatrix(for: entity)
+                let normalMatrix = modelMatrix.inverse.transpose
+                let instanceData = MeshInstanceData(
                     modelMatrix: modelMatrix,
                     normalMatrix: normalMatrix,
-                    ambientLightColor: ambientColor,
-                    directionalLightColor: directionalColor,
-                    directionalLightDirection: directionalDirection,
-                    pointLightColor: pointColor,
-                    pointLightPosition: pointPosition,
-                    meshColor: meshComponent.color
+                    color: meshComponent.color
                 )
-                renderer.render(mesh: meshComponent.mesh, texture: meshComponent.texture, uniforms: uniforms, context: context)
+                
+                let meshKey = ObjectIdentifier(meshComponent.mesh as AnyObject)
+                let textureKey = meshComponent.texture.map { ObjectIdentifier($0 as AnyObject) }
+                let key = MeshBatchKey(meshID: meshKey, textureID: textureKey)
+                
+                if batches[key] == nil {
+                    batchOrder.append(key)
+                    batches[key] = MeshBatch(mesh: meshComponent.mesh, texture: meshComponent.texture, instances: [])
+                }
+                batches[key]?.instances.append(instanceData)
+            }
+            
+            for key in batchOrder {
+                if let batch = batches[key], !batch.instances.isEmpty {
+                    renderer.renderInstanced(
+                        mesh: batch.mesh,
+                        texture: batch.texture,
+                        instances: batch.instances,
+                        uniforms: frameUniforms,
+                        context: context
+                    )
+                }
             }
         }
         
@@ -119,44 +159,62 @@ public struct RenderSystem {
             }
         }
         
-        // Render sprite components sorted by Z position (ascending)
+        // Render sprite components sorted by Z position (ascending, batched instanced draw calls)
         var spriteEntities = world.entities(with: SpriteComponent.self)
-        spriteEntities.sort { a, b in
-            let posA = world.component(ofType: TransformComponent.self, for: a.0)?.position.z ?? 0.0
-            let posB = world.component(ofType: TransformComponent.self, for: b.0)?.position.z ?? 0.0
-            return posA < posB
-        }
-        for (entity, spriteComponent) in spriteEntities {
-            guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
-                continue
+        if !spriteEntities.isEmpty, let unitQuadMesh = renderer.unitQuadMesh {
+            spriteEntities.sort { a, b in
+                let posA = world.component(ofType: TransformComponent.self, for: a.0)?.position.z ?? 0.0
+                let posB = world.component(ofType: TransformComponent.self, for: b.0)?.position.z ?? 0.0
+                return posA < posB
             }
             
-            var currentComponent = spriteComponent
-            if currentComponent.mesh == nil || currentComponent.isDirty {
-                let vertices = SpriteMeshGenerator.generateVertices(
-                    for: currentComponent.frameName,
-                    in: currentComponent.spriteSheet,
-                    color: currentComponent.color
-                )
-                if let newMesh = renderer.createMesh(vertices: vertices) {
-                    currentComponent.mesh = newMesh
-                    currentComponent.isDirty = false
-                    world.addComponent(currentComponent, to: entity)
-                }
-            }
+            var currentTexture: (any Texture)? = nil
+            var currentBatch: [SpriteInstanceData] = []
+            let spriteUniforms = SpriteFrameUniforms(viewProjectionMatrix: viewProjectionMatrix)
             
-            if let mesh = currentComponent.mesh {
-                let modelMatrix = world.worldMatrix(for: entity)
-                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
-                let uniforms = SpriteUniforms(modelViewProjectionMatrix: mvp, colorTint: SIMD4<Float>(1, 1, 1, 1))
-                
-                renderer.renderSprite(
-                    mesh: mesh,
-                    texture: currentComponent.spriteSheet.texture,
-                    uniforms: uniforms,
+            func flushSpriteBatch() {
+                guard let texture = currentTexture, !currentBatch.isEmpty else { return }
+                renderer.renderSpritesInstanced(
+                    mesh: unitQuadMesh,
+                    texture: texture,
+                    instances: currentBatch,
+                    uniforms: spriteUniforms,
                     context: context
                 )
+                currentBatch.removeAll(keepingCapacity: true)
             }
+            
+            for (entity, spriteComponent) in spriteEntities {
+                guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
+                    continue
+                }
+                
+                let texture = spriteComponent.spriteSheet.texture
+                if let current = currentTexture {
+                    if ObjectIdentifier(current as AnyObject) != ObjectIdentifier(texture as AnyObject) {
+                        flushSpriteBatch()
+                        currentTexture = texture
+                    }
+                } else {
+                    currentTexture = texture
+                }
+                
+                let frame = spriteComponent.spriteSheet.frame(named: spriteComponent.frameName)
+                let width = Float(frame?.sourceSize.w ?? 1)
+                let height = Float(frame?.sourceSize.h ?? 1)
+                let sizeScale = simd_float4x4(diagonal: SIMD4<Float>(width, height, 1.0, 1.0))
+                let modelMatrix = matrix_multiply(world.worldMatrix(for: entity), sizeScale)
+                
+                let uvRect = SpriteMeshGenerator.uvRect(for: spriteComponent.frameName, in: spriteComponent.spriteSheet)
+                let instance = SpriteInstanceData(
+                    modelMatrix: modelMatrix,
+                    colorTint: spriteComponent.color,
+                    uvRect: uvRect
+                )
+                currentBatch.append(instance)
+            }
+            
+            flushSpriteBatch()
         }
         
         // Render text components

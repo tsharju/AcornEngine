@@ -12,5 +12,6 @@ build_output_3d/
 imgui.ini
 *.log
 build_matchacorn/
+build_jump/
 fix_pbxproj.py
 test_renderer.swift

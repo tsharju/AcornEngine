@@ -1,41 +1,57 @@
 # AcornEngine Documentation
 
-AcornEngine is a modern, high-performance 2D/3D game engine targetting Apple platforms (**iOS 16+** and **macOS 13+**). It is built using **Swift 6** with strict concurrency safety (`Sendable` conformance and `@MainActor` isolation where appropriate) and leverages the **Metal** graphics API for hardware-accelerated rendering.
+AcornEngine is a modern, high-performance 2D/3D game engine targeting Apple platforms (**iOS 16+** and **macOS 13+**). It is built using **Swift 6** with strict concurrency safety (`Sendable` conformance and `@MainActor` isolation where appropriate) and leverages the **Metal** graphics API for hardware-accelerated rendering.
 
 ---
 
 ## Architecture Overview
 
-AcornEngine is designed around a modular architecture:
+AcornEngine is designed around a modular, data-oriented architecture:
 ```mermaid
 graph TD
     Engine[Engine Coordinator] --> World[ECS World]
     Engine --> Renderer[Renderer Backend]
+    Engine --> InputSystem[Input System]
+    Engine --> AudioSystem[Audio System]
     
     World --> Entity[Entity Registry]
     World --> Component[Component Stores]
     World --> System[Systems List]
+    World --> EventBus[EventBus Stream]
     
     RenderSystem[Render System] --> World
     RenderSystem --> Renderer
+    PhysicsSystem[Physics System] --> World
+    PhysicsSystem --> Box2D[Box2D v3]
+    PhysicsSystem --> EventBus
+    AudioSystem --> World
+    AudioSystem --> EventBus
+    InputSystem --> World
+    InputSystem --> EventBus
     
-    subgraph ECS Loop
+    subgraph Core Loop & Event Messaging
         World
+        EventBus
     end
     
-    subgraph Graphics Pipeline
+    subgraph Hardware Subsystems
         Renderer
+        Box2D
+        AudioSystem
+        InputSystem
     end
 ```
 
-The engine uses three main pillars:
-1. **ECS (Entity Component System)**: High-performance data separation where entities are simple IDs, components are pure data structs, and systems contain the logic.
-2. **Metal Rendering Backend**: Low-overhead hardware-accelerated graphics pipeline supporting standard meshes, textured sprites, tilemaps, and high-quality Signed Distance Field (SDF) text.
-3. **Engine Coordinator**: Manages the game loop by ticking the ECS world (`update`) and triggering the render pass (`render`).
+The engine is built upon five foundational pillars:
+1. **ECS (Entity Component System)**: High-performance data separation where entities are lightweight IDs, components are pure data structs, and systems contain the logic.
+2. **Decoupled EventBus**: Type-safe event streaming and frame-buffered message queues enabling systems to communicate without tight coupling.
+3. **Metal Rendering Backend & GPU Instancing**: Hardware-accelerated graphics pipeline supporting instanced 3D meshes, batched 2D sprites, tilemaps, and scalable Signed Distance Field (SDF) text.
+4. **Unified Input & Audio Subsystems**: Multi-device hardware abstraction (Keyboard, Mouse, Touch, Game Controllers) and 3D spatial sound processing via `AVAudioEngine`.
+5. **Native 2D Physics Engine**: Box2D v3 rigid body simulation, contact callbacks, and sensor trigger volumes.
 
 ---
 
-## 1. Entity Component System (ECS)
+## 1. Entity Component System (ECS) & EventBus
 
 Located under [Engine/Sources/AcornEngine/ECS](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS):
 
@@ -59,18 +75,47 @@ A protocol representing logic that runs on entities and components.
 * **Requirements**:
   * `func update(world: World, deltaTime: Double)`: Performs logic updates on the world state.
 
-### [World](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/World.swift)
-The central registry that manages the lifetime of entities, component storage, and the execution order of systems.
+### [Event](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/Event.swift)
+A marker protocol for all decoupleable event structures published across systems.
+* **Type**: `protocol`
+* **Conformances**: `Sendable`
+
+### [EventBus](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/EventBus.swift)
+A decoupled publish-subscribe and frame-buffered event stream.
 * **Type**: `class`
 * **Isolation**: `@MainActor`
 * **Key Features**:
-  * **Entity Lifetimes**: Creates (`createEntity()`) and destroys (`destroyEntity()`) entities. Destroying an entity automatically cleans up all associated components.
+  * **Immediate Dispatch (`subscribe`)**: Subscribes a closure invoked immediately when matching events are published. Returns an `EventSubscription` token that can be cancelled.
+  * **Event Publishing (`publish`)**: Dispatches the event to registered immediate callbacks and appends it to the current frame's buffered event queue.
+  * **Frame Queries (`events(ofType:)` / `hasEvents(ofType:)`)**: Systems can query all events of a specific type buffered during the current tick/frame.
+  * **Frame Clearance (`clear()`)**: Clears buffered events at the end of each frame (invoked automatically during `world.update()`).
+
+```swift
+// Subscribing to an event
+let sub = world.eventBus.subscribe(CollisionEnterEvent.self) { event in
+    print("Collision between entity \(event.entityA.id) and \(event.entityB.id)")
+}
+
+// Querying buffered frame events inside a System
+let touchEvents = world.eventBus.events(ofType: TouchBeganEvent.self)
+for touch in touchEvents {
+    // Process touch
+}
+```
+
+### [World](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/World.swift)
+The central registry that manages the lifetime of entities, component storage, systems, and the shared event bus.
+* **Type**: `class`
+* **Isolation**: `@MainActor`
+* **Key Features**:
+  * **Entity Lifetimes**: Creates (`createEntity()`) and destroys (`destroyEntity()`) entities. Destroying an entity automatically cleans up all associated components and removes child hierarchies.
   * **Component Management**: Add, remove, or retrieve components dynamically for any entity via type-safe generics:
     * `addComponent<T: Component>(_ component: T, to entity: Entity)`
     * `removeComponent<T: Component>(ofType type: T.Type, from entity: Entity)`
     * `component<T: Component>(ofType type: T.Type, for entity: Entity) -> T?`
   * **Entity Queries**: Retrieve lists of entities possessing a specific component type via `entities(with type: T.Type)`.
   * **System Registration**: Systems are executed in the order they are registered via `registerSystem(_:)` whenever `update(deltaTime:)` is called.
+  * **Hierarchy Resolution**: Provides `worldMatrix(for:)` and `worldPosition(for:)` to resolve nested transformations through `ParentComponent` chains.
 
 ---
 
@@ -86,27 +131,44 @@ graph TD
     MetalRenderer --> PipelineState[Standard Mesh Pipeline]
     MetalRenderer --> SpriteState[Sprite Blending Pipeline]
     MetalRenderer --> TextState[SDF Text Blending Pipeline]
+    MetalRenderer --> InstancedMesh[Instanced 3D Mesh Pipeline]
+    MetalRenderer --> InstancedSprite[Instanced 2D Sprite Pipeline]
     
     Shaders[Shaders.metal] --> PipelineState
     Shaders --> SpriteState
     Shaders --> TextState
+    Shaders --> InstancedMesh
+    Shaders --> InstancedSprite
 ```
 
 ### [Renderer (Protocol)](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Renderer.swift)
-An abstraction over the graphic device APIs, facilitating potential future multi-backend support.
+An abstraction over graphics device APIs, facilitating multi-backend support.
 * **Key Methods**:
   * `createMesh(vertices: [Vertex]) -> Mesh?`: Generates a hardware vertex buffer.
-  * `render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext)`: Draws a standard 3D mesh.
+  * `render(mesh: Mesh, texture: (any Texture)?, uniforms: GlobalUniforms, context: RenderContext)`: Draws a single 3D mesh.
   * `renderText(mesh: Mesh, texture: any Texture, uniforms: SDFUniforms, context: RenderContext)`: Draws text using the SDF shader.
-  * `renderSprite(mesh: Mesh, texture: any Texture, uniforms: SpriteUniforms, context: RenderContext)`: Draws sprites or tile maps using sprite shaders.
+  * `renderSprite(mesh: Mesh, texture: any Texture, uniforms: SpriteUniforms, context: RenderContext)`: Draws a single sprite or tile map quad.
+  * `renderInstanced(mesh: any Mesh, texture: (any Texture)?, instances: [MeshInstanceData], uniforms: FrameUniforms, context: RenderContext)`: Renders multiple instances of a 3D mesh in a single GPU draw call.
+  * `renderSpritesInstanced(mesh: any Mesh, texture: any Texture, instances: [SpriteInstanceData], uniforms: SpriteFrameUniforms, context: RenderContext)`: Renders batched 2D sprite instances in a single GPU draw call.
+  * `unitQuadMesh: (any Mesh)?`: Shared unit quad geometry for 2D sprite batching.
 
 ### [MetalRenderer](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/MetalRenderer.swift)
 The concrete implementation of the renderer using Apple's Metal API.
-* **Pipelines**: Initializes three separate pipeline states from [Shaders.metal](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Shaders.metal):
-  1. **Standard Pipeline**: 3D mesh rendering supporting vertex colors, textures, and diffuse lighting (Ambient + multiple Point Lights).
+* **Pipelines**: Initializes specialized pipeline states compiled from [Shaders.metal](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Shaders.metal):
+  1. **Standard Pipeline**: Single 3D mesh rendering with vertex colors, textures, ambient, directional, and point lighting.
   2. **Sprite Pipeline**: Alpha-blended 2D texture rendering with color tints.
-  3. **SDF Text Pipeline**: Alpha-blended rendering mapping distance values to smooth characters and outlines.
-* **Context**: Uses `MetalRenderContext` to hold the current command buffer and render pass descriptor. It safely manages a command encoder per frame using locking.
+  3. **SDF Text Pipeline**: Alpha-blended signed distance field rendering for scalable glyphs and outlines.
+  4. **Instanced Mesh Pipeline**: Hardware instanced 3D rendering driven by per-instance dynamic model matrices, normal matrices, and colors (`drawIndexedPrimitives:instanceCount:` / `drawPrimitives:instanceCount:`).
+  5. **Instanced Sprite Pipeline**: Hardware instanced 2D sprite rendering driven by per-instance model matrices, tint colors, and normalized atlas UV bounding rectangles.
+* **Context**: Uses `MetalRenderContext` to hold the current command buffer and render pass descriptor with thread-safe encoding.
+
+### Uniforms & Instance Structures
+* **`GlobalUniforms`**: Model-View-Projection matrix, model matrix, normal matrix, mesh color tint, and light parameters (ambient, directional, point).
+* **`FrameUniforms`**: View-Projection matrix and scene lighting parameters shared across instanced 3D draw calls.
+* **`MeshInstanceData`**: Per-instance `modelMatrix`, `normalMatrix`, and RGBA `color`.
+* **`SpriteFrameUniforms`**: Frame-level View-Projection matrix for 2D sprite passes.
+* **`SpriteInstanceData`**: Per-instance `modelMatrix`, `colorTint`, and `uvRect` (`SIMD4<Float>` bounding coordinates $[u_{\min}, v_{\min}, u_{\max}, v_{\max}]$).
+* **`SDFUniforms`**: Model-View-Projection matrix, `textColor`, `outlineColor`, `outlineWidth`, and anti-aliasing `edgeWidth`.
 
 ### Texture & Data Loading
 * **[Texture (Protocol)](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Texture.swift)**: Common interface for texture resources.
@@ -119,18 +181,44 @@ Responsible for parsing and loading glTF models (`.glb` / `.gltf`) from disk.
 * **Output**: Extracts arrays of `MetalMesh` buffers, `GLTFNode` structural configurations (translation, rotation, scale, parents), and embedded texture image binary payloads.
 
 ### Mesh & Geometry Basics
-* **[Vertex](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Vertex.swift)**: A struct containing:
+* **[Vertex](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/Vertex.swift)**: A 16-byte aligned struct containing:
   * `position: SIMD3<Float>`: 3D position vector.
   * `color: SIMD4<Float>`: Vertex RGBA color.
   * `texCoord: SIMD2<Float>`: Texture coordinate (UV) for model mapping.
   * `normal: SIMD3<Float>`: 3D normal vector for surface shading calculations.
 * **[MetalMesh](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/MetalMesh.swift)**: Implements the opaque `Mesh` protocol, managing an underlying `MTLBuffer` with shared storage.
+* **[BasicShapeGenerator](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/BasicShapeGenerator.swift)**: Generates primitive vertex arrays for cubes, planes, spheres, cylinders, and cones.
 
 ---
 
-## 3. Advanced Renderer Features
+## 3. Advanced Renderer Features & GPU Instancing
 
-AcornEngine includes highly optimized implementations for sprite sheets, tilemaps, and signed distance field text.
+AcornEngine includes highly optimized implementations for sprite sheets, tilemaps, signed distance field text, and GPU-instanced draw calls.
+
+### GPU Instanced Rendering & Draw Call Batching
+
+To minimize CPU-to-GPU command encoding overhead, `MetalRenderer` and `RenderSystem` employ hardware instancing for repeated 3D meshes and 2D sprite entities.
+
+```
+Individual Entities (Mesh / Sprite)
+        │
+        ▼
+   RenderSystem (Bucket & Sort)
+   ├── Contiguous Sprites (Same Texture) ──► Instance Buffer ──► drawPrimitives:instanceCount:
+   └── Grouped 3D Meshes (Same Mesh & Tex) ─► Instance Buffer ──► drawIndexedPrimitives:instanceCount:
+```
+
+* **Instanced 3D Meshes**:
+  - `RenderSystem` aggregates entities possessing `MeshComponent` and `TransformComponent`.
+  - Groups entities by unique `(mesh, texture)` pairs into batches.
+  - Dynamically builds per-instance data (`modelMatrix`, normal matrix, and `color` tint) and uploads them to a shared GPU instance buffer (`MeshInstanceData`).
+  - Dispatches a single `renderInstanced` call per unique batch.
+* **Instanced 2D Sprites & Batching**:
+  - `RenderSystem` sorts all visible `SpriteComponent` entities by ascending Z coordinate (`TransformComponent.position.z`) to ensure back-to-front rendering.
+  - Groups contiguous sequences of sprites sharing the same underlying `SpriteSheet.texture`.
+  - Encodes each sprite quad using a single shared `unitQuadMesh` (a unit square in $[ -0.5, 0.5 ]$) scaled by the sprite frame's source dimensions and entity transform.
+  - Packs per-instance model matrices, tint colors, and normalized UV bounding boxes (`uvRect`) into `SpriteInstanceData`.
+  - Flushes each sequence in a single `renderSpritesInstanced` draw call, reducing hundreds of sprite draws to a handful of batched calls.
 
 ### Sprite Sheets & Tilemaps
 
@@ -146,12 +234,13 @@ AcornEngine includes highly optimized implementations for sprite sheets, tilemap
 
 * **[SpriteSheet](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/SpriteSheet.swift)**: Stores a compiled texture atlas along with its layout metadata (decoded from standard TexturePacker JSON array/hash structures). Supports trimmed and rotated frames, calculating precise UV rects.
 * **[SpriteMeshGenerator](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Renderer/SpriteMeshGenerator.swift)**:
-  * Generates centered quads matching a sprite's source aspect ratio and offset metrics.
-  * Generates optimized grid vertices for `TileMapComponent` instances by skipping empty tiles and batching them into a single mesh.
+  - Generates centered unit quads and custom quads matching a sprite's source aspect ratio.
+  - Generates normalized `uvRect` coordinates (`SIMD4<Float>`) for instanced shaders.
+  - Generates optimized grid vertices for `TileMapComponent` instances by skipping empty tiles and batching them into a single unified mesh.
 
 ### Signed Distance Field (SDF) Text Rendering
 
-SDF text rendering maintains extreme sharpness and legibility even when scaled or viewed at steep angles, bypassing the pixelation typical of pixel-map text.
+SDF text rendering maintains extreme sharpness and legibility even when scaled or viewed at steep angles, bypassing the pixelation typical of raster pixel-map text.
 
 ```
 Grayscale Raster Glyphs ===(SDF Search Radius)===> Distance Field Texture (1 Channel)
@@ -171,7 +260,7 @@ Grayscale Raster Glyphs ===(SDF Search Radius)===> Distance Field Texture (1 Cha
 
 ## 4. Components
 
-Located under [Engine/Sources/AcornEngine/Core/Components](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components):
+Located under [Engine/Sources/AcornEngine/Core/Components](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components), [Engine/Sources/AcornEngine/Physics](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics), and [Engine/Sources/AcornEngine/Audio](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Audio):
 
 ### [TransformComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/TransformComponent.swift)
 Stores the physical placement of an entity in the virtual world.
@@ -190,6 +279,8 @@ Establishes a hierarchical relationship between entities, forming a scene tree h
 Assigns a pre-built static 3D geometry to an entity for rendering.
 * **Properties**:
   * `mesh: any Mesh`: An opaque GPU mesh resource.
+  * `texture: (any Texture)?`: Optional diffuse texture mapped onto the mesh.
+  * `color: SIMD4<Float>`: Mesh RGBA tint color (default `[1.0, 1.0, 1.0, 1.0]`).
 
 ### [SpriteComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/SpriteComponent.swift)
 Configures an entity to render as a 2D textured quad.
@@ -198,7 +289,7 @@ Configures an entity to render as a 2D textured quad.
   * `frameName: String`: Name of the frame within the sheet.
   * `color: SIMD4<Float>`: Tint color (multiplied during rendering).
   * `mesh: (any Mesh)?`: Cached mesh buffer.
-  * `isDirty: Bool`: Flag signaling the RenderSystem to rebuild the geometry when frame or color parameters change.
+  * `isDirty: Bool`: Flag signaling the RenderSystem to rebuild geometry when frame or color parameters change.
 
 ### [TileMapComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/TileMapComponent.swift)
 Draws a large grid of static sprite tiles.
@@ -275,6 +366,42 @@ Defines physical bounds and collision shape configurations.
   * `friction: Float`: Resistance to sliding.
   * `restitution: Float`: Bounciness coefficient.
   * `density: Float`: Mass-per-unit-area coefficient.
+  * `isSensor: Bool`: Whether the collider acts as a non-solid sensor.
+  * `enableContactEvents: Bool`: Enables collision enter/stay/exit event publishing.
+  * `enableSensorEvents: Bool`: Enables sensor enter/stay/exit event publishing.
+
+### [SensorTriggerComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics/SensorTriggerComponent.swift)
+Represents a non-solid sensor / trigger volume attached to an entity's physics body.
+* **Properties**:
+  * `shapeType: PhysicsColliderComponent.ShapeType`: Box or circle shape boundaries.
+  * `overlappingEntities: Set<Entity>`: The set of entities currently overlapping this trigger.
+  * `overlapCount: Int`: Count of entities inside the trigger volume.
+* **Key Methods**:
+  * `func isOverlapping(_ entity: Entity) -> Bool`: Checks whether a given entity is currently inside the volume.
+
+### [AudioSourceComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Audio/AudioSourceComponent.swift)
+Emits sound in 3D or 2D space.
+* **Properties**:
+  * `clip: AudioClip?`: Audio asset buffer to play.
+  * `volume: Float`: Playback volume $[0.0, 1.0]$.
+  * `pitch: Float`: Pitch multiplier $[0.5, 2.0]$.
+  * `isLooping: Bool`: Automatic looping toggle.
+  * `isSpatial: Bool`: Enables 3D spatial attenuation and directional mixing.
+  * `playOnAwake: Bool`: Starts playback automatically on initialization.
+  * `reverbBlend: Float`: Reverb blend amount $[0.0, 1.0]$.
+  * `renderingAlgorithm: RenderingAlgorithm`: Spatial algorithm (`.equalPowerPanning`, `.sphericalHead`, `.hrtf`, `.soundField`).
+  * `state: PlaybackState`: Read-only current state (`.stopped`, `.playing`, `.paused`).
+* **Key Methods**:
+  * `mutating func play()`: Requests immediate playback.
+  * `mutating func pause()`: Requests pause.
+  * `mutating func resume()`: Resumes paused playback.
+  * `mutating func stop()`: Requests stop.
+
+### [AudioListenerComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Audio/AudioListenerComponent.swift)
+Marks an entity as the active audio listener in 3D space.
+* **Properties**:
+  * `isPrimary: Bool`: Flags this listener as the primary scene microphone (defaults to `true`).
+  * `masterVolume: Float`: Master gain clamped to $[0.0, 1.0]$.
 
 ### [ParticleComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/ParticleComponent.swift)
 Identifies a particle entity and tracks its age limit.
@@ -309,82 +436,237 @@ Defines a light source used for 3D shading calculations.
 
 ## 5. ECS Systems
 
-Located under [Engine/Sources/AcornEngine/Core/Systems](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems) and [Engine/Sources/AcornEngine/Physics](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics):
+Located under [Engine/Sources/AcornEngine/Core/Systems](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems), [Engine/Sources/AcornEngine/Physics](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics), [Engine/Sources/AcornEngine/Input](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Input), and [Engine/Sources/AcornEngine/Audio](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Audio):
+
+### [InputSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Input/InputSystem.swift)
+Consolidates cross-platform input state and hardware controller polling.
+* **Operation**:
+  * Polls connected Apple `GameController` hardware devices every frame via `gameControllerBridge`.
+  * Manages key press/release states, mouse buttons, cursor coordinates, and multi-touch contacts.
+  * Publishes input events onto `EventBus` and advances per-frame transition buffers on `advanceFrame()`.
+
+### [AudioSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Audio/AudioSystem.swift)
+Drives 3D spatial sound and audio lifecycle management.
+* **Operation**:
+  * **Listener Synchronization**: Finds the primary `AudioListenerComponent`, synchronizing its 3D world position (`worldPosition(for:)`) and 3D angular orientation (Yaw, Pitch, Roll) with `AVAudioEnvironmentNode`. Sets master volume on the main mixer node.
+  * **Source Node Management**: Attaches and connects `AVAudioPlayerNode` instances dynamically. Connects spatial audio sources to `AVAudioEnvironmentNode` and non-spatial sources to `mainMixerNode`.
+  * **3D Position Tracking**: Updates spatial player node coordinates to match entity world positions every frame.
+  * **One-Shot Playback**: Listens for `PlaySoundEvent` and plays unattached sound clips using an auto-recycling player node pool.
+  * **Cleanup**: Detaches and releases audio player nodes when entities or components are removed.
+
+### [RenderSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/RenderSystem.swift)
+The pipeline bridge that retrieves visible components, builds uniform batches, and submits instanced render commands.
+* **Operation**:
+  1. **View-Projection Extraction**: Searches for the first active `CameraComponent` in the world, computes the view matrix from the inverse world transform, and multiplies it by the camera's projection matrix.
+  2. **Lighting Extraction**: Aggregates ambient, directional, and point light sources into `FrameUniforms`.
+  3. **3D Mesh Batching & Instancing**: Collects `MeshComponent` entities, groups them by `(mesh, texture)`, builds `MeshInstanceData` arrays, and calls `renderer.renderInstanced`.
+  4. **2D Sprite Batching & Instancing**: Queries all `SpriteComponent` entities, sorts them by ascending Z position, groups contiguous runs sharing the same sprite sheet texture, and executes `renderer.renderSpritesInstanced`.
+  5. **TileMaps & Text**: Rebuilds dirty vertex buffers and renders individual meshes for `TileMapComponent` and `TextComponent`.
+
+### [PhysicsSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics/PhysicsSystem.swift)
+Orchestrates Box2D physics simulation, contact events, and ECS transform synchronization.
+* **Operation**:
+  1. **Body & Shape Creation**: Automatically constructs Box2D `b2BodyId` and `b2ShapeId` wrappers for entities with `PhysicsBodyComponent`, `PhysicsColliderComponent`, and `SensorTriggerComponent`.
+  2. **Simulation Step**: Advances Box2D via `b2World_Step` with fixed timesteps (`1/60`s).
+  3. **Contact & Sensor Event Dispatching**: Queries Box2D contact events (`b2World_GetContactEvents`) and sensor events (`b2World_GetSensorEvents`). Publishes `CollisionEnterEvent`, `CollisionStayEvent`, `CollisionExitEvent`, `SensorEnterEvent`, `SensorStayEvent`, and `SensorExitEvent` onto the `EventBus`.
+  4. **Transform Sync**: Copies simulated 2D positions and rotations back to entities' `TransformComponent` (converting world positions to local parent coordinates if parented).
 
 ### [CameraSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/CameraSystem.swift)
 Updates camera positions and orientations.
 * **Operation**:
-  * **Standard Tracking**: For entities with `CameraTrackingComponent` and `TransformComponent`, it fetches the target's transform and linearly interpolates (LERP) the camera's position:
-    $$\vec{p}_{cam} = \text{mix}(\vec{p}_{cam}, \vec{p}_{target} + \vec{o}_{offset}, s_{smoothing})$$
-    If the target is part of a hierarchy, tracking calculates coordinates using the accumulated world position `worldPosition(for:)`.
-  * **Orbit & Sway**: For entities with `CameraOrbitComponent` and `TransformComponent`, it accumulates elapsed time, calculates orbit angles, applies vertical bobbing/horizontal sway offsets, and positions the camera. Finally, it calculates pitch and yaw Euler angles to keep the camera pointing directly at the target (using world positions if nested).
+  * **Standard Tracking**: Linearly interpolates (LERP) camera position toward target entity position offset.
+  * **Orbit & Sway**: Accumulates elapsed time, computes orbital angles, vertical bobbing, and horizontal sway, pointing the camera at the focal target.
 
 ### [GPSCoordinateSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/GPSCoordinateSystem.swift)
-Coordinates real-world GPS coordinates with local game transforms.
-* **Operation**:
-  * **Two-way Sync**: Detects changes between `TransformComponent` positions and `GPSPositionComponent` GPS coordinates. If an entity moves in the local world, it translates the coordinates back to GPS. If the GPS coordinates are modified, it updates the transform.
-  * **Web Mercator Projection**: Projects latitude and longitude coordinates onto a 2D plane relative to a reference coordinate origin representing $(0,0,0)$ in the game world.
-
-### [RenderSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/RenderSystem.swift)
-The pipeline bridge that retrieves visible components, updates dynamic buffers, and builds render commands.
-* **Operation**:
-  1. **View-Projection Extraction**: Searches for the first active `CameraComponent` in the world. If present, it retrieves its parent entity's world matrix via `worldMatrix(for:)`, takes its inverse to produce the *View Matrix*, and multiplies it by the camera's *Projection Matrix* to get the combined `viewProjectionMatrix`.
-  2. **Mesh Rebuilding**: Inspects all `SpriteComponent`, `TextComponent`, and `TileMapComponent` entities. If the `isDirty` flag is true, it triggers generation algorithms to produce a new set of vertices, uploads them to the GPU via `renderer.createMesh(vertices:)`, caches the returned mesh, and resets the dirty flag.
-  3. **Z-Sorting Support**: Prior to generating draw commands, the `RenderSystem` automatically queries all `SpriteComponent` entities and sorts them based on their Z coordinate in `TransformComponent` (ascending). This provides correct back-to-front rendering order for 2D sprites.
-  4. **Light Gathering**: Collects all active `LightComponent` entities, extracting their positions (via `worldPosition(for:)`) and properties to populate the lighting uniforms passed to the Metal shaders.
-  5. **Uniform Packaging & Drawing**:
-     * Iterates over `MeshComponent` entities, calculates the MVP matrix utilizing `worldMatrix(for:)` to correctly apply hierarchical parent transforms, and submits them to `renderer.render`.
-     * Iterates over `TextComponent` entities, scales them down by a base scaling factor (`0.003`), binds the atlas texture, packages outline parameters into `SDFUniforms`, and calls `renderer.renderText`.
-     * Iterates over `SpriteComponent` and `TileMapComponent` entities, binds their sprite sheet texture, packages colors into `SpriteUniforms`, and calls `renderer.renderSprite`.
-
-### [PhysicsSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics/PhysicsSystem.swift)
-Orchestrates Box2D physics updates and ECS synchronization.
-* **Operation**:
-  1. **Body Creation**: Automatically constructs Box2D `b2BodyId` and `b2ShapeId` wrappers for entities newly receiving a `PhysicsBodyComponent` and optionally a `PhysicsColliderComponent`.
-  2. **Simulation Step**: Advances the Box2D engine context via `b2World_Step` using a set `timeStep` (default `1/60`s) and `subStepCount` (default `4`).
-  3. **Transform Sync**: Copies physical states (2D positions and rotations) back to the entities' local `TransformComponent` after simulation steps. If the entity has a parent, it converts the Box2D world position back to parent-relative local coordinates before updating the `TransformComponent`.
+Performs two-way synchronization between real-world geographical coordinates and local 3D transforms using Web Mercator projection.
 
 ### [ParticleSystem](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Systems/ParticleSystem.swift)
-Manages dynamic lifecycle loops for emission particles.
-* **Operation**:
-  1. **Lifecycle Limits**: Traverses `ParticleComponent` records, increments their age by `deltaTime`, and destroys entities that exceed their configured lifetime.
-  2. **Emission Intervals**: Evaluates `ParticleEmitterComponent` rate settings, spawns particle entities at emitter coordinate origins, sets random physical velocities, limits, and sizes, and automatically adds Box2D physical bodies and shape colliders.
+Manages dynamic lifecycle loops for emission particles, advancing age counters, emitting new entities with randomized physical velocities, and destroying expired particles.
 
 ---
 
-## 6. 2D Physics System (Box2D Integration)
+## 6. 2D Physics System & Contact Events (Box2D Integration)
 
-AcornEngine integrates the industry-standard **Box2D v3** library natively. This provides stable, rigid-body dynamics for 2D gameplay.
+AcornEngine integrates the industry-standard **Box2D v3** library natively.
 
 ```mermaid
 graph LR
-    ECSWorld[ECS World] -->|Updates components| PhysSystem[Physics System]
-    PhysSystem -->|Sync positions| B2World[Box2D World]
-    B2World -->|Step simulation| B2World
-    B2World -->|Sync back| ECSWorld
+    ECSWorld[ECS World] -->|Sync body properties| PhysSystem[Physics System]
+    PhysSystem -->|Step simulation| B2World[Box2D World]
+    B2World -->|Query contact events| PhysSystem
+    PhysSystem -->|Publish Collision / Sensor Events| EventBus[EventBus]
+    PhysSystem -->|Sync positions & rotations back| ECSWorld
 ```
 
-* **World Context**: Handled in `@MainActor` isolation inside `PhysicsSystem`.
-* **Timestepping**: Uses fixed-rate updates (`b2World_Step`) to avoid numerical instability under varying frame rates.
-* **Collision Shapes**: Supports box quads and circles, scaling geometry dynamically using densities and frictions.
-* **Physics State Ownership**: Box2D owns the position and rotation state of active bodies. Manual changes to `TransformComponent` on the Swift side are overwritten by Box2D once simulated, ensuring simulation consistency.
+### Collision & Contact Events
+When two physical colliders make or break contact, `PhysicsSystem` captures the contact manifolds and publishes events to the `EventBus`:
+
+* **[CollisionContactPoint](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics/PhysicsEvents.swift)**: Contains 2D world contact point `point`, surface `normal`, and relative `approachSpeed`.
+* **[CollisionEnterEvent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics/PhysicsEvents.swift)**: Published upon initial contact between `entityA` and `entityB`.
+* **[CollisionStayEvent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics/PhysicsEvents.swift)**: Published each frame while two shapes remain touching.
+* **[CollisionExitEvent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Physics/PhysicsEvents.swift)**: Published when two shapes separate.
+
+### Sensor & Trigger Volumes
+For zones requiring trigger detection without physical reaction (such as pickup items, checkpoints, or hazard zones):
+* Attach a `SensorTriggerComponent` or set `isSensor = true` on `PhysicsColliderComponent`.
+* Listen for **`SensorEnterEvent`**, **`SensorStayEvent`**, and **`SensorExitEvent`**.
+* Query overlapping entities anytime via `sensorComponent.overlappingEntities` or `sensorComponent.isOverlapping(entity)`.
 
 ### Usage Example:
 ```swift
-// Create a dynamic physics-enabled block
-let block = world.createEntity()
-world.addComponent(TransformComponent(position: [0.0, 5.0, 0.0]), to: block)
-world.addComponent(PhysicsBodyComponent(type: .dynamicBody), to: block)
+// Create a dynamic player ball
+let player = world.createEntity()
+world.addComponent(TransformComponent(position: [0.0, 5.0, 0.0]), to: player)
+world.addComponent(PhysicsBodyComponent(type: .dynamicBody), to: player)
 world.addComponent(PhysicsColliderComponent(
-    shapeType: .box(width: 1.0, height: 1.0),
+    shapeType: .circle(radius: 0.5),
     friction: 0.2,
-    restitution: 0.5
-), to: block)
+    restitution: 0.8
+), to: player)
+
+// Create a non-solid coin pickup sensor
+let coin = world.createEntity()
+world.addComponent(TransformComponent(position: [0.0, 1.0, 0.0]), to: coin)
+world.addComponent(PhysicsBodyComponent(type: .staticBody), to: coin)
+world.addComponent(SensorTriggerComponent(shapeType: .circle(radius: 0.75)), to: coin)
+
+// Subscribe to sensor overlaps
+world.eventBus.subscribe(SensorEnterEvent.self) { event in
+    if event.sensorEntity == coin && event.visitorEntity == player {
+        print("Player picked up coin!")
+        world.destroyEntity(coin)
+    }
+}
 ```
 
 ---
 
-## 7. 2D Particle System
+## 7. Unified Input System & Game Controller Support
+
+Located under [Engine/Sources/AcornEngine/Input](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Input):
+
+```mermaid
+graph TD
+    AppKit_UIKit[AppKit / UIKit Events] -->|Forward| InputSystem
+    GameController[Apple GameController Framework] -->|Poll| GameControllerBridge
+    GameControllerBridge --> InputSystem
+    
+    InputSystem --> InputState[InputState Record]
+    InputSystem --> EventBus[EventBus Dispatches]
+```
+
+### Supported Hardware Input Streams:
+1. **Keyboard**:
+   - `Key` enum covering alphanumeric keys, functional keys, arrows, and modifiers.
+   - `KeyModifierFlags` (`.shift`, `.control`, `.alt`, `.command`, `.capsLock`).
+   - Querying: `inputState.isKeyDown(key)`, `inputState.wasKeyPressedThisFrame(key)`, `inputState.wasKeyReleasedThisFrame(key)`.
+2. **Mouse & Pointer**:
+   - `MouseButton` (`.left`, `.right`, `.middle`, `.other(Int)`).
+   - Absolute cursor position `mousePosition`, per-frame relative movement `mouseDelta`, and scroll wheel `scrollDelta`.
+   - Querying: `inputState.isMouseButtonDown(button)`, `inputState.wasMouseButtonPressedThisFrame(button)`.
+3. **Multi-Touch**:
+   - `Touch` structure tracking unique touch `id`, screen `position`, `delta`, `phase` (`.began`, `.moved`, `.ended`, `.cancelled`), and `tapCount`.
+   - Querying: `inputState.touches`, `inputState.touch(id:)`.
+4. **Game Controllers (MFi, Xbox, PlayStation)**:
+   - Polled natively via `GameControllerBridge`.
+   - `GamepadState` tracks connection status, name, analog thumbsticks (`leftThumbstick`, `rightThumbstick`), analog triggers, D-pad, and buttons (`buttonA`, `buttonB`, `buttonX`, `buttonY`, `leftShoulder`, `rightShoulder`, etc.).
+   - Querying: `inputState.gamepad(id:)`, `gamepad.isButtonDown(button)`, `gamepad.wasButtonPressed(button)`.
+
+### Event Subscriptions:
+Systems can react to input via immediate subscriptions or buffered events on the `EventBus`:
+* `KeyDownEvent`, `KeyUpEvent`
+* `MouseDownEvent`, `MouseUpEvent`, `MouseMoveEvent`, `MouseScrollEvent`
+* `TouchBeganEvent`, `TouchMovedEvent`, `TouchEndedEvent`, `TouchCancelledEvent`
+* `GamepadConnectedEvent`, `GamepadDisconnectedEvent`, `GamepadButtonEvent`, `GamepadAxisEvent`
+
+### Usage Example:
+```swift
+// Check keyboard and gamepad input in a player movement system
+final class PlayerControlSystem: System {
+    func update(world: World, deltaTime: Double) {
+        guard let engine = world.component(ofType: PlayerTag.self, for: playerEntity) else { return }
+        
+        let input = engine.inputSystem.state
+        var moveDirection = SIMD2<Float>.zero
+        
+        // Keyboard input
+        if input.isKeyDown(.w) || input.isKeyDown(.upArrow) { moveDirection.y += 1.0 }
+        if input.isKeyDown(.s) || input.isKeyDown(.downArrow) { moveDirection.y -= 1.0 }
+        if input.isKeyDown(.a) || input.isKeyDown(.leftArrow) { moveDirection.x -= 1.0 }
+        if input.isKeyDown(.d) || input.isKeyDown(.rightArrow) { moveDirection.x += 1.0 }
+        
+        // Gamepad thumbstick input (if connected)
+        if let gamepad = input.gamepads.values.first {
+            if simd_length(gamepad.leftThumbstick) > 0.1 {
+                moveDirection = gamepad.leftThumbstick
+            }
+        }
+    }
+}
+```
+
+---
+
+## 8. Audio Subsystem & 3D Spatial Sound
+
+Located under [Engine/Sources/AcornEngine/Audio](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Audio):
+
+```mermaid
+graph TD
+    World[ECS World] --> AudioSystem
+    AudioSystem --> EnvironmentNode[AVAudioEnvironmentNode (3D Mixer)]
+    AudioSystem --> MainMixer[AVAudioEngine Main Mixer]
+    
+    AudioSource[AudioSourceComponent (Spatial)] --> EnvironmentNode
+    AudioSourceDirect[AudioSourceComponent (2D / Direct)] --> MainMixer
+    AudioListener[AudioListenerComponent] -.->|Sync Position & Orientation| EnvironmentNode
+    OneShot[PlaySoundEvent] --> AudioSystem
+```
+
+* **[AudioClip](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Audio/AudioClip.swift)**: Encapsulates loaded audio data (`AVAudioPCMBuffer` and `AVAudioFormat`). Can be decoded from standard audio file formats (`.wav`, `.mp3`, `.m4a`, `.caf`) or synthesized programmatically.
+* **3D Spatial Calculations**:
+  - `AudioSystem` converts entity 3D transforms (`position`) into `AVAudio3DPoint` coordinates.
+  - Converts Euler rotation angles (Pitch, Yaw, Roll) on the active listener entity into `AVAudio3DAngularOrientation`.
+  - Supports multiple 3D spatial mixing algorithms:
+    - `.equalPowerPanning`: High performance 2D/3D pan.
+    - `.sphericalHead`: 3D spatialization using head-shadow simulation.
+    - `.hrtf`: High-fidelity binaural rendering using Head-Related Transfer Functions.
+    - `.soundField`: Multi-channel sound field rendering.
+* **One-Shot Audio Events**:
+  - Publish `PlaySoundEvent(clip:volume:pitch:position:)` onto the `EventBus` to play sound effects without attaching an entity component.
+  - Publish `StopAllSoundsEvent()` to immediately silence all active voices.
+
+### Usage Example:
+```swift
+// 1. Attach a 3D audio listener to the main camera
+let cameraEntity = world.createEntity()
+world.addComponent(TransformComponent(position: [0, 2, -5]), to: cameraEntity)
+world.addComponent(AudioListenerComponent(isPrimary: true, masterVolume: 1.0), to: cameraEntity)
+
+// 2. Attach a spatial sound emitter to a campfire entity
+let fireClip = try AudioClip(contentsOf: fireAudioURL)
+let fireEntity = world.createEntity()
+world.addComponent(TransformComponent(position: [10, 0, 5]), to: fireEntity)
+world.addComponent(AudioSourceComponent(
+    clip: fireClip,
+    volume: 0.8,
+    isLooping: true,
+    isSpatial: true,
+    playOnAwake: true,
+    renderingAlgorithm: .hrtf
+), to: fireEntity)
+
+// 3. Play a one-shot explosion sound in the world
+world.eventBus.publish(PlaySoundEvent(
+    clip: explosionClip,
+    volume: 1.0,
+    position: SIMD3<Float>(0, 0, 0)
+))
+```
+
+---
+
+## 9. 2D Particle System
 
 The Particle System leverages ECS architecture and the Physics System to create high-performance dynamic effects (such as explosions, sparks, or ambient debris).
 
@@ -421,7 +703,7 @@ world.addComponent(ParticleEmitterComponent(
 
 ---
 
-## 8. Core Math Extensions
+## 10. Core Math Extensions & GPS Projection
 
 Located under [Engine/Sources/AcornEngine/Core/Math.swift](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Math.swift):
 
@@ -446,3 +728,4 @@ where $R = 6378137.0$ meters represents the equatorial radius of the Earth.
 Inverse Web Mercator projection maps local projected coordinate positions back into geographical coordinates via:
 $$\lambda = \frac{x}{R}$$
 $$\phi = 2 \arctan\left(e^{y/R}\right) - \frac{\pi}{2}$$
+

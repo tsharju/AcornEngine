@@ -13,12 +13,14 @@ Acorn Editor is a native macOS desktop application designed for real-time visual
    - Allows selecting individual entities to view, rename, and edit their properties.
 
 2. **Entity Inspector & Dynamic Component Injection**:
-   - Inspects all components attached to the currently selected entity.
-   - Allows renaming entities directly inside the inspector.
-   - Supports **dynamic component injection**, allowing components to be added to or removed from entities at runtime.
-   - Integrates custom GUI controls for `TransformComponent`, enabling real-time drag-and-drop modification of **Position**, **Rotation**, and **Scale** coordinates.
-   - Automatically reflects modified parameters in the simulation.
-   - Displays textual fallbacks for custom components without native editor overrides.
+   - Inspects all components attached to the currently selected entity in real time.
+   - Allows renaming entities directly inside the inspector header.
+   - Supports **dynamic component injection** via `ComponentRegistry`, allowing components to be added or removed from entities at runtime with automatic default initialization.
+   - **Transform Controls**: Custom GUI sliders and drag inputs for `TransformComponent` (Position, Rotation, Scale).
+   - **Audio Controls**: Interactive inspector controls for `AudioSourceComponent` (Volume slider, Pitch multiplier, Looping and Spatial checkboxes, Play on Awake toggle, Reverb Blend slider, and instant **Play**, **Pause**, and **Stop** playback action buttons) and `AudioListenerComponent` (Primary listener toggle, Master volume slider).
+   - **Light & Camera Controls**: Color picker and intensity sliders for `LightComponent`, FOV and near/far clipping for `CameraComponent`, target entity ID and radius/speed for `CameraOrbitComponent`, and smoothing/offset sliders for `CameraTrackingComponent`.
+   - **Physics & Particle Controls**: Live gravity scale and sleep toggles for `PhysicsBodyComponent`, friction and restitution controls for `PhysicsColliderComponent`, and emission rate tuning for `ParticleEmitterComponent`.
+   - Displays textual property fallbacks for custom or newly registered components without native editor overrides.
 
 3. **Interactive World View & glTF Loader**:
    - Projects and visualizes the scene using 3D-to-2D CPU projection drawing.
@@ -30,9 +32,9 @@ Acorn Editor is a native macOS desktop application designed for real-time visual
      - **Scene Camera**: Uses the active [CameraComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/CameraComponent.swift) and its associated entity transform defined in the ECS world.
 
 4. **Cross-Platform Support (macOS & iOS/iPad)**:
-   - Shared ImGui-based inspector logic compiled via C++ Interoperability.
+   - Shared ImGui-based inspector logic compiled via C++ Interoperability (`Component+Inspectable.swift`).
    - Custom **iPad port** (`AcornEditoriOS`) utilizing UIKit touch-to-mouse mapping, Retina display scaling, and safe area layout constraints.
-   - Custom fonts bundled (`JetBrains Mono` and `Arial`) for rendering high-fidelity text.
+   - High-fidelity typography: bundles and configures custom vector fonts (`JetBrains Mono` and `Arial`) across both macOS and iOS targets.
 
 ---
 

@@ -31,10 +31,10 @@ This document tracks completed milestones, upcoming features, architectural impr
 
 ## 🎯 Priority 1: Core 2D Animation, Layering & Camera Systems
 
-- [ ] **2D Sprite Flipbook Animation System**
-  - [ ] Create `SpriteAnimationComponent` with support for named animation clips (e.g. "idle", "run", "jump", "attack").
-  - [ ] Implement `SpriteAnimationSystem` handling frame timing (FPS), playback modes (`.once`, `.loop`, `.pingPong`), and state transitions.
-  - [ ] Support animation frame notification events (e.g. `AnimationFrameEvent` for syncing footstep sounds, attack hitboxes, and particle spawns).
+- [x] **2D Sprite Flipbook Animation System**
+  - [x] Create `SpriteAnimationComponent` with support for named animation clips (e.g. "idle", "run", "jump", "attack").
+  - [x] Implement `SpriteAnimationSystem` handling frame timing (FPS), playback modes (`.once`, `.loop`, `.pingPong`), and state transitions.
+  - [x] Support animation frame notification events (e.g. `AnimationFrameEvent` for syncing footstep sounds, attack hitboxes, and particle spawns).
 - [ ] **Sprite Slicing (9-Slice / 3-Slice Scaling)**
   - [ ] Support 9-slice / 3-slice sprite borders and center tiling/stretching in `SpriteComponent`.
   - [ ] Generate 9-slice vertex geometry dynamically for scalable platforms, dialogue boxes, and UI panels without texture distortion.

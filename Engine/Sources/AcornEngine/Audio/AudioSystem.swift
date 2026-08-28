@@ -58,16 +58,39 @@ public final class AudioSystem: System {
         self.audioEngine = AVAudioEngine()
         self.environmentNode = AVAudioEnvironmentNode()
         
-        audioEngine.attach(environmentNode)
-        audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: nil)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: 44100.0, channels: 2) else {
+            return
+        }
         
+        #if targetEnvironment(simulator)
+        environmentNode.renderingAlgorithm = .equalPowerPanning
         do {
-            let renderFormat = audioEngine.mainMixerNode.outputFormat(forBus: 0)
-            try audioEngine.enableManualRenderingMode(.offline, format: renderFormat, maximumFrameCount: 4096)
+            try audioEngine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+            audioEngine.attach(environmentNode)
+            audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: format)
             try audioEngine.start()
         } catch {
-            print("[AudioSystem] Warning: Failed to start AVAudioEngine: \(error.localizedDescription)")
+            print("[AudioSystem] Warning: Failed to start offline AVAudioEngine in simulator: \(error.localizedDescription)")
         }
+        #else
+        audioEngine.attach(environmentNode)
+        audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: format)
+        do {
+            #if os(iOS) || os(tvOS) || os(visionOS)
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            try? session.setActive(true)
+            #endif
+            try audioEngine.start()
+        } catch {
+            do {
+                try audioEngine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+                try audioEngine.start()
+            } catch {
+                print("[AudioSystem] Warning: Failed to start AVAudioEngine: \(error.localizedDescription)")
+            }
+        }
+        #endif
     }
     
     deinit {

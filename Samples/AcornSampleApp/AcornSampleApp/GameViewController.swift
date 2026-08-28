@@ -303,42 +303,42 @@ class GameViewController: UIViewController, MTKViewDelegate {
                     self.engine.world.addComponent(mageTransform, to: mageEntity)
                     self.engine.world.addComponent(mageSprite, to: mageEntity)
                     
-                    // Start animation loop task
+                    let allClips = spriteSheet.createAnimationClips(fps: 4.0, playbackMode: .loop)
+                    
+                    let knightClips = allClips.filter { $0.key.hasPrefix("knight_") }
+                    let knightAnim = SpriteAnimationComponent(clips: knightClips, initialClip: "knight_walk")
+                    self.engine.world.addComponent(knightAnim, to: knightEntity)
+                    
+                    let archerClips = allClips.filter { $0.key.hasPrefix("archer_") }
+                    let archerAnim = SpriteAnimationComponent(clips: archerClips, initialClip: "archer_walk")
+                    self.engine.world.addComponent(archerAnim, to: archerEntity)
+                    
+                    let mageClips = allClips.filter { $0.key.hasPrefix("mage_") }
+                    let mageAnim = SpriteAnimationComponent(clips: mageClips, initialClip: "mage_walk")
+                    self.engine.world.addComponent(mageAnim, to: mageEntity)
+                    
+                    // Periodically cycle clips (walk -> jump -> attack -> die) to showcase flipbook transitions
                     Task {
-                        let animations = ["walk", "jump", "attack", "die"]
-                        var currentAnimIndex = 0
-                        var currentFrame = 0
-                        
+                        let actions = ["walk", "jump", "attack", "die"]
+                        var actionIdx = 0
                         while true {
-                            try? await Task.sleep(nanoseconds: 250_000_000) // 250ms per frame
+                            try? await Task.sleep(nanoseconds: 1_500_000_000) // Switch action every 1.5s
+                            actionIdx = (actionIdx + 1) % actions.count
+                            let action = actions[actionIdx]
                             
-                            let anim = animations[currentAnimIndex]
-                            
-                            // Update Knight frame
-                            if var ks = self.engine.world.component(ofType: SpriteComponent.self, for: knightEntity) {
-                                ks.frameName = "knight_\(anim)_\(currentFrame)"
-                                ks.isDirty = true
-                                self.engine.world.addComponent(ks, to: knightEntity)
-                            }
-                            
-                            // Update Archer frame
-                            if var asComp = self.engine.world.component(ofType: SpriteComponent.self, for: archerEntity) {
-                                asComp.frameName = "archer_\(anim)_\(currentFrame)"
-                                asComp.isDirty = true
-                                self.engine.world.addComponent(asComp, to: archerEntity)
-                            }
-                            
-                            // Update Mage frame
-                            if var ms = self.engine.world.component(ofType: SpriteComponent.self, for: mageEntity) {
-                                ms.frameName = "mage_\(anim)_\(currentFrame)"
-                                ms.isDirty = true
-                                self.engine.world.addComponent(ms, to: mageEntity)
-                            }
-                            
-                            currentFrame += 1
-                            if currentFrame >= 4 {
-                                currentFrame = 0
-                                currentAnimIndex = (currentAnimIndex + 1) % animations.count
+                            await MainActor.run {
+                                if var ka = self.engine.world.component(ofType: SpriteAnimationComponent.self, for: knightEntity) {
+                                    ka.play(clipNamed: "knight_\(action)")
+                                    self.engine.world.addComponent(ka, to: knightEntity)
+                                }
+                                if var aa = self.engine.world.component(ofType: SpriteAnimationComponent.self, for: archerEntity) {
+                                    aa.play(clipNamed: "archer_\(action)")
+                                    self.engine.world.addComponent(aa, to: archerEntity)
+                                }
+                                if var ma = self.engine.world.component(ofType: SpriteAnimationComponent.self, for: mageEntity) {
+                                    ma.play(clipNamed: "mage_\(action)")
+                                    self.engine.world.addComponent(ma, to: mageEntity)
+                                }
                             }
                         }
                     }

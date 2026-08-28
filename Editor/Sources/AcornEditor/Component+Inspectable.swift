@@ -260,6 +260,78 @@ extension AudioListenerComponent: Inspectable {
     }
 }
 
+extension SpriteAnimationComponent: Inspectable {
+    public mutating func drawInspector(world: World, entity: Entity) {
+        ImGui.TextUnformatted("Active Clip: \(currentClipName ?? "None")", nil)
+        
+        let clipNames = Array(clips.keys).sorted()
+        if !clipNames.isEmpty {
+            var selectedIdx = Int32(clipNames.firstIndex(of: currentClipName ?? "") ?? 0)
+            let namesJoined = clipNames.joined(separator: "\0") + "\0"
+            if ImGui.Combo("Clips", &selectedIdx, namesJoined, -1) {
+                if selectedIdx >= 0 && selectedIdx < clipNames.count {
+                    play(clipNamed: clipNames[Int(selectedIdx)])
+                    world.addComponent(self, to: entity)
+                }
+            }
+        }
+        
+        if let clip = currentClip {
+            let total = clip.frames.count
+            ImGui.TextUnformatted("Frame: \(currentFrameIndex + 1) / \(total) (\(currentFrame?.frameName ?? ""))", nil)
+            
+            var frameIdx = Int32(currentFrameIndex)
+            if ImGui.SliderInt("Scrub Frame", &frameIdx, 0, Int32(max(0, total - 1)), "%d", 0) {
+                currentFrameIndex = Int(frameIdx)
+                playbackTimer = 0.0
+                world.addComponent(self, to: entity)
+            }
+        }
+        
+        var currentSpeed = Float(speed)
+        if ImGui.SliderFloat("Speed", &currentSpeed, 0.1, 5.0, "%.2fx", 0) {
+            speed = Double(currentSpeed)
+            world.addComponent(self, to: entity)
+        }
+        
+        var playing = isPlaying
+        if ImGui.Checkbox("Is Playing", &playing) {
+            isPlaying = playing
+            world.addComponent(self, to: entity)
+        }
+        
+        var paused = isPaused
+        if ImGui.Checkbox("Is Paused", &paused) {
+            isPaused = paused
+            world.addComponent(self, to: entity)
+        }
+        
+        if ImGui.Button("Play", ImVec2(0, 0)) {
+            if let clip = currentClipName {
+                play(clipNamed: clip)
+            } else if let first = clips.keys.sorted().first {
+                play(clipNamed: first)
+            }
+            world.addComponent(self, to: entity)
+        }
+        ImGui.SameLine(0, -1)
+        if ImGui.Button("Pause", ImVec2(0, 0)) {
+            pause()
+            world.addComponent(self, to: entity)
+        }
+        ImGui.SameLine(0, -1)
+        if ImGui.Button("Resume", ImVec2(0, 0)) {
+            resume()
+            world.addComponent(self, to: entity)
+        }
+        ImGui.SameLine(0, -1)
+        if ImGui.Button("Stop", ImVec2(0, 0)) {
+            stop()
+            world.addComponent(self, to: entity)
+        }
+    }
+}
+
 @MainActor
 public func registerDefaultComponents() {
     ComponentRegistry.register(name: "AudioSource", type: AudioSourceComponent.self) {
@@ -268,6 +340,10 @@ public func registerDefaultComponents() {
     
     ComponentRegistry.register(name: "AudioListener", type: AudioListenerComponent.self) {
         AudioListenerComponent()
+    }
+    
+    ComponentRegistry.register(name: "SpriteAnimation", type: SpriteAnimationComponent.self) {
+        SpriteAnimationComponent()
     }
 }
 

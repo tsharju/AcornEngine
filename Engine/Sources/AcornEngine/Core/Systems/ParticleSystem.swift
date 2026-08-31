@@ -11,34 +11,32 @@ public final class ParticleSystem: System {
         // 1. Update existing particles (age and destroy)
         let particles = world.entities(with: ParticleComponent.self)
         for (entity, comp) in particles {
-            var mutableComp = comp
-            mutableComp.age += deltaTime
-            
-            if mutableComp.age >= mutableComp.lifetime {
+            if comp.age + deltaTime >= comp.lifetime {
                 world.destroyEntity(entity)
             } else {
-                world.addComponent(mutableComp, to: entity)
+                world.mutateComponent(ofType: ParticleComponent.self, for: entity) { particle in
+                    particle.age += deltaTime
+                }
             }
         }
         
         // 2. Emit new particles
-        let emitters = world.entities(with: ParticleEmitterComponent.self)
-        for (entity, emitter) in emitters {
+        world.forEach(ParticleEmitterComponent.self) { entity, emitter in
             var mutableEmitter = emitter
-            guard mutableEmitter.isEmitting else { continue }
+            guard mutableEmitter.isEmitting else { return }
             
             mutableEmitter.timeSinceLastEmit += deltaTime
             
             // Only emit if we have a valid rate
-            guard mutableEmitter.emitRate > 0 else { continue }
+            guard mutableEmitter.emitRate > 0 else { return }
             
             let emitInterval = 1.0 / mutableEmitter.emitRate
             
+            // Need transform to know where to spawn
+            guard let transform = world.component(ofType: TransformComponent.self, for: entity) else { return }
+            
             while mutableEmitter.timeSinceLastEmit >= emitInterval {
                 mutableEmitter.timeSinceLastEmit -= emitInterval
-                
-                // Need transform to know where to spawn
-                guard let transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
                 
                 let particleEntity = world.createEntity()
                 

@@ -25,7 +25,7 @@ public struct RenderSystem {
         
         if let override = overrideViewProjection {
             viewProjectionMatrix = override
-        } else if let cameraEntity = world.entities(with: CameraComponent.self).first {
+        } else if let cameraEntity = world.firstEntity(with: CameraComponent.self) {
             let camera = cameraEntity.1
             if world.component(ofType: TransformComponent.self, for: cameraEntity.0) != nil {
                 let viewMatrix = world.worldMatrix(for: cameraEntity.0).inverse
@@ -160,13 +160,17 @@ public struct RenderSystem {
         }
         
         // Render sprite components sorted by Z position (ascending, batched instanced draw calls)
-        var spriteEntities = world.entities(with: SpriteComponent.self)
+        let spriteEntities = world.entities(with: SpriteComponent.self)
         if !spriteEntities.isEmpty, let unitQuadMesh = renderer.unitQuadMesh {
-            spriteEntities.sort { a, b in
-                let posA = world.component(ofType: TransformComponent.self, for: a.0)?.position.z ?? 0.0
-                let posB = world.component(ofType: TransformComponent.self, for: b.0)?.position.z ?? 0.0
-                return posA < posB
+            var spriteRenderList: [(entity: Entity, sprite: SpriteComponent, z: Float)] = []
+            spriteRenderList.reserveCapacity(spriteEntities.count)
+            for (entity, spriteComponent) in spriteEntities {
+                guard let transform = world.component(ofType: TransformComponent.self, for: entity) else {
+                    continue
+                }
+                spriteRenderList.append((entity, spriteComponent, transform.position.z))
             }
+            spriteRenderList.sort { $0.z < $1.z }
             
             var currentTexture: (any Texture)? = nil
             var currentBatch: [SpriteInstanceData] = []
@@ -184,11 +188,7 @@ public struct RenderSystem {
                 currentBatch.removeAll(keepingCapacity: true)
             }
             
-            for (entity, spriteComponent) in spriteEntities {
-                guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
-                    continue
-                }
-                
+            for (entity, spriteComponent, _) in spriteRenderList {
                 let texture = spriteComponent.spriteSheet.texture
                 if let current = currentTexture {
                     if ObjectIdentifier(current as AnyObject) != ObjectIdentifier(texture as AnyObject) {

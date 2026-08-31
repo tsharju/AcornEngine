@@ -29,10 +29,9 @@ public class GPSCoordinateSystem: System {
         self.referenceCoordinate = newReference
         updateReferenceWebMercator()
         
-        let entities = world.entities(with: GPSPositionComponent.self)
-        for (entity, _) in entities {
-            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
-            guard var gps = world.component(ofType: GPSPositionComponent.self, for: entity) else { continue }
+        world.forEach(GPSPositionComponent.self) { entity, gpsRef in
+            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { return }
+            var gps = gpsRef
             
             // Recalculate transform from the current GPS coordinate.
             let newPosition = toWorld(coordinate: gps.coordinate)
@@ -80,10 +79,8 @@ public class GPSCoordinateSystem: System {
     ///   - world: The ECS world.
     ///   - deltaTime: The time elapsed since the last update.
     public func update(world: World, deltaTime: Double) {
-        let entities = world.entities(with: GPSPositionComponent.self)
-        
-        for (entity, gpsRef) in entities {
-            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
+        world.forEach(GPSPositionComponent.self) { entity, gpsRef in
+            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { return }
             var gps = gpsRef
             
             let transformChanged = transform.position != gps.lastSyncedPosition

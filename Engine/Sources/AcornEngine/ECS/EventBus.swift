@@ -3,10 +3,10 @@ import Foundation
 /// A token representing an active event subscription.
 @MainActor
 public final class EventSubscription: Identifiable {
-    public let id: UUID
+    public let id: UInt64
     private var cancelAction: (@MainActor () -> Void)?
     
-    internal init(id: UUID = UUID(), cancelAction: @escaping @MainActor () -> Void) {
+    internal init(id: UInt64, cancelAction: @escaping @MainActor () -> Void) {
         self.id = id
         self.cancelAction = cancelAction
     }
@@ -22,11 +22,29 @@ public final class EventSubscription: Identifiable {
     }
 }
 
+/// An internal type-erased interface for clearing typed frame event lists.
+@MainActor
+private protocol AnyEventList: AnyObject {
+    func clear()
+}
+
+/// A strongly-typed list for frame-buffered events of type `T`.
+/// Eliminates existential boxing and per-query dynamic downcasting.
+@MainActor
+private final class TypedEventList<T: Event>: AnyEventList {
+    var items: [T] = []
+    
+    func clear() {
+        items.removeAll(keepingCapacity: true)
+    }
+}
+
 /// A central decoupled event bus and frame-buffered message stream for ECS systems.
 @MainActor
 public final class EventBus {
-    private var subscribers: [ObjectIdentifier: [UUID: @MainActor (any Event) -> Void]] = [:]
-    private var frameEvents: [ObjectIdentifier: [any Event]] = [:]
+    private var nextSubscriptionID: UInt64 = 0
+    private var subscribers: [ObjectIdentifier: [UInt64: @MainActor (any Event) -> Void]] = [:]
+    private var frameEventLists: [ObjectIdentifier: any AnyEventList] = [:]
     
     /// Initializes an empty event bus.
     public init() {}
@@ -42,7 +60,8 @@ public final class EventBus {
         handler: @escaping @MainActor (T) -> Void
     ) -> EventSubscription {
         let key = ObjectIdentifier(T.self)
-        let id = UUID()
+        let id = nextSubscriptionID
+        nextSubscriptionID += 1
         
         let wrapper: @MainActor (any Event) -> Void = { event in
             if let typed = event as? T {
@@ -65,11 +84,14 @@ public final class EventBus {
     public func publish<T: Event>(_ event: T) {
         let key = ObjectIdentifier(T.self)
         
-        // Buffer into current frame events
-        if frameEvents[key] == nil {
-            frameEvents[key] = []
+        // Buffer into typed current frame events
+        if let list = frameEventLists[key] as? TypedEventList<T> {
+            list.items.append(event)
+        } else {
+            let list = TypedEventList<T>()
+            list.items.append(event)
+            frameEventLists[key] = list
         }
-        frameEvents[key]?.append(event)
         
         // Notify immediate subscribers
         if let handlers = subscribers[key] {
@@ -84,8 +106,8 @@ public final class EventBus {
     /// - Returns: An array of events of the given type.
     public func events<T: Event>(ofType type: T.Type = T.self) -> [T] {
         let key = ObjectIdentifier(T.self)
-        guard let list = frameEvents[key] else { return [] }
-        return list.compactMap { $0 as? T }
+        guard let list = frameEventLists[key] as? TypedEventList<T> else { return [] }
+        return list.items
     }
     
     /// Returns a boolean value indicating whether any events of the specified type were published in the current frame.
@@ -93,18 +115,20 @@ public final class EventBus {
     /// - Returns: `true` if at least one event of the specified type is present, otherwise `false`.
     public func hasEvents<T: Event>(ofType type: T.Type = T.self) -> Bool {
         let key = ObjectIdentifier(T.self)
-        guard let list = frameEvents[key] else { return false }
-        return !list.isEmpty
+        guard let list = frameEventLists[key] as? TypedEventList<T> else { return false }
+        return !list.items.isEmpty
     }
     
     /// Clears all buffered frame events. Called automatically at the end of each frame or tick.
     public func clear() {
-        frameEvents.removeAll(keepingCapacity: true)
+        for list in frameEventLists.values {
+            list.clear()
+        }
     }
     
     /// Removes all subscribers and clears all buffered events.
     public func reset() {
         subscribers.removeAll()
-        frameEvents.removeAll()
+        frameEventLists.removeAll()
     }
 }

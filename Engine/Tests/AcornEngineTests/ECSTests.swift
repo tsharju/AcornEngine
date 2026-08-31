@@ -146,4 +146,80 @@ struct ECSTests {
         #expect(e1Children.contains(e2))
         #expect(e1Children.contains(e3))
     }
+    
+    @Test("Entity ID recycling")
+    func testEntityIDRecycling() {
+        let world = World()
+        let e1 = world.createEntity()
+        let e2 = world.createEntity()
+        #expect(e1.id == 0)
+        #expect(e2.id == 1)
+        
+        world.destroyEntity(e1)
+        let e3 = world.createEntity()
+        #expect(e3.id == 0) // Reused recycled ID
+        
+        let e4 = world.createEntity()
+        #expect(e4.id == 2) // Increments beyond highest allocated
+    }
+    
+    @Test("In-place component mutation")
+    func testMutateComponent() {
+        let world = World()
+        let entity = world.createEntity()
+        world.addComponent(PositionComponent(x: 10, y: 20), to: entity)
+        
+        world.mutateComponent(ofType: PositionComponent.self, for: entity) { pos in
+            pos.x += 5
+            pos.y += 10
+        }
+        
+        let retrieved = world.component(ofType: PositionComponent.self, for: entity)
+        #expect(retrieved?.x == 15)
+        #expect(retrieved?.y == 30)
+    }
+    
+    @Test("firstEntity query")
+    func testFirstEntity() {
+        let world = World()
+        let empty = world.firstEntity(with: PositionComponent.self)
+        #expect(empty == nil)
+        
+        let e1 = world.createEntity()
+        world.addComponent(PositionComponent(x: 42, y: 84), to: e1)
+        
+        let match = world.firstEntity(with: PositionComponent.self)
+        #expect(match != nil)
+        #expect(match?.0 == e1)
+        #expect(match?.1.x == 42)
+    }
+    
+    @Test("forEach zero-allocation iteration")
+    func testForEachIteration() {
+        let world = World()
+        let e1 = world.createEntity()
+        let e2 = world.createEntity()
+        let e3 = world.createEntity()
+        
+        world.addComponent(PositionComponent(x: 1, y: 2), to: e1)
+        world.addComponent(VelocityComponent(dx: 10, dy: 20), to: e1)
+        
+        world.addComponent(PositionComponent(x: 3, y: 4), to: e2)
+        world.addComponent(VelocityComponent(dx: 30, dy: 40), to: e2)
+        
+        world.addComponent(PositionComponent(x: 5, y: 6), to: e3) // No Velocity
+        
+        var totalX: Float = 0
+        world.forEach(PositionComponent.self) { _, pos in
+            totalX += pos.x
+        }
+        #expect(totalX == 9)
+        
+        var combinedCount = 0
+        world.forEach(PositionComponent.self, VelocityComponent.self) { entity, pos, vel in
+            combinedCount += 1
+            #expect(entity == e1 || entity == e2)
+        }
+        #expect(combinedCount == 2)
+    }
 }

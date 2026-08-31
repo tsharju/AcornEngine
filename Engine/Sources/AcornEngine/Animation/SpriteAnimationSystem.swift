@@ -13,9 +13,7 @@ public struct SpriteAnimationSystem: System {
     ///   - world: The ECS world.
     ///   - deltaTime: The elapsed time in seconds since the last frame.
     public func update(world: World, deltaTime: Double) {
-        let entities = world.entities(with: SpriteAnimationComponent.self)
-        
-        for (entity, animComponent) in entities {
+        world.forEach(SpriteAnimationComponent.self) { entity, animComponent in
             var anim = animComponent
             
             guard anim.isPlaying, !anim.isPaused, anim.speed > 0 else {
@@ -23,19 +21,18 @@ public struct SpriteAnimationSystem: System {
                 if let clip = anim.currentClip, !clip.frames.isEmpty {
                     let clampedIndex = max(0, min(anim.currentFrameIndex, clip.frames.count - 1))
                     let activeFrame = clip.frames[clampedIndex]
-                    if var sprite = world.component(ofType: SpriteComponent.self, for: entity) {
+                    world.mutateComponent(ofType: SpriteComponent.self, for: entity) { sprite in
                         if sprite.frameName != activeFrame.frameName {
                             sprite.frameName = activeFrame.frameName
                             sprite.isDirty = true
-                            world.addComponent(sprite, to: entity)
                         }
                     }
                 }
-                continue
+                return
             }
             
             guard let clip = anim.currentClip, !clip.frames.isEmpty else {
-                continue
+                return
             }
             
             let frameCount = clip.frames.count
@@ -123,11 +120,10 @@ public struct SpriteAnimationSystem: System {
             let updatedFrame = clip.frames[anim.currentFrameIndex]
             
             // Synchronize active frame with SpriteComponent
-            if var sprite = world.component(ofType: SpriteComponent.self, for: entity) {
+            world.mutateComponent(ofType: SpriteComponent.self, for: entity) { sprite in
                 if sprite.frameName != updatedFrame.frameName {
                     sprite.frameName = updatedFrame.frameName
                     sprite.isDirty = true
-                    world.addComponent(sprite, to: entity)
                 }
             }
             

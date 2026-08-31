@@ -13,15 +13,13 @@ public struct CameraSystem: System {
     ///   - deltaTime: The time elapsed since the last update.
     public func update(world: World, deltaTime: Double) {
         // 1. Process standard camera tracking
-        let trackingEntities = world.entities(with: CameraTrackingComponent.self)
-        
-        for (entity, tracking) in trackingEntities {
+        world.forEach(CameraTrackingComponent.self) { entity, tracking in
             guard var transform = world.component(ofType: TransformComponent.self, for: entity) else {
-                continue
+                return
             }
             
             guard world.component(ofType: TransformComponent.self, for: tracking.target) != nil else {
-                continue
+                return
             }
             
             let targetPosition = world.worldPosition(for: tracking.target) + tracking.offset
@@ -34,11 +32,9 @@ public struct CameraSystem: System {
         }
         
         // 2. Process floating camera orbiting
-        let orbitEntities = world.entities(with: CameraOrbitComponent.self)
-        
-        for (entity, orbit) in orbitEntities {
+        world.forEach(CameraOrbitComponent.self) { entity, orbit in
             guard var transform = world.component(ofType: TransformComponent.self, for: entity) else {
-                continue
+                return
             }
             
             var mutableOrbit = orbit

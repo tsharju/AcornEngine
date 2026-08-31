@@ -3,6 +3,7 @@ import Foundation
 /// A token representing an active event subscription.
 @MainActor
 public final class EventSubscription: Identifiable {
+    /// The unique subscription identifier.
     public let id: UInt64
     private var cancelAction: (@MainActor () -> Void)?
     
@@ -15,10 +16,6 @@ public final class EventSubscription: Identifiable {
     public func cancel() {
         cancelAction?()
         cancelAction = nil
-    }
-    
-    deinit {
-        // MainActor deinit handling if needed; cancelAction is cleared on explicit cancel
     }
 }
 
@@ -51,12 +48,12 @@ public final class EventBus {
     
     /// Subscribes to events of a specific type.
     /// - Parameters:
-    ///   - eventType: The type of event to subscribe to.
+    ///   - eventType: The type of event to subscribe to (defaults to `T.self`).
     ///   - handler: The closure invoked whenever an event of this type is published.
     /// - Returns: A subscription token that can be cancelled.
     @discardableResult
     public func subscribe<T: Event>(
-        _ eventType: T.Type = T.self,
+        to eventType: T.Type = T.self,
         handler: @escaping @MainActor (T) -> Void
     ) -> EventSubscription {
         let key = ObjectIdentifier(T.self)
@@ -77,6 +74,19 @@ public final class EventBus {
         return EventSubscription(id: id) { [weak self] in
             self?.subscribers[key]?[id] = nil
         }
+    }
+    
+    /// Subscribes to events of a specific type (unlabeled overload for backward compatibility).
+    /// - Parameters:
+    ///   - eventType: The type of event to subscribe to.
+    ///   - handler: The closure invoked whenever an event of this type is published.
+    /// - Returns: A subscription token that can be cancelled.
+    @discardableResult
+    public func subscribe<T: Event>(
+        _ eventType: T.Type,
+        handler: @escaping @MainActor (T) -> Void
+    ) -> EventSubscription {
+        subscribe(to: eventType, handler: handler)
     }
     
     /// Publishes an event to all active subscribers and buffers it in the current frame stream.

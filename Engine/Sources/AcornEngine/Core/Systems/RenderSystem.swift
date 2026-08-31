@@ -165,10 +165,11 @@ public struct RenderSystem {
             var spriteRenderList: [(entity: Entity, sprite: SpriteComponent, z: Float)] = []
             spriteRenderList.reserveCapacity(spriteEntities.count)
             for (entity, spriteComponent) in spriteEntities {
-                guard let transform = world.component(ofType: TransformComponent.self, for: entity) else {
+                guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
                     continue
                 }
-                spriteRenderList.append((entity, spriteComponent, transform.position.z))
+                let worldZ = world.worldPosition(for: entity).z
+                spriteRenderList.append((entity, spriteComponent, worldZ))
             }
             spriteRenderList.sort { $0.z < $1.z }
             

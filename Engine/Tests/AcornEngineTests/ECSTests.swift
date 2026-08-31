@@ -36,8 +36,8 @@ struct ECSTests {
         let e1 = world.createEntity()
         let e2 = world.createEntity()
         
-        #expect(e1.id == 0)
-        #expect(e2.id == 1)
+        #expect(e1.index == 0)
+        #expect(e2.index == 1)
         #expect(e1 != e2)
         
         world.destroyEntity(e1)
@@ -147,20 +147,26 @@ struct ECSTests {
         #expect(e1Children.contains(e3))
     }
     
-    @Test("Entity ID recycling")
-    func testEntityIDRecycling() {
+    @Test("Entity generational indexing and ABA protection")
+    func testEntityGenerationalIndexing() {
         let world = World()
         let e1 = world.createEntity()
-        let e2 = world.createEntity()
-        #expect(e1.id == 0)
-        #expect(e2.id == 1)
+        #expect(e1.index == 0)
+        #expect(e1.generation == 1)
         
+        world.addComponent(PositionComponent(x: 10, y: 20), to: e1)
         world.destroyEntity(e1)
-        let e3 = world.createEntity()
-        #expect(e3.id == 0) // Reused recycled ID
         
-        let e4 = world.createEntity()
-        #expect(e4.id == 2) // Increments beyond highest allocated
+        // Re-creating entity recycles index 0 with generation 2
+        let e2 = world.createEntity()
+        #expect(e2.index == 0)
+        #expect(e2.generation == 2)
+        #expect(e1 != e2)
+        #expect(e1.id != e2.id)
+        
+        // Old stale entity reference should not match or mutate e2's components
+        world.addComponent(PositionComponent(x: 99, y: 99), to: e1)
+        #expect(world.component(ofType: PositionComponent.self, for: e2) == nil)
     }
     
     @Test("In-place component mutation")
@@ -179,7 +185,25 @@ struct ECSTests {
         #expect(retrieved?.y == 30)
     }
     
-    @Test("firstEntity query")
+    @Test("mutateEach safe component pool mutation")
+    func testMutateEach() {
+        let world = World()
+        let e1 = world.createEntity()
+        let e2 = world.createEntity()
+        
+        world.addComponent(PositionComponent(x: 10, y: 20), to: e1)
+        world.addComponent(PositionComponent(x: 30, y: 40), to: e2)
+        
+        world.mutateEach(PositionComponent.self) { entity, pos in
+            pos.x += 1
+            pos.y += 2
+        }
+        
+        #expect(world.component(ofType: PositionComponent.self, for: e1)?.x == 11)
+        #expect(world.component(ofType: PositionComponent.self, for: e2)?.x == 31)
+    }
+    
+    @Test("firstEntity query with named tuple elements")
     func testFirstEntity() {
         let world = World()
         let empty = world.firstEntity(with: PositionComponent.self)
@@ -190,8 +214,8 @@ struct ECSTests {
         
         let match = world.firstEntity(with: PositionComponent.self)
         #expect(match != nil)
-        #expect(match?.0 == e1)
-        #expect(match?.1.x == 42)
+        #expect(match?.entity == e1)
+        #expect(match?.component.x == 42)
     }
     
     @Test("forEach zero-allocation iteration")
@@ -221,5 +245,41 @@ struct ECSTests {
             #expect(entity == e1 || entity == e2)
         }
         #expect(combinedCount == 2)
+    }
+    
+    @Test("Circular hierarchy recursion depth limit")
+    func testCircularHierarchyGuard() {
+        let world = World()
+        let e1 = world.createEntity()
+        let e2 = world.createEntity()
+        
+        world.addComponent(TransformComponent(position: SIMD3<Float>(1, 0, 0)), to: e1)
+        world.addComponent(TransformComponent(position: SIMD3<Float>(2, 0, 0)), to: e2)
+        
+        world.addComponent(ParentComponent(parent: e2), to: e1)
+        world.addComponent(ParentComponent(parent: e1), to: e2) // Circular reference
+        
+        // Should terminate gracefully due to max depth limit instead of hanging indefinitely
+        let matrix = world.worldMatrix(for: e1)
+        #expect(matrix.columns.3.x != 0)
+    }
+    
+    @Test("Multi-component entity destruction")
+    func testMultiComponentDestruction() {
+        let world = World()
+        let entity = world.createEntity()
+        
+        world.addComponent(PositionComponent(x: 1, y: 2), to: entity)
+        world.addComponent(VelocityComponent(dx: 3, dy: 4), to: entity)
+        
+        #expect(world.component(ofType: PositionComponent.self, for: entity) != nil)
+        #expect(world.component(ofType: VelocityComponent.self, for: entity) != nil)
+        
+        world.destroyEntity(entity)
+        
+        #expect(world.component(ofType: PositionComponent.self, for: entity) == nil)
+        #expect(world.component(ofType: VelocityComponent.self, for: entity) == nil)
+        #expect(world.entities(with: PositionComponent.self).isEmpty)
+        #expect(world.entities(with: VelocityComponent.self).isEmpty)
     }
 }

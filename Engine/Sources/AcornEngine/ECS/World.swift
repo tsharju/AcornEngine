@@ -1,11 +1,22 @@
 import simd
 
 #if DEBUG
+/// Metadata representing a registered component type, used by the editor inspector.
 public struct ComponentMetadata: Sendable {
+    /// The display name of the component.
     public let name: String
+    
+    /// The runtime metatype of the component.
     public let type: any Component.Type
+    
+    /// A factory closure creating a default instance of the component.
     public let factory: @Sendable () -> any Component
     
+    /// Initializes new component metadata.
+    /// - Parameters:
+    ///   - name: The display name.
+    ///   - type: The component metatype.
+    ///   - factory: The default constructor closure.
     public init(name: String, type: any Component.Type, factory: @escaping @Sendable () -> any Component) {
         self.name = name
         self.type = type
@@ -16,8 +27,14 @@ public struct ComponentMetadata: Sendable {
 /// A registry for components, used by the editor to know what component types can be added to an entity.
 @MainActor
 public struct ComponentRegistry {
+    /// The list of registered component metadata entries.
     public static var components: [ComponentMetadata] = []
     
+    /// Registers a new component type with a display name and default factory.
+    /// - Parameters:
+    ///   - name: The human-readable name of the component.
+    ///   - type: The component metatype.
+    ///   - factory: A closure returning a default instance of the component.
     public static func register<T: Component>(name: String, type: T.Type, factory: @escaping @Sendable () -> T) {
         components.append(ComponentMetadata(name: name, type: type, factory: factory))
     }
@@ -53,8 +70,13 @@ private final class ComponentPool<T: Component>: AnyComponentPool {
 /// The central registry managing all entities, components, and systems.
 @MainActor
 public class World {
-    private var nextEntityID: UInt64 = 0
-    private var freeEntityIDs: [UInt64] = []
+    /// Tracks generational counters for all entity index slots.
+    private var entityGenerations: [UInt32] = []
+    
+    /// Free list of recycled entity slot indices.
+    private var freeEntityIndices: [UInt32] = []
+    
+    /// The set of currently active entities.
     private var entities: Set<Entity> = []
     
     /// Typed component storage pools keyed by the component type's ObjectIdentifier.
@@ -74,17 +96,18 @@ public class World {
         self.eventBus = eventBus
     }
     
-    /// Creates a new entity and adds it to the world (reusing destroyed IDs if available).
+    /// Creates a new entity and adds it to the world (reusing destroyed index slots with incremented generation).
     /// - Returns: The newly created entity.
     public func createEntity() -> Entity {
-        let id: UInt64
-        if let recycled = freeEntityIDs.popLast() {
-            id = recycled
+        let entity: Entity
+        if let recycledIndex = freeEntityIndices.popLast() {
+            let gen = entityGenerations[Int(recycledIndex)]
+            entity = Entity(index: recycledIndex, generation: gen)
         } else {
-            id = nextEntityID
-            nextEntityID += 1
+            let index = UInt32(entityGenerations.count)
+            entityGenerations.append(1)
+            entity = Entity(index: index, generation: 1)
         }
-        let entity = Entity(id: id)
         entities.insert(entity)
         return entity
     }
@@ -93,8 +116,12 @@ public class World {
     /// - Parameter entity: The entity to destroy.
     public func destroyEntity(_ entity: Entity) {
         guard entities.contains(entity) else { return }
+        let idx = Int(entity.index)
+        guard idx < entityGenerations.count, entityGenerations[idx] == entity.generation else { return }
+        
         entities.remove(entity)
-        freeEntityIDs.append(entity.id)
+        entityGenerations[idx] &+= 1
+        freeEntityIndices.append(entity.index)
         
         if let typeIds = entityComponentTypes.removeValue(forKey: entity) {
             for typeId in typeIds {
@@ -129,9 +156,9 @@ public class World {
     
     /// Removes a component of the specified type from the entity.
     /// - Parameters:
-    ///   - type: The type of the component to remove.
+    ///   - type: The type of the component to remove (defaults to `T.self`).
     ///   - entity: The entity to remove the component from.
-    public func removeComponent<T: Component>(ofType type: T.Type, from entity: Entity) {
+    public func removeComponent<T: Component>(ofType type: T.Type = T.self, from entity: Entity) {
         let typeId = ObjectIdentifier(T.self)
         if let pool = componentPools[typeId] as? ComponentPool<T> {
             pool.items.removeValue(forKey: entity)
@@ -148,11 +175,11 @@ public class World {
     
     /// Retrieves a component of the specified type from the entity.
     /// - Parameters:
-    ///   - type: The type of the component to retrieve.
+    ///   - type: The type of the component to retrieve (defaults to `T.self`).
     ///   - entity: The entity to retrieve the component for.
     /// - Returns: The component if it exists, otherwise `nil`.
     @inline(__always)
-    public func component<T: Component>(ofType type: T.Type, for entity: Entity) -> T? {
+    public func component<T: Component>(ofType type: T.Type = T.self, for entity: Entity) -> T? {
         let typeId = ObjectIdentifier(T.self)
         guard let pool = componentPools[typeId] as? ComponentPool<T> else { return nil }
         return pool.items[entity]
@@ -160,7 +187,7 @@ public class World {
     
     /// Mutates an existing component in-place without copying out and re-adding.
     /// - Parameters:
-    ///   - type: The type of the component to mutate.
+    ///   - type: The type of the component to mutate (defaults to `T.self`).
     ///   - entity: The entity owning the component.
     ///   - modify: A closure modifying the component in place.
     @inline(__always)
@@ -172,29 +199,45 @@ public class World {
         pool.items[entity] = comp
     }
     
+    /// Mutates all instances of a specific component type in-place without dictionary invalidation or array allocation.
+    /// - Parameters:
+    ///   - type: The component type to mutate across all owning entities (defaults to `T.self`).
+    ///   - modify: A closure receiving the entity and an inout reference to the component.
+    @inline(__always)
+    public func mutateEach<T: Component>(_ type: T.Type = T.self, _ modify: (Entity, inout T) -> Void) {
+        let typeId = ObjectIdentifier(T.self)
+        guard let pool = componentPools[typeId] as? ComponentPool<T> else { return }
+        for entity in Array(pool.items.keys) {
+            if var comp = pool.items[entity] {
+                modify(entity, &comp)
+                pool.items[entity] = comp
+            }
+        }
+    }
+    
     /// Retrieves all entities that have a specific component type, along with the component.
-    /// - Parameter type: The type of the component to query.
+    /// - Parameter type: The type of the component to query (defaults to `T.self`).
     /// - Returns: An array of tuples containing the entity and its corresponding component.
-    public func entities<T: Component>(with type: T.Type) -> [(Entity, T)] {
+    public func entities<T: Component>(with type: T.Type = T.self) -> [(Entity, T)] {
         let typeId = ObjectIdentifier(T.self)
         guard let pool = componentPools[typeId] as? ComponentPool<T> else { return [] }
         return Array(pool.items)
     }
     
     /// Retrieves the first entity possessing a specific component type.
-    /// - Parameter type: The component type to query.
-    /// - Returns: The first matching (Entity, T) tuple if found, otherwise `nil`.
+    /// - Parameter type: The component type to query (defaults to `T.self`).
+    /// - Returns: The first matching `(entity: Entity, component: T)` tuple if found, otherwise `nil`.
     @inline(__always)
-    public func firstEntity<T: Component>(with type: T.Type = T.self) -> (Entity, T)? {
+    public func firstEntity<T: Component>(with type: T.Type = T.self) -> (entity: Entity, component: T)? {
         let typeId = ObjectIdentifier(T.self)
         guard let pool = componentPools[typeId] as? ComponentPool<T>,
               let first = pool.items.first else { return nil }
-        return (first.key, first.value)
+        return (entity: first.key, component: first.value)
     }
     
     /// Iterates over all entities with a specific component type without transient array allocation.
     /// - Parameters:
-    ///   - type: The component type to iterate over.
+    ///   - type: The component type to iterate over (defaults to `T.self`).
     ///   - body: A closure executed for each entity and component pair.
     @inline(__always)
     public func forEach<T: Component>(_ type: T.Type = T.self, _ body: (Entity, T) -> Void) {
@@ -207,6 +250,10 @@ public class World {
     
     /// Iterates over all entities possessing two specific component types without temporary array allocation.
     /// Iterates over the smaller component pool and performs fast O(1) lookups into the second pool.
+    /// - Parameters:
+    ///   - t1: First component type (defaults to `T1.self`).
+    ///   - t2: Second component type (defaults to `T2.self`).
+    ///   - body: A closure executed for each matching entity and its component pair.
     @inline(__always)
     public func forEach<T1: Component, T2: Component>(
         _ t1: T1.Type = T1.self,
@@ -250,11 +297,16 @@ public class World {
     }
     
     /// Computes the world transformation matrix for the given entity by traversing its parent chain.
+    /// Includes a recursion depth limit to prevent infinite loops in circular hierarchies.
+    /// - Parameter entity: The entity to calculate the world matrix for.
+    /// - Returns: The 4x4 world transformation matrix.
     public func worldMatrix(for entity: Entity) -> simd_float4x4 {
         var currentEntity = entity
         var accumulatedMatrix = simd_float4x4.identity
+        var depth = 0
         
-        while true {
+        while depth < 64 {
+            depth += 1
             if let transform = self.component(ofType: TransformComponent.self, for: currentEntity) {
                 accumulatedMatrix = matrix_multiply(transform.matrix, accumulatedMatrix)
             }
@@ -269,6 +321,8 @@ public class World {
     }
 
     /// Computes the world position for the given entity.
+    /// - Parameter entity: The entity to calculate the world position for.
+    /// - Returns: The world-space 3D position vector.
     public func worldPosition(for entity: Entity) -> SIMD3<Float> {
         let matrix = worldMatrix(for: entity)
         return SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
@@ -277,10 +331,17 @@ public class World {
 #if DEBUG
     private var entityNames: [Entity: String] = [:]
     
+    /// Retrieves the editor display name for an entity.
+    /// - Parameter entity: The entity to query.
+    /// - Returns: The display name or a fallback string.
     public func name(for entity: Entity) -> String {
         return entityNames[entity] ?? "Entity \(entity.id)"
     }
     
+    /// Sets an editor display name for an entity.
+    /// - Parameters:
+    ///   - name: The custom display name.
+    ///   - entity: The entity to name.
     public func setName(_ name: String, for entity: Entity) {
         entityNames[entity] = name
     }
@@ -291,6 +352,8 @@ public class World {
     }
     
     /// Retrieves all components for a given entity. (Editor-only feature)
+    /// - Parameter entity: The entity to query components for.
+    /// - Returns: An array of all components attached to the entity.
     public func allComponents(for entity: Entity) -> [any Component] {
         guard let typeIds = entityComponentTypes[entity] else { return [] }
         var result: [any Component] = []

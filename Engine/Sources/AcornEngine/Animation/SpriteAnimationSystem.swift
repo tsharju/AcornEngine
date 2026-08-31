@@ -13,9 +13,7 @@ public struct SpriteAnimationSystem: System {
     ///   - world: The ECS world.
     ///   - deltaTime: The elapsed time in seconds since the last frame.
     public func update(world: World, deltaTime: Double) {
-        world.forEach(SpriteAnimationComponent.self) { entity, animComponent in
-            var anim = animComponent
-            
+        world.mutateEach(SpriteAnimationComponent.self) { entity, anim in
             guard anim.isPlaying, !anim.isPaused, anim.speed > 0 else {
                 // Keep sprite in sync even if not playing
                 if let clip = anim.currentClip, !clip.frames.isEmpty {
@@ -126,8 +124,6 @@ public struct SpriteAnimationSystem: System {
                     sprite.isDirty = true
                 }
             }
-            
-            world.addComponent(anim, to: entity)
         }
     }
 }

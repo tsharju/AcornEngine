@@ -93,7 +93,16 @@ public final class AudioSystem: System {
         #endif
     }
     
+    #if os(iOS) || os(tvOS) || os(visionOS)
+    nonisolated(unsafe) private var notificationObservers: [any NSObjectProtocol] = []
+    #endif
+    
     deinit {
+        #if os(iOS) || os(tvOS) || os(visionOS)
+        for obs in notificationObservers {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        #endif
         audioEngine.stop()
         for node in playerNodes.values {
             node.stop()
@@ -114,6 +123,16 @@ public final class AudioSystem: System {
     ///   - world: The ECS world.
     ///   - deltaTime: The elapsed time in seconds since the last frame.
     public func update(world: World, deltaTime: Double) {
+        // Advance offline timeline if manual rendering mode is enabled
+        if audioEngine.isInManualRenderingMode {
+            let sampleRate = audioEngine.manualRenderingFormat.sampleRate
+            let frameCount = AVAudioFrameCount(max(1, UInt32(sampleRate * deltaTime)))
+            let clampedFrames = min(4096, frameCount)
+            if let renderBuffer = AVAudioPCMBuffer(pcmFormat: audioEngine.manualRenderingFormat, frameCapacity: clampedFrames) {
+                _ = try? audioEngine.renderOffline(clampedFrames, to: renderBuffer)
+            }
+        }
+        
         // 1. Update Listener
         updateListener(world: world)
         

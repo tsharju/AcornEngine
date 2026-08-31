@@ -43,19 +43,19 @@ public struct SpriteAnimationSystem: System {
             
             // Advance timer
             anim.playbackTimer += deltaTime * anim.speed
-            var frameChanged = false
             let mode = anim.activePlaybackMode
             
             // Step frames while timer exceeds current frame duration
-            while anim.isPlaying && anim.playbackTimer >= clip.frames[anim.currentFrameIndex].duration {
-                let frameDuration = clip.frames[anim.currentFrameIndex].duration
+            while anim.isPlaying && anim.playbackTimer >= max(0.0001, clip.frames[anim.currentFrameIndex].duration) {
+                let frameDuration = max(0.0001, clip.frames[anim.currentFrameIndex].duration)
                 anim.playbackTimer -= frameDuration
                 
+                var advanced = false
                 switch mode {
                 case .once:
                     if anim.currentFrameIndex + 1 < frameCount {
                         anim.currentFrameIndex += 1
-                        frameChanged = true
+                        advanced = true
                     } else {
                         anim.isPlaying = false
                         anim.playbackTimer = 0.0
@@ -64,7 +64,7 @@ public struct SpriteAnimationSystem: System {
                     
                 case .loop:
                     anim.currentFrameIndex = (anim.currentFrameIndex + 1) % frameCount
-                    frameChanged = true
+                    advanced = true
                     
                 case .pingPong:
                     if frameCount <= 1 {
@@ -74,21 +74,21 @@ public struct SpriteAnimationSystem: System {
                         if nextIndex >= frameCount {
                             anim.pingPongDirection = -1
                             anim.currentFrameIndex = max(0, frameCount - 2)
-                            frameChanged = true
+                            advanced = true
                         } else if nextIndex < 0 {
                             anim.pingPongDirection = 1
                             anim.currentFrameIndex = min(frameCount - 1, 1)
-                            frameChanged = true
+                            advanced = true
                         } else {
                             anim.currentFrameIndex = nextIndex
-                            frameChanged = true
+                            advanced = true
                         }
                     }
                     
                 case .reverseOnce:
                     if anim.currentFrameIndex > 0 {
                         anim.currentFrameIndex -= 1
-                        frameChanged = true
+                        advanced = true
                     } else {
                         anim.isPlaying = false
                         anim.playbackTimer = 0.0
@@ -97,7 +97,26 @@ public struct SpriteAnimationSystem: System {
                     
                 case .reverseLoop:
                     anim.currentFrameIndex = (anim.currentFrameIndex - 1 + frameCount) % frameCount
-                    frameChanged = true
+                    advanced = true
+                }
+                
+                if advanced {
+                    let frame = clip.frames[anim.currentFrameIndex]
+                    world.eventBus.publish(SpriteAnimationFrameEvent(
+                        entity: entity,
+                        clipName: clip.name,
+                        frameIndex: anim.currentFrameIndex,
+                        frameName: frame.frameName
+                    ))
+                    
+                    for trigger in frame.triggers {
+                        world.eventBus.publish(SpriteAnimationTriggerEvent(
+                            entity: entity,
+                            clipName: clip.name,
+                            frameIndex: anim.currentFrameIndex,
+                            payload: trigger
+                        ))
+                    }
                 }
             }
             
@@ -109,25 +128,6 @@ public struct SpriteAnimationSystem: System {
                     sprite.frameName = updatedFrame.frameName
                     sprite.isDirty = true
                     world.addComponent(sprite, to: entity)
-                }
-            }
-            
-            // Dispatch notification events if frame changed
-            if frameChanged {
-                world.eventBus.publish(SpriteAnimationFrameEvent(
-                    entity: entity,
-                    clipName: clip.name,
-                    frameIndex: anim.currentFrameIndex,
-                    frameName: updatedFrame.frameName
-                ))
-                
-                for trigger in updatedFrame.triggers {
-                    world.eventBus.publish(SpriteAnimationTriggerEvent(
-                        entity: entity,
-                        clipName: clip.name,
-                        frameIndex: anim.currentFrameIndex,
-                        payload: trigger
-                    ))
                 }
             }
             

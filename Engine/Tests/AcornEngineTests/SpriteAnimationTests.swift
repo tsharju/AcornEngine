@@ -243,7 +243,7 @@ struct SpriteAnimationTests {
     }
     
     @Test("SpriteAnimationSystem publishes Frame and Trigger events")
-    func testAnimationEventBusDispatch() {
+    func testAnimationEventBusDispatch() throws {
         let world = World()
         let animSystem = SpriteAnimationSystem()
         world.registerSystem(animSystem)
@@ -266,13 +266,169 @@ struct SpriteAnimationTests {
         world.update(deltaTime: 0.1)
         
         #expect(frameEvents.count == 1)
-        #expect(frameEvents.first?.clipName == "attack")
-        #expect(frameEvents.first?.frameIndex == 1)
-        #expect(frameEvents.first?.frameName == "atk_1")
+        let frameEvent = try #require(frameEvents.first)
+        #expect(frameEvent.clipName == "attack")
+        #expect(frameEvent.frameIndex == 1)
+        #expect(frameEvent.frameName == "atk_1")
         
-        #expect(triggerEvents.count == 2)
+        try #require(triggerEvents.count == 2)
         #expect(triggerEvents[0].payload == "hitbox_active")
         #expect(triggerEvents[1].payload == "slash_sfx")
+    }
+    
+    @Test("SpriteAnimationSystem plays correctly in .reverseOnce mode")
+    func testReverseOncePlaybackMode() throws {
+        let world = World()
+        let animSystem = SpriteAnimationSystem()
+        world.registerSystem(animSystem)
+        
+        let clip = SpriteAnimationClip(
+            name: "rewind",
+            frameNames: ["f0", "f1", "f2"],
+            fps: 10.0, // 0.1s per frame
+            playbackMode: .reverseOnce
+        )
+        
+        let entity = world.createEntity()
+        let animComp = SpriteAnimationComponent(clips: ["rewind": clip], initialClip: "rewind")
+        world.addComponent(animComp, to: entity)
+        
+        var completedEvents: [SpriteAnimationCompletedEvent] = []
+        _ = world.eventBus.subscribe(SpriteAnimationCompletedEvent.self) { completedEvents.append($0) }
+        
+        // Should start at frame 2 for reverse mode
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 2)
+        
+        // Advance 0.1s -> frame 1
+        world.update(deltaTime: 0.1)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 1)
+        #expect(completedEvents.isEmpty)
+        
+        // Advance 0.1s -> frame 0
+        world.update(deltaTime: 0.1)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 0)
+        #expect(completedEvents.isEmpty)
+        
+        // Advance 0.1s -> stops on frame 0 and completes
+        world.update(deltaTime: 0.1)
+        let state = try #require(world.component(ofType: SpriteAnimationComponent.self, for: entity))
+        #expect(state.currentFrameIndex == 0)
+        #expect(state.isPlaying == false)
+        #expect(completedEvents.count == 1)
+        #expect(completedEvents.first?.clipName == "rewind")
+    }
+    
+    @Test("SpriteAnimationSystem loops continuously in .reverseLoop mode")
+    func testReverseLoopPlaybackMode() {
+        let world = World()
+        let animSystem = SpriteAnimationSystem()
+        world.registerSystem(animSystem)
+        
+        let clip = SpriteAnimationClip(
+            name: "backLoop",
+            frameNames: ["f0", "f1", "f2"],
+            fps: 10.0,
+            playbackMode: .reverseLoop
+        )
+        
+        let entity = world.createEntity()
+        let animComp = SpriteAnimationComponent(clips: ["backLoop": clip], initialClip: "backLoop")
+        world.addComponent(animComp, to: entity)
+        
+        // Starts at frame 2
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 2)
+        
+        // Advance -> frame 1
+        world.update(deltaTime: 0.1)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 1)
+        
+        // Advance -> frame 0
+        world.update(deltaTime: 0.1)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 0)
+        
+        // Advance -> wraps back to frame 2
+        world.update(deltaTime: 0.1)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 2)
+    }
+    
+    @Test("SpriteAnimationSystem fires all intermediate triggers during multi-frame catch-up")
+    func testMultiFrameTriggerTraversal() throws {
+        let world = World()
+        let animSystem = SpriteAnimationSystem()
+        world.registerSystem(animSystem)
+        
+        let frame0 = SpriteAnimationFrame(frameName: "f0", duration: 0.1, triggers: ["t0"])
+        let frame1 = SpriteAnimationFrame(frameName: "f1", duration: 0.1, triggers: ["t1"])
+        let frame2 = SpriteAnimationFrame(frameName: "f2", duration: 0.1, triggers: ["t2"])
+        let frame3 = SpriteAnimationFrame(frameName: "f3", duration: 0.1, triggers: ["t3"])
+        let clip = SpriteAnimationClip(name: "sequence", frames: [frame0, frame1, frame2, frame3], playbackMode: .loop)
+        
+        let entity = world.createEntity()
+        let anim = SpriteAnimationComponent(clips: ["sequence": clip], initialClip: "sequence")
+        world.addComponent(anim, to: entity)
+        
+        var triggerEvents: [SpriteAnimationTriggerEvent] = []
+        _ = world.eventBus.subscribe(SpriteAnimationTriggerEvent.self) { triggerEvents.append($0) }
+        
+        // Advance by 0.35s (spans frames 1, 2, and lands on frame 3)
+        world.update(deltaTime: 0.35)
+        
+        // Should have fired triggers for frame 1, 2, and 3
+        try #require(triggerEvents.count == 3)
+        #expect(triggerEvents[0].payload == "t1")
+        #expect(triggerEvents[1].payload == "t2")
+        #expect(triggerEvents[2].payload == "t3")
+    }
+    
+    @Test("SpriteAnimationSystem handles zero and negative playback speed")
+    func testSpeedMultiplier() {
+        let world = World()
+        let animSystem = SpriteAnimationSystem()
+        world.registerSystem(animSystem)
+        
+        let clip = SpriteAnimationClip(
+            name: "test",
+            frameNames: ["f0", "f1"],
+            fps: 10.0,
+            playbackMode: .loop
+        )
+        
+        let entity = world.createEntity()
+        var animComp = SpriteAnimationComponent(clips: ["test": clip], initialClip: "test", speed: 0.0)
+        world.addComponent(animComp, to: entity)
+        
+        // With speed = 0, frames do not advance
+        world.update(deltaTime: 0.5)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 0)
+        
+        // Set negative speed (frozen)
+        animComp.speed = -1.0
+        world.addComponent(animComp, to: entity)
+        world.update(deltaTime: 0.5)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 0)
+        
+        // Set double speed (2.0)
+        animComp.speed = 2.0
+        world.addComponent(animComp, to: entity)
+        world.update(deltaTime: 0.05) // 0.05 * 2.0 = 0.1s -> frame 1
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 1)
+    }
+    
+    @Test("SpriteAnimationSystem handles single-frame and zero-duration edge cases without hang")
+    func testEdgeCases() {
+        let world = World()
+        let animSystem = SpriteAnimationSystem()
+        world.registerSystem(animSystem)
+        
+        // Single frame clip
+        let singleFrameClip = SpriteAnimationClip(name: "static", frames: [SpriteAnimationFrame(frameName: "s0", duration: 0.0)], playbackMode: .pingPong)
+        let entity = world.createEntity()
+        let animComp = SpriteAnimationComponent(clips: ["static": singleFrameClip], initialClip: "static")
+        world.addComponent(animComp, to: entity)
+        
+        // Should not hang in while loop despite duration 0.0
+        world.update(deltaTime: 1.0)
+        #expect(world.component(ofType: SpriteAnimationComponent.self, for: entity)?.currentFrameIndex == 0)
     }
     
     @Test("SpriteAnimationSystem handles large deltaTime spanning multiple frames")
@@ -301,7 +457,7 @@ struct SpriteAnimationTests {
     }
     
     @Test("SpriteSheet automated animation clip generation from naming patterns and tags")
-    func testSpriteSheetClipGenerators() {
+    func testSpriteSheetClipGenerators() throws {
         let metadata = SpriteSheetMetadata(
             frames: [
                 SpriteFrame(filename: "knight_walk_0", frame: SpriteRect(x: 0, y: 0, w: 16, h: 16), rotated: false, trimmed: false, spriteSourceSize: SpriteRect(x: 0, y: 0, w: 16, h: 16), sourceSize: SpriteSize(w: 16, h: 16), duration: 100),
@@ -330,17 +486,17 @@ struct SpriteAnimationTests {
         let sheet = SpriteSheet(texture: DummyTexture(), metadata: metadata)
         
         // Pattern-based clips
-        let patternClips = sheet.createAnimationClips(fps: 10.0)
-        #expect(patternClips["knight_walk"] != nil)
-        #expect(patternClips["knight_walk"]?.frames.count == 2)
-        #expect(patternClips["knight_attack"] != nil)
-        #expect(patternClips["knight_attack"]?.frames.count == 1)
+        let patternClips = sheet.makeAnimationClips(fps: 10.0)
+        let walkClip = try #require(patternClips["knight_walk"])
+        #expect(walkClip.frames.count == 2)
+        let attackClip = try #require(patternClips["knight_attack"])
+        #expect(attackClip.frames.count == 1)
         
         // Tag-based clips
-        let tagClips = sheet.createAnimationClipsFromTags()
-        #expect(tagClips["walk"] != nil)
-        #expect(tagClips["walk"]?.frames.count == 2)
-        #expect(tagClips["attack"] != nil)
-        #expect(tagClips["attack"]?.frames.count == 1)
+        let tagClips = sheet.makeAnimationClipsFromTags()
+        let tagWalk = try #require(tagClips["walk"])
+        #expect(tagWalk.frames.count == 2)
+        let tagAttack = try #require(tagClips["attack"])
+        #expect(tagAttack.frames.count == 1)
     }
 }

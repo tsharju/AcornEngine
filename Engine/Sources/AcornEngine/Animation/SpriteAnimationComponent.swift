@@ -51,6 +51,7 @@ public struct SpriteAnimationComponent: Component, Codable, Sendable, Equatable 
     }
     
     /// The normalized progress `(0.0 ... 1.0)` through the current animation clip cycle.
+    /// - Complexity: O(n), where n is the number of frames in the active clip.
     public var normalizedProgress: Double {
         guard let clip = currentClip, clip.totalDuration > 0 else { return 0.0 }
         var elapsed: Double = 0.0
@@ -74,8 +75,16 @@ public struct SpriteAnimationComponent: Component, Codable, Sendable, Equatable 
         isPlaying: Bool = true
     ) {
         self.clips = clips
-        self.currentClipName = initialClip ?? clips.keys.sorted().first
-        self.currentFrameIndex = 0
+        let selectedClipName = initialClip ?? clips.keys.sorted().first
+        self.currentClipName = selectedClipName
+        
+        if let name = selectedClipName, let clip = clips[name],
+           clip.playbackMode == .reverseOnce || clip.playbackMode == .reverseLoop {
+            self.currentFrameIndex = max(0, clip.frames.count - 1)
+        } else {
+            self.currentFrameIndex = 0
+        }
+        
         self.playbackTimer = 0.0
         self.speed = speed
         self.playbackModeOverride = nil
@@ -84,25 +93,41 @@ public struct SpriteAnimationComponent: Component, Codable, Sendable, Equatable 
         self.pingPongDirection = 1
     }
     
-    /// Initializes a new `SpriteAnimationComponent` with a list of clips.
+    /// Initializes a new `SpriteAnimationComponent` with an array of clips.
     /// - Parameters:
-    ///   - clipList: An array of animation clips.
+    ///   - clips: An array of animation clips.
     ///   - initialClip: The name of the clip to select initially (defaults to first clip's name).
     ///   - speed: Playback speed multiplier (defaults to `1.0`).
     ///   - isPlaying: Whether animation starts playing immediately (defaults to `true`).
+    public init(
+        clips: [SpriteAnimationClip],
+        initialClip: String? = nil,
+        speed: Double = 1.0,
+        isPlaying: Bool = true
+    ) {
+        var dict: [String: SpriteAnimationClip] = [:]
+        for clip in clips {
+            dict[clip.name] = clip
+        }
+        self.init(
+            clips: dict,
+            initialClip: initialClip ?? clips.first?.name,
+            speed: speed,
+            isPlaying: isPlaying
+        )
+    }
+    
+    /// Initializes a new `SpriteAnimationComponent` with a list of clips.
+    @available(*, deprecated, renamed: "init(clips:initialClip:speed:isPlaying:)")
     public init(
         clipList: [SpriteAnimationClip],
         initialClip: String? = nil,
         speed: Double = 1.0,
         isPlaying: Bool = true
     ) {
-        var dict: [String: SpriteAnimationClip] = [:]
-        for clip in clipList {
-            dict[clip.name] = clip
-        }
         self.init(
-            clips: dict,
-            initialClip: initialClip ?? clipList.first?.name,
+            clips: clipList,
+            initialClip: initialClip,
             speed: speed,
             isPlaying: isPlaying
         )
@@ -125,6 +150,19 @@ public struct SpriteAnimationComponent: Component, Codable, Sendable, Equatable 
             currentClipName = clips.keys.sorted().first
             currentFrameIndex = 0
             playbackTimer = 0.0
+        }
+    }
+    
+    /// Plays or unpauses the currently active or default animation clip.
+    /// - Parameters:
+    ///   - mode: An optional playback mode override.
+    ///   - restartIfAlreadyPlaying: Whether to reset playback to the beginning if already playing. Defaults to `false`.
+    public mutating func play(
+        mode: SpriteAnimationPlaybackMode? = nil,
+        restartIfAlreadyPlaying: Bool = false
+    ) {
+        if let name = currentClipName ?? clips.keys.sorted().first {
+            play(clipNamed: name, mode: mode, restartIfAlreadyPlaying: restartIfAlreadyPlaying)
         }
     }
     

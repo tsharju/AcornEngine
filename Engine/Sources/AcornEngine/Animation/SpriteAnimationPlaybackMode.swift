@@ -1,7 +1,7 @@
 import Foundation
 
 /// Defines how a sprite animation clip cycles through its sequential frames.
-public enum SpriteAnimationPlaybackMode: String, Codable, Sendable, Equatable {
+public enum SpriteAnimationPlaybackMode: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
     /// Plays forward once from the first frame to the last frame, then stops on the last frame.
     case once
     

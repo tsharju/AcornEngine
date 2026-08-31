@@ -1,12 +1,18 @@
 import Foundation
 import simd
 
-/// A struct representing a rectangle in pixels.
+/// A 2D rectangle in pixel coordinates.
 public struct SpriteRect: Codable, Sendable, Equatable {
     public var x: Int
     public var y: Int
     public var w: Int
     public var h: Int
+    
+    /// The width of the rectangle in pixels.
+    public var width: Int { w }
+    
+    /// The height of the rectangle in pixels.
+    public var height: Int { h }
     
     public init(x: Int, y: Int, w: Int, h: Int) {
         self.x = x
@@ -16,10 +22,16 @@ public struct SpriteRect: Codable, Sendable, Equatable {
     }
 }
 
-/// A struct representing a size in pixels.
+/// A 2D size in pixel dimensions.
 public struct SpriteSize: Codable, Sendable, Equatable {
     public var w: Int
     public var h: Int
+    
+    /// The width in pixels.
+    public var width: Int { w }
+    
+    /// The height in pixels.
+    public var height: Int { h }
     
     public init(w: Int, h: Int) {
         self.w = w
@@ -196,7 +208,7 @@ public final class SpriteSheet: @unchecked Sendable {
     ///   - fps: The frame rate in frames per second (defaults to `10.0`).
     ///   - playbackMode: The playback mode (defaults to `.loop`).
     /// - Returns: A dictionary of animation clips keyed by clip name.
-    public func createAnimationClips(
+    public func makeAnimationClips(
         fps: Double = 10.0,
         playbackMode: SpriteAnimationPlaybackMode = .loop
     ) -> [String: SpriteAnimationClip] {
@@ -244,15 +256,24 @@ public final class SpriteSheet: @unchecked Sendable {
         return result
     }
     
+    /// Automatically groups frames matching common prefix patterns into named animation clips.
+    @available(*, deprecated, renamed: "makeAnimationClips(fps:playbackMode:)")
+    public func createAnimationClips(
+        fps: Double = 10.0,
+        playbackMode: SpriteAnimationPlaybackMode = .loop
+    ) -> [String: SpriteAnimationClip] {
+        makeAnimationClips(fps: fps, playbackMode: playbackMode)
+    }
+    
     /// Creates animation clips using `frameTags` defined in the metadata (e.g. from Aseprite exports).
-    /// - Parameter defaultFps: The fallback frame rate if individual frame duration is absent (defaults to `10.0`).
+    /// - Parameter defaultFPS: The fallback frame rate if individual frame duration is absent (defaults to `10.0`).
     /// - Returns: A dictionary of animation clips keyed by tag name.
-    public func createAnimationClipsFromTags(defaultFps: Double = 10.0) -> [String: SpriteAnimationClip] {
+    public func makeAnimationClipsFromTags(defaultFPS: Double = 10.0) -> [String: SpriteAnimationClip] {
         guard let tags = metadata.meta.frameTags, !tags.isEmpty else {
             return [:]
         }
         
-        let defaultDuration = 1.0 / max(0.001, defaultFps)
+        let defaultDuration = 1.0 / max(0.001, defaultFPS)
         var result: [String: SpriteAnimationClip] = [:]
         let allFrames = metadata.frames
         
@@ -285,5 +306,11 @@ public final class SpriteSheet: @unchecked Sendable {
         }
         
         return result
+    }
+    
+    /// Creates animation clips using `frameTags` defined in the metadata (e.g. from Aseprite exports).
+    @available(*, deprecated, renamed: "makeAnimationClipsFromTags(defaultFPS:)")
+    public func createAnimationClipsFromTags(defaultFps: Double = 10.0) -> [String: SpriteAnimationClip] {
+        makeAnimationClipsFromTags(defaultFPS: defaultFps)
     }
 }

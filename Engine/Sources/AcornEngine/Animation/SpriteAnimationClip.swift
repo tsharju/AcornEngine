@@ -12,6 +12,7 @@ public struct SpriteAnimationClip: Codable, Sendable, Equatable {
     public var playbackMode: SpriteAnimationPlaybackMode
     
     /// The total duration of one complete cycle of the clip in seconds.
+    /// - Complexity: O(n), where n is the number of frames in the clip.
     public var totalDuration: Double {
         frames.reduce(0.0) { $0 + $1.duration }
     }

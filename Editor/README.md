@@ -1,15 +1,15 @@
 # Acorn Editor
 
-Acorn Editor is a native macOS desktop application designed for real-time visualization, inspection, and manipulation of [AcornEngine](file:///Users/tsharju/Code/AcornEngine/Engine/README.md) worlds. Built using Swift 6 with C++ interoperability, it combines Apple's native **Cocoa** windowing and **MetalKit** rendering with the **Dear ImGui** immediate-mode graphical user interface.
+Acorn Editor is a native macOS desktop application designed for real-time visualization, inspection, and manipulation of [AcornEngine](../Engine/README.md) worlds. Built using Swift 6 with C++ interoperability, it combines Apple's native **Cocoa** windowing and **MetalKit** rendering with the **Dear ImGui** immediate-mode graphical user interface.
 
 ---
 
 ## Key Features
 
 1. **Scene Tree View & Hierarchies**:
-   - Lists all active entities in the [World](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/World.swift) in real time.
+   - Lists all active entities in the `World` in real time.
    - Displays a tree hierarchy structure reflecting parent-child relationships defined by `ParentComponent`.
-   - Provides a one-click interface to dynamically spawn new [Entity](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/Entity.swift) instances.
+   - Provides a one-click interface to dynamically spawn new `Entity` instances.
    - Allows selecting individual entities to view, rename, and edit their properties.
 
 2. **Entity Inspector & Dynamic Component Injection**:
@@ -17,6 +17,7 @@ Acorn Editor is a native macOS desktop application designed for real-time visual
    - Allows renaming entities directly inside the inspector header.
    - Supports **dynamic component injection** via `ComponentRegistry`, allowing components to be added or removed from entities at runtime with automatic default initialization.
    - **Transform Controls**: Custom GUI sliders and drag inputs for `TransformComponent` (Position, Rotation, Scale).
+   - **Animation Controls**: Interactive inspector controls for `SpriteAnimationComponent` (Active clip selection dropdown, playback mode selector with `.once`, `.loop`, `.pingPong`, `.reverseOnce`, and `.reverseLoop`, speed multiplier slider, playback action buttons for **Play**, **Pause**, **Resume**, and **Stop**, and real-time frame index / progress readout).
    - **Audio Controls**: Interactive inspector controls for `AudioSourceComponent` (Volume slider, Pitch multiplier, Looping and Spatial checkboxes, Play on Awake toggle, Reverb Blend slider, and instant **Play**, **Pause**, and **Stop** playback action buttons) and `AudioListenerComponent` (Primary listener toggle, Master volume slider).
    - **Light & Camera Controls**: Color picker and intensity sliders for `LightComponent`, FOV and near/far clipping for `CameraComponent`, target entity ID and radius/speed for `CameraOrbitComponent`, and smoothing/offset sliders for `CameraTrackingComponent`.
    - **Physics & Particle Controls**: Live gravity scale and sleep toggles for `PhysicsBodyComponent`, friction and restitution controls for `PhysicsColliderComponent`, and emission rate tuning for `ParticleEmitterComponent`.
@@ -29,7 +30,7 @@ Acorn Editor is a native macOS desktop application designed for real-time visual
    - Draws local coordinate axis gizmos (X: Red, Y: Green, Z: Blue) directly at each entity's position, reflecting its translation, rotation, and scale.
    - Supports camera toggles between:
      - **Editor Camera**: A free-floating camera with controls for Position, Pitch, and Yaw.
-     - **Scene Camera**: Uses the active [CameraComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/CameraComponent.swift) and its associated entity transform defined in the ECS world.
+     - **Scene Camera**: Uses the active `CameraComponent` and its associated entity transform defined in the ECS world.
 
 4. **Cross-Platform Support (macOS & iOS/iPad)**:
    - Shared ImGui-based inspector logic compiled via C++ Interoperability (`Component+Inspectable.swift`).
@@ -40,15 +41,15 @@ Acorn Editor is a native macOS desktop application designed for real-time visual
 
 ## Directory & Package Structure
 
-The Editor is organized as a multi-target folder structure in the [Editor](file:///Users/tsharju/Code/AcornEngine/Editor) directory:
+The Editor is organized as a multi-target folder structure in the `Editor` directory:
 
-* [Package.swift](file:///Users/tsharju/Code/AcornEngine/Editor/Package.swift): Configures the Swift Package Manager targets.
+* `Package.swift`: Configures the Swift Package Manager targets.
   - Leverages Swift C++ Interoperability (`.interoperabilityMode(.Cxx)`) to compile and bind the Dear ImGui library.
-  - Declares dependencies on the local [AcornEngine](file:///Users/tsharju/Code/AcornEngine/Engine/README.md) target.
-* [Sources/AcornEditor/](file:///Users/tsharju/Code/AcornEngine/Editor/Sources/AcornEditor): Contains the macOS editor application entry points (`MacEditor.swift`, `Component+Inspectable.swift`, etc.).
-* [AcornEditoriOS/](file:///Users/tsharju/Code/AcornEngine/Editor/AcornEditoriOS): The native iOS/iPad Xcode project target containing `EditorViewController.swift` and delegates.
-* [Fonts/](file:///Users/tsharju/Code/AcornEngine/Editor/Fonts): Bundled custom typography assets (`JetBrains Mono`).
-* [Sources/ImGui/](file:///Users/tsharju/Code/AcornEngine/Editor/Sources/ImGui): Wraps the Dear ImGui sources (`imgui.cpp`, `imgui_impl_metal.mm`, helper bridges, etc.) into a compiled target.
+  - Declares dependencies on the local `AcornEngine` target.
+* `Sources/AcornEditor/`: Contains the macOS editor application entry points (`MacEditor.swift`, `Component+Inspectable.swift`, etc.).
+* `AcornEditoriOS/`: The native iOS/iPad Xcode project target containing `EditorViewController.swift` and delegates.
+* `Fonts/`: Bundled custom typography assets (`JetBrains Mono`).
+* `Sources/ImGui/`: Wraps the Dear ImGui sources (`imgui.cpp`, `imgui_impl_metal.mm`, helper bridges, etc.) into a compiled target.
 
 ---
 
@@ -56,7 +57,7 @@ The Editor is organized as a multi-target folder structure in the [Editor](file:
 
 ### Application Lifecycle
 
-The entry point in [MacEditor.swift](file:///Users/tsharju/Code/AcornEngine/Editor/Sources/AcornEditor/MacEditor.swift) instantiates a shared Cocoa application and binds the custom [EditorApplicationDelegate](file:///Users/tsharju/Code/AcornEngine/Editor/Sources/AcornEditor/MacEditor.swift):
+The entry point in `MacEditor.swift` instantiates a shared Cocoa application and binds the custom `EditorApplicationDelegate`:
 
 ```swift
 let app = NSApplication.shared
@@ -70,11 +71,11 @@ The delegate manages:
 - **ImGui Context Initialization**: Registers the Metal device and binds OSX / Metal render loops to the ImGui backend via:
   - `ImGui_ImplOSX_Init(view)`
   - `ImGui_ImplMetal_Init(device)`
-- **ECS World Setup**: Instantiates a default [World](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/ECS/World.swift) instance and populates it with initial test entities.
+- **ECS World Setup**: Instantiates a default `World` instance and populates it with initial test entities.
 
 ### Core Render Loop
 
-The loop is driven via the `MTKViewDelegate` implementation in [MacEditor.swift](file:///Users/tsharju/Code/AcornEngine/Editor/Sources/AcornEditor/MacEditor.swift):
+The loop is driven via the `MTKViewDelegate` implementation in `MacEditor.swift`:
 
 ```mermaid
 sequenceDiagram
@@ -99,7 +100,7 @@ sequenceDiagram
    - Left side: Scene Tree (top) and Inspector (bottom) windows are displayed at fixed positions.
    - Right side: World View window takes up the remaining viewport space.
 3. **CPU Vector Projection**:
-   - The view-projection matrix ($MVP$) is evaluated using either the interactive Editor Camera parameters or the active scene [CameraComponent](file:///Users/tsharju/Code/AcornEngine/Engine/Sources/AcornEngine/Core/Components/CameraComponent.swift).
+   - The view-projection matrix ($MVP$) is evaluated using either the interactive Editor Camera parameters or the active scene `CameraComponent`.
    - Local vertices (grid lines, entity coordinate axes) are projected into screen coordinates:
      $$x_{\text{screen}} = \frac{v_{\text{ndc}.x} + 1.0}{2.0} \times W_{\text{viewport}} + X_{\text{offset}}$$
      $$y_{\text{screen}} = \frac{1.0 - v_{\text{ndc}.y}}{2.0} \times H_{\text{viewport}} + Y_{\text{offset}}$$

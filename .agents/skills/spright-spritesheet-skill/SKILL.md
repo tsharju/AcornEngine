@@ -8,7 +8,7 @@ description: Creates sprite sheets for the Acorn Engine using the spright CLI to
 This skill explains how to package individual sprite or animation frames into packed sprite sheets (textures + JSON metadata) compatible with the Acorn Engine using the `spright` command-line tool.
 
 ## Templates
-* **[acorn.inja](file:///Users/tsharju/Code/AcornEngine/.agents/skills/spright-spritesheet-skill/templates/acorn.inja)**: Generates Hash-format JSON metadata compatible with Swift's `SpriteSheetMetadata` decoding logic.
+* **[acorn.inja](templates/acorn.inja)**: Generates Hash-format JSON metadata compatible with Swift's `SpriteSheetMetadata` decoding logic.
 
 ## Packing Configuration
 Create a `spright.conf` configuration file in your directory:

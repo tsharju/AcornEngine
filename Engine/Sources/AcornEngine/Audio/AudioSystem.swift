@@ -58,19 +58,51 @@ public final class AudioSystem: System {
         self.audioEngine = AVAudioEngine()
         self.environmentNode = AVAudioEnvironmentNode()
         
-        audioEngine.attach(environmentNode)
-        audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: nil)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: 44100.0, channels: 2) else {
+            return
+        }
         
+        #if targetEnvironment(simulator)
+        environmentNode.renderingAlgorithm = .equalPowerPanning
         do {
-            let renderFormat = audioEngine.mainMixerNode.outputFormat(forBus: 0)
-            try audioEngine.enableManualRenderingMode(.offline, format: renderFormat, maximumFrameCount: 4096)
+            try audioEngine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+            audioEngine.attach(environmentNode)
+            audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: format)
             try audioEngine.start()
         } catch {
-            print("[AudioSystem] Warning: Failed to start AVAudioEngine: \(error.localizedDescription)")
+            print("[AudioSystem] Warning: Failed to start offline AVAudioEngine in simulator: \(error.localizedDescription)")
         }
+        #else
+        audioEngine.attach(environmentNode)
+        audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: format)
+        do {
+            #if os(iOS) || os(tvOS) || os(visionOS)
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            try? session.setActive(true)
+            #endif
+            try audioEngine.start()
+        } catch {
+            do {
+                try audioEngine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+                try audioEngine.start()
+            } catch {
+                print("[AudioSystem] Warning: Failed to start AVAudioEngine: \(error.localizedDescription)")
+            }
+        }
+        #endif
     }
     
+    #if os(iOS) || os(tvOS) || os(visionOS)
+    nonisolated(unsafe) private var notificationObservers: [any NSObjectProtocol] = []
+    #endif
+    
     deinit {
+        #if os(iOS) || os(tvOS) || os(visionOS)
+        for obs in notificationObservers {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        #endif
         audioEngine.stop()
         for node in playerNodes.values {
             node.stop()
@@ -91,6 +123,16 @@ public final class AudioSystem: System {
     ///   - world: The ECS world.
     ///   - deltaTime: The elapsed time in seconds since the last frame.
     public func update(world: World, deltaTime: Double) {
+        // Advance offline timeline if manual rendering mode is enabled
+        if audioEngine.isInManualRenderingMode {
+            let sampleRate = audioEngine.manualRenderingFormat.sampleRate
+            let frameCount = AVAudioFrameCount(max(1, UInt32(sampleRate * deltaTime)))
+            let clampedFrames = min(4096, frameCount)
+            if let renderBuffer = AVAudioPCMBuffer(pcmFormat: audioEngine.manualRenderingFormat, frameCapacity: clampedFrames) {
+                _ = try? audioEngine.renderOffline(clampedFrames, to: renderBuffer)
+            }
+        }
+        
         // 1. Update Listener
         updateListener(world: world)
         

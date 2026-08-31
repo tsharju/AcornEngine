@@ -13,29 +13,36 @@ public class Engine {
     /// The system responsible for input handling.
     public let inputSystem: InputSystem
     
-    /// The system responsible for rendering meshes.
+    /// The system responsible for rendering meshes and sprites.
     public let renderSystem: RenderSystem
     
     /// The system responsible for audio playback and 3D spatial sound.
     public let audioSystem: AudioSystem
+    
+    /// The system responsible for 2D sprite flipbook animation.
+    public let spriteAnimationSystem: SpriteAnimationSystem
     
     /// Initializes a new engine.
     /// - Parameters:
     ///   - renderer: The renderer.
     ///   - inputSystem: The input system (defaults to standard InputSystem).
     ///   - audioSystem: The audio system (defaults to standard AudioSystem).
+    ///   - spriteAnimationSystem: The sprite animation system (defaults to standard SpriteAnimationSystem).
     public init(
         renderer: any Renderer,
         inputSystem: InputSystem = InputSystem(),
-        audioSystem: AudioSystem = AudioSystem()
+        audioSystem: AudioSystem = AudioSystem(),
+        spriteAnimationSystem: SpriteAnimationSystem = SpriteAnimationSystem()
     ) {
         self.world = World()
         self.renderer = renderer
         self.inputSystem = inputSystem
         self.renderSystem = RenderSystem(renderer: self.renderer)
         self.audioSystem = audioSystem
+        self.spriteAnimationSystem = spriteAnimationSystem
         
         self.world.registerSystem(self.inputSystem)
+        self.world.registerSystem(self.spriteAnimationSystem)
         self.world.registerSystem(self.audioSystem)
     }
     

@@ -11,39 +11,36 @@ public final class ParticleSystem: System {
         // 1. Update existing particles (age and destroy)
         let particles = world.entities(with: ParticleComponent.self)
         for (entity, comp) in particles {
-            var mutableComp = comp
-            mutableComp.age += deltaTime
-            
-            if mutableComp.age >= mutableComp.lifetime {
+            if comp.age + deltaTime >= comp.lifetime {
                 world.destroyEntity(entity)
             } else {
-                world.addComponent(mutableComp, to: entity)
+                world.mutateComponent(ofType: ParticleComponent.self, for: entity) { particle in
+                    particle.age += deltaTime
+                }
             }
         }
         
         // 2. Emit new particles
-        let emitters = world.entities(with: ParticleEmitterComponent.self)
-        for (entity, emitter) in emitters {
-            var mutableEmitter = emitter
-            guard mutableEmitter.isEmitting else { continue }
+        world.mutateEach(ParticleEmitterComponent.self) { entity, emitter in
+            guard emitter.isEmitting else { return }
             
-            mutableEmitter.timeSinceLastEmit += deltaTime
+            emitter.timeSinceLastEmit += deltaTime
             
             // Only emit if we have a valid rate
-            guard mutableEmitter.emitRate > 0 else { continue }
+            guard emitter.emitRate > 0 else { return }
             
-            let emitInterval = 1.0 / mutableEmitter.emitRate
+            let emitInterval = 1.0 / emitter.emitRate
             
-            while mutableEmitter.timeSinceLastEmit >= emitInterval {
-                mutableEmitter.timeSinceLastEmit -= emitInterval
-                
-                // Need transform to know where to spawn
-                guard let transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
+            // Need transform to know where to spawn
+            guard let transform = world.component(ofType: TransformComponent.self, for: entity) else { return }
+            
+            while emitter.timeSinceLastEmit >= emitInterval {
+                emitter.timeSinceLastEmit -= emitInterval
                 
                 let particleEntity = world.createEntity()
                 
                 // Pick a random scale
-                let scale = Float.random(in: mutableEmitter.scale)
+                let scale = Float.random(in: emitter.scale)
                 let pTransform = TransformComponent(
                     position: transform.position,
                     rotation: transform.rotation,
@@ -52,20 +49,20 @@ public final class ParticleSystem: System {
                 world.addComponent(pTransform, to: particleEntity)
                 
                 // Pick a random lifetime
-                let lifetime = Double.random(in: mutableEmitter.lifetime)
+                let lifetime = Double.random(in: emitter.lifetime)
                 let pComp = ParticleComponent(lifetime: lifetime)
                 world.addComponent(pComp, to: particleEntity)
                 
                 // Pick a random mesh
-                if let mesh = mutableEmitter.meshes.randomElement() {
+                if let mesh = emitter.meshes.randomElement() {
                     let meshComp = MeshComponent(mesh: mesh)
                     world.addComponent(meshComp, to: particleEntity)
                 }
                 
                 // Setup physics body
-                let vx = Float.random(in: mutableEmitter.linearVelocityX)
-                let vy = Float.random(in: mutableEmitter.linearVelocityY)
-                let angular = Float.random(in: mutableEmitter.angularVelocity)
+                let vx = Float.random(in: emitter.linearVelocityX)
+                let vy = Float.random(in: emitter.linearVelocityY)
+                let angular = Float.random(in: emitter.angularVelocity)
                 
                 let physicsBody = PhysicsBodyComponent(
                     type: .dynamicBody,
@@ -82,8 +79,6 @@ public final class ParticleSystem: System {
                 )
                 world.addComponent(collider, to: particleEntity)
             }
-            
-            world.addComponent(mutableEmitter, to: entity)
         }
     }
 }

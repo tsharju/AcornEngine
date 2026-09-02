@@ -13,15 +13,13 @@ public struct CameraSystem: System {
     ///   - deltaTime: The time elapsed since the last update.
     public func update(world: World, deltaTime: Double) {
         // 1. Process standard camera tracking
-        let trackingEntities = world.entities(with: CameraTrackingComponent.self)
-        
-        for (entity, tracking) in trackingEntities {
+        world.forEach(CameraTrackingComponent.self) { entity, tracking in
             guard var transform = world.component(ofType: TransformComponent.self, for: entity) else {
-                continue
+                return
             }
             
             guard world.component(ofType: TransformComponent.self, for: tracking.target) != nil else {
-                continue
+                return
             }
             
             let targetPosition = world.worldPosition(for: tracking.target) + tracking.offset
@@ -34,24 +32,21 @@ public struct CameraSystem: System {
         }
         
         // 2. Process floating camera orbiting
-        let orbitEntities = world.entities(with: CameraOrbitComponent.self)
-        
-        for (entity, orbit) in orbitEntities {
+        world.mutateEach(CameraOrbitComponent.self) { entity, orbit in
             guard var transform = world.component(ofType: TransformComponent.self, for: entity) else {
-                continue
+                return
             }
             
-            var mutableOrbit = orbit
-            mutableOrbit.time += deltaTime
+            orbit.time += deltaTime
             
             let angle: Float
             if orbit.useAngleSway {
                 // In sway mode, angle changes back and forth around the starting angle
-                angle = orbit.angle + orbit.swayAngleAmplitude * sin(Float(orbit.speed) * Float(mutableOrbit.time))
+                angle = orbit.angle + orbit.swayAngleAmplitude * sin(Float(orbit.speed) * Float(orbit.time))
             } else {
                 // In continuous mode, angle increases linearly
-                mutableOrbit.angle += orbit.speed * Float(deltaTime)
-                angle = mutableOrbit.angle
+                orbit.angle += orbit.speed * Float(deltaTime)
+                angle = orbit.angle
             }
             
             // Get target position
@@ -62,7 +57,7 @@ public struct CameraSystem: System {
                 targetPos = .zero
             }
             
-            let time = Float(mutableOrbit.time)
+            let time = Float(orbit.time)
             
             // Calculate orbital offset on XZ plane
             let xOffset = orbit.radius * sin(angle)
@@ -91,9 +86,8 @@ public struct CameraSystem: System {
             // Apply Euler angles (pitch, yaw, roll = 0)
             transform.rotation = SIMD3<Float>(pitch, -yaw, 0.0)
             
-            // Write back to components
+            // Write back transform
             world.addComponent(transform, to: entity)
-            world.addComponent(mutableOrbit, to: entity)
         }
     }
 }

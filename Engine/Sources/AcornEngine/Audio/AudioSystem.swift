@@ -317,11 +317,11 @@ public final class AudioSystem: System {
     }
     
     private func cleanupRemovedNodes(world: World) {
-        let currentSourceEntities = Set(world.entities(with: AudioSourceComponent.self).map(\.0))
+        guard !playerNodes.isEmpty else { return }
         let trackedEntities = Array(playerNodes.keys)
         
         for entity in trackedEntities {
-            if !currentSourceEntities.contains(entity) {
+            if world.component(ofType: AudioSourceComponent.self, for: entity) == nil {
                 if let node = playerNodes[entity] {
                     node.stop()
                     audioEngine.disconnectNodeOutput(node)

@@ -117,4 +117,40 @@ struct EventBusTests {
         
         _ = sub
     }
+    
+    @Test("EventBus reset clears all subscribers and frame events")
+    func testResetClearsSubscribersAndEvents() {
+        let bus = EventBus()
+        var receivedCount = 0
+        
+        let sub = bus.subscribe(to: CustomScoreEvent.self) { _ in
+            receivedCount += 1
+        }
+        bus.publish(CustomScoreEvent(score: 50))
+        #expect(receivedCount == 1)
+        #expect(bus.hasEvents(ofType: CustomScoreEvent.self))
+        
+        bus.reset()
+        #expect(!bus.hasEvents(ofType: CustomScoreEvent.self))
+        #expect(bus.events(ofType: CustomScoreEvent.self).isEmpty)
+        
+        bus.publish(CustomScoreEvent(score: 100))
+        #expect(receivedCount == 1) // Handler was removed during reset
+        _ = sub
+    }
+    
+    @Test("EventSubscription cancel idempotency")
+    func testSubscriptionCancelIdempotency() {
+        let bus = EventBus()
+        var callCount = 0
+        let sub = bus.subscribe(to: CustomScoreEvent.self) { _ in
+            callCount += 1
+        }
+        
+        sub.cancel()
+        sub.cancel() // Double cancel should be safe
+        
+        bus.publish(CustomScoreEvent(score: 10))
+        #expect(callCount == 0)
+    }
 }

@@ -29,10 +29,8 @@ public class GPSCoordinateSystem: System {
         self.referenceCoordinate = newReference
         updateReferenceWebMercator()
         
-        let entities = world.entities(with: GPSPositionComponent.self)
-        for (entity, _) in entities {
-            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
-            guard var gps = world.component(ofType: GPSPositionComponent.self, for: entity) else { continue }
+        world.mutateEach(GPSPositionComponent.self) { entity, gps in
+            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { return }
             
             // Recalculate transform from the current GPS coordinate.
             let newPosition = toWorld(coordinate: gps.coordinate)
@@ -41,7 +39,6 @@ public class GPSCoordinateSystem: System {
             gps.lastSyncedCoordinate = gps.coordinate
             
             world.addComponent(transform, to: entity)
-            world.addComponent(gps, to: entity)
         }
     }
     
@@ -80,11 +77,8 @@ public class GPSCoordinateSystem: System {
     ///   - world: The ECS world.
     ///   - deltaTime: The time elapsed since the last update.
     public func update(world: World, deltaTime: Double) {
-        let entities = world.entities(with: GPSPositionComponent.self)
-        
-        for (entity, gpsRef) in entities {
-            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { continue }
-            var gps = gpsRef
+        world.mutateEach(GPSPositionComponent.self) { entity, gps in
+            guard var transform = world.component(ofType: TransformComponent.self, for: entity) else { return }
             
             let transformChanged = transform.position != gps.lastSyncedPosition
             let gpsChanged = gps.coordinate != gps.lastSyncedCoordinate
@@ -95,7 +89,6 @@ public class GPSCoordinateSystem: System {
                 gps.coordinate = newGPS
                 gps.lastSyncedPosition = transform.position
                 gps.lastSyncedCoordinate = newGPS
-                world.addComponent(gps, to: entity)
             } else if gpsChanged {
                 // GPS coordinate was explicitly changed (or both changed, in which case GPS wins), update Transform
                 let newPos = toWorld(coordinate: gps.coordinate)
@@ -103,7 +96,6 @@ public class GPSCoordinateSystem: System {
                 gps.lastSyncedPosition = newPos
                 gps.lastSyncedCoordinate = gps.coordinate
                 world.addComponent(transform, to: entity)
-                world.addComponent(gps, to: entity)
             } else if gps.lastSyncedPosition == nil {
                 // Initial sync: sync from GPS to Transform by default if just added
                 let newPos = toWorld(coordinate: gps.coordinate)
@@ -111,7 +103,6 @@ public class GPSCoordinateSystem: System {
                 gps.lastSyncedPosition = newPos
                 gps.lastSyncedCoordinate = gps.coordinate
                 world.addComponent(transform, to: entity)
-                world.addComponent(gps, to: entity)
             }
         }
     }

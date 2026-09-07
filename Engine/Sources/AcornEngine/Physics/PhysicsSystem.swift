@@ -52,11 +52,32 @@ public final class PhysicsSystem: System {
     /// Mapping of Box2D shapes to their owning ECS entities.
     private var shapeToEntity: [ShapeKey: Entity] = [:]
     
+    /// Tracks active Box2D bodies created for ECS entities.
+    private var activeBodies: [Entity: b2BodyId] = [:]
+    
+    /// Tracks registered shape keys associated with each entity for fast cleanup.
+    private var entityShapes: [Entity: [ShapeKey]] = [:]
+    
     /// Actively persisting collision contacts between entity pairs.
     private var activeContacts: Set<EntityPair> = []
     
     /// Actively persisting sensor overlaps between sensor entities and visiting entities.
     private var activeSensors: Set<SensorPair> = []
+    
+    /// Checks if a Box2D body is currently registered for the given entity.
+    public func hasBody(for entity: Entity) -> Bool {
+        activeBodies[entity] != nil
+    }
+    
+    /// Returns the number of currently active Box2D bodies.
+    public var activeBodyCount: Int {
+        activeBodies.count
+    }
+    
+    /// Returns the number of registered shapes in the shape registry.
+    public var registeredShapeCount: Int {
+        shapeToEntity.count
+    }
     
     public init() {
         var worldDef = b2DefaultWorldDef()
@@ -69,6 +90,28 @@ public final class PhysicsSystem: System {
     }
     
     public func update(world: World, deltaTime: Double) {
+        let currentEntities = world.entities(with: PhysicsBodyComponent.self)
+        let currentEntitySet = Set(currentEntities.map { $0.0 })
+        
+        // 0. Clean up bodies for entities that have been destroyed or no longer have a PhysicsBodyComponent
+        var destroyedEntities: [Entity] = []
+        for (entity, bodyId) in activeBodies {
+            if !currentEntitySet.contains(entity) {
+                b2DestroyBody(bodyId)
+                if let shapeKeys = entityShapes.removeValue(forKey: entity) {
+                    for key in shapeKeys {
+                        shapeToEntity.removeValue(forKey: key)
+                    }
+                }
+                activeContacts = activeContacts.filter { $0.entityA != entity && $0.entityB != entity }
+                activeSensors = activeSensors.filter { $0.sensorEntity != entity && $0.visitorEntity != entity }
+                destroyedEntities.append(entity)
+            }
+        }
+        for entity in destroyedEntities {
+            activeBodies.removeValue(forKey: entity)
+        }
+        
         let entities = world.entities(with: PhysicsBodyComponent.self)
         
         // 1. Ensure all entities with a PhysicsBodyComponent have a corresponding Box2D body & shapes created
@@ -100,7 +143,10 @@ public final class PhysicsSystem: System {
                 
                 let b2Body = b2CreateBody(worldId, &bodyDef)
                 mutableBodyComp.bodyId = b2Body
+                activeBodies[entity] = b2Body
                 world.addComponent(mutableBodyComp, to: entity)
+            } else if let b2Body = mutableBodyComp.bodyId {
+                activeBodies[entity] = b2Body
             }
             
             guard let b2Body = mutableBodyComp.bodyId else { continue }
@@ -129,7 +175,9 @@ public final class PhysicsSystem: System {
                     }
                     
                     mutableCollider.shapeId = shapeId
-                    shapeToEntity[ShapeKey(shapeId)] = entity
+                    let shapeKey = ShapeKey(shapeId)
+                    shapeToEntity[shapeKey] = entity
+                    entityShapes[entity, default: []].append(shapeKey)
                     world.addComponent(mutableCollider, to: entity)
                 }
             }
@@ -154,7 +202,9 @@ public final class PhysicsSystem: System {
                     }
                     
                     mutableSensor.shapeId = shapeId
-                    shapeToEntity[ShapeKey(shapeId)] = entity
+                    let shapeKey = ShapeKey(shapeId)
+                    shapeToEntity[shapeKey] = entity
+                    entityShapes[entity, default: []].append(shapeKey)
                     world.addComponent(mutableSensor, to: entity)
                 }
             }

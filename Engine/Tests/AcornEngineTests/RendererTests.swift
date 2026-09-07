@@ -74,4 +74,35 @@ struct RendererTests {
             _ = try await loader.loadTexture(width: 8, height: 8, pixels: invalidPixels)
         }
     }
+
+    @Test("Renderer Protocol createTexture & TextureLoader(renderer:)")
+    func rendererCreateTexture() async throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            return
+        }
+        
+        let renderer = try MetalRenderer(device: device)
+        
+        // 1. Direct renderer createTexture with r8Unorm
+        let r8Pixels = [UInt8](repeating: 200, count: 4 * 4)
+        let r8Texture = renderer.createTexture(width: 4, height: 4, pixelData: r8Pixels, format: .r8Unorm)
+        let metalR8 = try #require(r8Texture as? MetalTexture)
+        #expect(metalR8.width == 4)
+        #expect(metalR8.height == 4)
+        #expect(metalR8.texture.pixelFormat == .r8Unorm)
+        
+        // 2. Direct renderer createTexture with rgba8Unorm
+        let rgbaPixels = [UInt8](repeating: 100, count: 4 * 4 * 4)
+        let rgbaTexture = renderer.createTexture(width: 4, height: 4, pixelData: rgbaPixels, format: .rgba8Unorm)
+        let metalRGBA = try #require(rgbaTexture as? MetalTexture)
+        #expect(metalRGBA.width == 4)
+        #expect(metalRGBA.height == 4)
+        #expect(metalRGBA.texture.pixelFormat == .rgba8Unorm)
+        
+        // 3. TextureLoader using any Renderer
+        let loader = TextureLoader(renderer: renderer)
+        let loadedTexture = try await loader.loadTexture(width: 4, height: 4, pixels: rgbaPixels)
+        #expect(loadedTexture.width == 4)
+        #expect(loadedTexture.height == 4)
+    }
 }

@@ -1,5 +1,4 @@
 import Foundation
-import Metal
 
 /// The core engine coordinator that manages the game loop, world, and rendering.
 @MainActor

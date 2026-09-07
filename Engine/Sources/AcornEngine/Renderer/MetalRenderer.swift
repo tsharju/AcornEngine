@@ -121,6 +121,55 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         return MetalMesh(device: device, vertices: vertices)
     }
     
+    /// Creates a Metal texture from raw pixel data.
+    public func createTexture(width: Int, height: Int, pixelData: [UInt8], format: TextureFormat) -> (any Texture)? {
+        guard width > 0, height > 0 else { return nil }
+        let pixelFormat: MTLPixelFormat
+        let bytesPerPixel: Int
+        switch format {
+        case .r8Unorm:
+            pixelFormat = .r8Unorm
+            bytesPerPixel = 1
+        case .rgba8Unorm:
+            pixelFormat = .rgba8Unorm
+            bytesPerPixel = 4
+        }
+        guard pixelData.count == width * height * bytesPerPixel else { return nil }
+        
+        let descriptor = MTLTextureDescriptor()
+        descriptor.pixelFormat = pixelFormat
+        descriptor.width = width
+        descriptor.height = height
+        descriptor.usage = .shaderRead
+        #if os(macOS)
+        descriptor.storageMode = .managed
+        #else
+        descriptor.storageMode = .shared
+        #endif
+        
+        guard let mtlTexture = device.makeTexture(descriptor: descriptor) else {
+            return nil
+        }
+        
+        let region = MTLRegion(
+            origin: MTLOrigin(x: 0, y: 0, z: 0),
+            size: MTLSize(width: width, height: height, depth: 1)
+        )
+        
+        pixelData.withUnsafeBytes { bufferPointer in
+            if let baseAddress = bufferPointer.baseAddress {
+                mtlTexture.replace(
+                    region: region,
+                    mipmapLevel: 0,
+                    withBytes: baseAddress,
+                    bytesPerRow: width * bytesPerPixel
+                )
+            }
+        }
+        
+        return MetalTexture(texture: mtlTexture)
+    }
+    
     /// Renders a mesh using the given Metal frame context.
     public func render(mesh: Mesh, texture: (any Texture)?, uniforms: GlobalUniforms, context: RenderContext) {
         guard let metalContext = context as? MetalRenderContext,

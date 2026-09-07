@@ -58,4 +58,46 @@ struct PhysicsSystemTests {
             #expect(yPos > 0.0)
         }
     }
+
+    @Test("Entity destruction and component removal cleans up Box2D bodies and shape registry")
+    func testEntityDestructionCleansUpPhysicsBodies() {
+        let world = World()
+        let physicsSystem = PhysicsSystem()
+        world.registerSystem(physicsSystem)
+        
+        // 1. Create two physics entities
+        let entityA = world.createEntity()
+        world.addComponent(TransformComponent(position: SIMD3<Float>(0, 5, 0)), to: entityA)
+        world.addComponent(PhysicsBodyComponent(type: .dynamicBody), to: entityA)
+        world.addComponent(PhysicsColliderComponent(shapeType: .box(width: 1.0, height: 1.0)), to: entityA)
+        
+        let entityB = world.createEntity()
+        world.addComponent(TransformComponent(position: SIMD3<Float>(0, 0, 0)), to: entityB)
+        world.addComponent(PhysicsBodyComponent(type: .staticBody), to: entityB)
+        world.addComponent(PhysicsColliderComponent(shapeType: .circle(radius: 2.0)), to: entityB)
+        
+        world.update(deltaTime: 1.0 / 60.0)
+        
+        #expect(physicsSystem.activeBodyCount == 2)
+        #expect(physicsSystem.registeredShapeCount == 2)
+        #expect(physicsSystem.hasBody(for: entityA))
+        #expect(physicsSystem.hasBody(for: entityB))
+        
+        // 2. Destroy entityA - verify its Box2D body & shape are cleaned up
+        world.destroyEntity(entityA)
+        world.update(deltaTime: 1.0 / 60.0)
+        
+        #expect(physicsSystem.activeBodyCount == 1)
+        #expect(physicsSystem.registeredShapeCount == 1)
+        #expect(!physicsSystem.hasBody(for: entityA))
+        #expect(physicsSystem.hasBody(for: entityB))
+        
+        // 3. Remove PhysicsBodyComponent from entityB - verify its body & shape are cleaned up
+        world.removeComponent(ofType: PhysicsBodyComponent.self, from: entityB)
+        world.update(deltaTime: 1.0 / 60.0)
+        
+        #expect(physicsSystem.activeBodyCount == 0)
+        #expect(physicsSystem.registeredShapeCount == 0)
+        #expect(!physicsSystem.hasBody(for: entityB))
+    }
 }

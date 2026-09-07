@@ -1,14 +1,6 @@
 import Foundation
 import simd
 
-#if canImport(AppKit)
-import AppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
-#endif
-
 /// A system that manages input state across keyboard, mouse, touch pointers, and game controllers.
 @MainActor
 public final class InputSystem: System {

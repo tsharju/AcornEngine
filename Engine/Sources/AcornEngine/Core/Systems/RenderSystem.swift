@@ -1,5 +1,4 @@
 import Foundation
-import Metal
 import simd
 
 /// A system that queries the world for renderable entities and submits them to the renderer.

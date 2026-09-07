@@ -221,6 +221,15 @@ public protocol Renderer: Sendable {
     /// - Returns: A backend-specific `Mesh` resource, or `nil` if creation fails.
     func createMesh(vertices: [Vertex]) -> Mesh?
     
+    /// Creates a backend-specific texture resource from raw pixel data.
+    /// - Parameters:
+    ///   - width: The width of the texture in pixels.
+    ///   - height: The height of the texture in pixels.
+    ///   - pixelData: The raw pixel bytes.
+    ///   - format: The pixel format of the data.
+    /// - Returns: A backend-specific `Texture` resource, or `nil` if creation fails.
+    func createTexture(width: Int, height: Int, pixelData: [UInt8], format: TextureFormat) -> (any Texture)?
+    
     /// Renders a mesh using the given frame context.
     /// - Parameters:
     ///   - mesh: The mesh to render.
@@ -289,6 +298,10 @@ public protocol Renderer: Sendable {
 public extension Renderer {
     var unitQuadMesh: (any Mesh)? {
         return createMesh(vertices: SpriteMeshGenerator.generateUnitQuad())
+    }
+    
+    func createTexture(width: Int, height: Int, pixelData: [UInt8], format: TextureFormat) -> (any Texture)? {
+        return nil
     }
     
     func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {

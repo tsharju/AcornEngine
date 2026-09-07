@@ -170,3 +170,32 @@ This document tracks completed milestones, upcoming features, architectural impr
 - [ ] **3D Physics & Character Controllers**: Jolt Physics integration or lightweight 3D collider system.
 - [ ] **Post-Processing Pass Pipeline**: Bloom, ACES Tonemapping, Color Grading, and FXAA anti-aliasing.
 
+---
+
+## 🤖 Cross-Platform Porting: Android Support
+
+Comprehensive architecture specifications and technical design are documented in [ANDROID_SUPPORT_PLAN.md](Docs/ANDROID_SUPPORT_PLAN.md).
+
+- [ ] **Phase 1: Core Portability & Clean-up**
+  - [x] Remove unused platform imports (`import Metal`, `import AppKit/UIKit`) from core and input modules.
+  - [x] Fix Box2D rigid body destruction (`b2DestroyBody`) and shape registry cleanup on entity destruction.
+  - [x] Add `createTexture(width:height:pixelData:format:)` to `Renderer` protocol and `MetalRenderer`.
+  - [ ] Implement `AcornMath` with platform-agnostic `Matrix4x4` / vector math to eliminate Darwin `<simd/simd.h>`.
+  - [ ] Implement `AssetProvider` VFS protocol with `BundleAssetProvider` (Apple) and `AndroidAssetProvider` (`AAssetManager`).
+  - [ ] Integrate `stb_image` for cross-platform image decoding (PNG/JPEG) without MetalKit.
+- [ ] **Phase 2: Subsystem Abstraction**
+  - [ ] Implement `AudioBackend` protocol and decouple `AudioClip` from `AVAudioPCMBuffer` using portable `AudioBuffer`.
+  - [ ] Implement `GamepadProvider` protocol and add Android keycode mappings (`Key.from(androidKeyCode:)`).
+  - [ ] Abstract font glyph rasterization behind `FontRasterizer` protocol with `stb_truetype` fallback.
+  - [ ] Decouple `GLTFLoader.cpp` to output pure `CPUMeshData` (vertices + indices).
+- [ ] **Phase 3: Package Modularization & Shaders**
+  - [ ] Reorganize `Package.swift` into modular targets: `AcornCore`, `AcornRenderMetal`, `AcornRenderVulkan`, `AcornAudioAVF`, `AcornAudioOboe`.
+  - [ ] Set up shader cross-compilation pipeline (Slang / HLSL -> SPIR-V & MSL).
+- [ ] **Phase 4: Vulkan Rendering Backend**
+  - [ ] Implement `VulkanRenderer: Renderer` utilizing Vulkan 1.1+ (with `VK_KHR_maintenance1` negative viewport height) and VMA.
+  - [ ] Support forward 3D meshes, 2D sprites, SDF text, and instanced draw batching.
+- [ ] **Phase 5: Android Platform Harness & AGDK Integration**
+  - [ ] Implement `GameActivity` and `ANativeWindow` surface lifecycle management (`surfaceCreated`/`surfaceDestroyed` safety).
+  - [ ] Implement `OboeAudioBackend` using Google Oboe / AAudio.
+  - [ ] Set up Android Gradle project (`build.gradle.kts`) with `swift-sdk-android` cross-compilation toolchain.
+

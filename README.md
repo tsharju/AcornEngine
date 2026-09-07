@@ -73,6 +73,7 @@ For more details on how to build, run, and modify individual components, refer t
 * [Engine Documentation](Engine/README.md) – Deep dive into the Entity Component System, EventBus, 2D Sprite Animation, Unified Input, 3D Spatial Audio, Metal Renderer & Instancing, Box2D physics simulation & contacts, 2D particle emitter, and coordinate geometry math.
 * [Editor Documentation](Editor/README.md) – In-depth guide on the macOS desktop workspace, Dear ImGui interop structure, Cocoa and Metal integration delegates, inspectable components, and interactive line-projection drawing.
 * [Roadmap & TODO List](TODO.md) – Feature roadmap, technical priorities, and planned subsystems.
+* [Android Compatibility Plan](Docs/ANDROID_SUPPORT_PLAN.md) – Architectural blueprint, subsystem abstractions, and phased roadmap for Android (API 24+) support using Vulkan, Oboe, and GameActivity.
 
 ---
 

@@ -163,6 +163,53 @@ struct PlayerAndCameraTests {
         }
     }
     
+    @Test("Camera view projection projects left object to negative NDC X")
+    @MainActor
+    func cameraProjectionNDC() {
+        let world = World()
+        let target = world.createEntity()
+        world.addComponent(TransformComponent(position: .zero), to: target)
+        let cam = ThirdPersonFollowCamera.create(in: world, target: target, distance: 50.0, pitch: 0.75, yaw: 0.0)
+        
+        let viewMatrix = world.worldMatrix(for: cam.entity).inverse
+        let cameraComp = world.component(ofType: CameraComponent.self, for: cam.entity)!
+        let projMatrix = cameraComp.projectionMatrix()
+        let vp = projMatrix * viewMatrix
+        
+        let leftPoint = vp * SIMD4<Float>(-5, 0, 0, 1)
+        let rightPoint = vp * SIMD4<Float>(5, 0, 0, 1)
+        
+        let leftNDC_X = leftPoint.x / leftPoint.w
+        let rightNDC_X = rightPoint.x / rightPoint.w
+        
+        #expect(leftNDC_X < 0)
+        #expect(rightNDC_X > 0)
+    }
+    
+    @Test("ThirdPersonFollowCamera followHeading smoothly interpolates yaw")
+    @MainActor
+    func cameraFollowHeading() {
+        let world = World()
+        let target = world.createEntity()
+        let cameraEntity = world.createEntity()
+        let camera = ThirdPersonFollowCamera(
+            entity: cameraEntity,
+            target: target,
+            yaw: 0.0
+        )
+        
+        // Follow target heading of 1.0 rad over 0.2s
+        camera.followHeading(1.0, deltaTime: 0.2, lerpRate: 2.5)
+        #expect(camera.yaw > 0.0)
+        #expect(camera.yaw < 1.0)
+        
+        // After sufficient time, yaw reaches target heading
+        for _ in 0..<10 {
+            camera.followHeading(1.0, deltaTime: 0.5, lerpRate: 2.5)
+        }
+        #expect(abs(camera.yaw - 1.0) < 0.01)
+    }
+    
     @Test("ThirdPersonFollowCamera clamps distance and pitch")
     @MainActor
     func cameraClamping() {

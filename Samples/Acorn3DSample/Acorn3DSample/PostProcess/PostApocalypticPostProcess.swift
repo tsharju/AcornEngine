@@ -1,0 +1,600 @@
+import Foundation
+import Metal
+import MetalKit
+import simd
+import AcornEngine
+import AcornMath
+
+/// Uniform structure passed to the post-apocalyptic post-processing shader.
+/// Memory layout is strictly aligned to 16 bytes for Metal compatibility.
+public struct PostApocalypticUniforms: Sendable, Equatable {
+    /// Inverse of the camera's view-projection matrix used for depth-to-world unprojection.
+    public var inverseViewProjectionMatrix: simd_float4x4
+    /// Camera view-projection matrix used for world-to-clip projection in SSAO.
+    public var viewProjectionMatrix: simd_float4x4
+    /// Camera world position (xyz) with 1.0 in w.
+    public var cameraPosition: SIMD4<Float>
+    /// Player character world position (xyz) used to exclude the player from post-processing.
+    public var playerPosition: SIMD4<Float>
+    /// Dark moss / damp vegetation base color.
+    public var mossColorDark: SIMD4<Float>
+    /// Fresh vibrant moss highlight color.
+    public var mossColorLight: SIMD4<Float>
+    /// Lichen / chartreuse accents.
+    public var mossColorLichen: SIMD4<Float>
+    /// Atmospheric overcast sky and distance fog color.
+    public var skyFogColor: SIMD4<Float>
+    /// Moss coverage density factor [0.0 ... 1.0].
+    public var mossDensity: Float
+    /// Perlin noise spatial scale factor.
+    public var mossScale: Float
+    /// Weathering, dirt and desaturation amount [0.0 ... 1.0].
+    public var weatheringAmount: Float
+    /// Exponential distance fog density factor.
+    public var fogDensity: Float
+    /// Elapsed time in seconds for atmospheric animation.
+    public var time: Float
+    /// 1.0 if post-apocalyptic rendering is active, 0.0 for pristine baseline.
+    public var isEnabled: Float
+    /// Screen-space ambient occlusion intensity factor [0.0 ... 2.0].
+    public var ssaoIntensity: Float
+    /// World-space radius in meters for occlusion sampling.
+    public var ssaoRadius: Float
+    /// Horizon bias to prevent self-occlusion artifacts on flat surfaces.
+    public var ssaoBias: Float
+    /// Padding floats to maintain strict 16-byte alignment.
+    public var pad0: Float
+    public var pad1: Float
+    public var pad2: Float
+
+    public init(
+        inverseViewProjectionMatrix: simd_float4x4 = matrix_identity_float4x4,
+        viewProjectionMatrix: simd_float4x4 = matrix_identity_float4x4,
+        cameraPosition: SIMD4<Float> = SIMD4<Float>(0, 30, 60, 1),
+        playerPosition: SIMD4<Float> = .zero,
+        mossColorDark: SIMD4<Float> = SIMD4<Float>(0.13, 0.24, 0.09, 1.0),
+        mossColorLight: SIMD4<Float> = SIMD4<Float>(0.28, 0.42, 0.15, 1.0),
+        mossColorLichen: SIMD4<Float> = SIMD4<Float>(0.46, 0.54, 0.18, 1.0),
+        skyFogColor: SIMD4<Float> = SIMD4<Float>(0.32, 0.36, 0.33, 1.0),
+        mossDensity: Float = 0.70,
+        mossScale: Float = 0.055,
+        weatheringAmount: Float = 0.65,
+        fogDensity: Float = 0.0018,
+        time: Float = 0.0,
+        isEnabled: Float = 1.0,
+        ssaoIntensity: Float = 1.25,
+        ssaoRadius: Float = 3.5,
+        ssaoBias: Float = 0.035
+    ) {
+        self.inverseViewProjectionMatrix = inverseViewProjectionMatrix
+        self.viewProjectionMatrix = viewProjectionMatrix
+        self.cameraPosition = cameraPosition
+        self.playerPosition = playerPosition
+        self.mossColorDark = mossColorDark
+        self.mossColorLight = mossColorLight
+        self.mossColorLichen = mossColorLichen
+        self.skyFogColor = skyFogColor
+        self.mossDensity = mossDensity
+        self.mossScale = mossScale
+        self.weatheringAmount = weatheringAmount
+        self.fogDensity = fogDensity
+        self.time = time
+        self.isEnabled = isEnabled
+        self.ssaoIntensity = ssaoIntensity
+        self.ssaoRadius = ssaoRadius
+        self.ssaoBias = ssaoBias
+        self.pad0 = 0.0
+        self.pad1 = 0.0
+        self.pad2 = 0.0
+    }
+}
+
+/// A two-pass post-processing pipeline that unprojects the depth buffer to 3D world coordinates,
+/// reconstructs surface normals with screen-space derivatives, and renders procedural Perlin noise moss,
+/// weathered surfaces, distance fog, and overcast skies.
+@MainActor
+public final class PostApocalypticPostProcess {
+    public let device: any MTLDevice
+    public private(set) var pipelineState: (any MTLRenderPipelineState)?
+    
+    public private(set) var sceneColorTexture: (any MTLTexture)?
+    public private(set) var sceneDepthTexture: (any MTLTexture)?
+    public let sceneRenderPassDescriptor = MTLRenderPassDescriptor()
+    
+    public var uniforms = PostApocalypticUniforms()
+    public private(set) var currentSize: CGSize = .zero
+    
+    /// Atmospheric sky clear color used for the scene pass.
+    public var clearColor: MTLClearColor = MTLClearColor(red: 0.30, green: 0.34, blue: 0.32, alpha: 1.0)
+    
+    /// Initializes a new PostApocalypticPostProcess pipeline.
+    /// - Parameters:
+    ///   - device: The Metal device.
+    ///   - pixelFormat: The output drawable pixel format (defaults to `.bgra8Unorm_srgb`).
+    public init(device: any MTLDevice, pixelFormat: MTLPixelFormat = .bgra8Unorm_srgb) {
+        self.device = device
+        self.pipelineState = Self.buildPipelineState(device: device, pixelFormat: pixelFormat)
+    }
+    
+    /// Updates the offscreen render target textures to match the drawable size.
+    /// - Parameter size: The size of the drawable in pixels.
+    public func updateDrawableSize(_ size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        if currentSize == size && sceneColorTexture != nil && sceneDepthTexture != nil {
+            return
+        }
+        currentSize = size
+        let width = Int(size.width)
+        let height = Int(size.height)
+        
+        // 1. Offscreen Color Texture
+        let colorDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm_srgb,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        colorDesc.usage = [.renderTarget, .shaderRead]
+        #if os(macOS)
+        colorDesc.storageMode = .managed
+        #else
+        colorDesc.storageMode = .shared
+        #endif
+        self.sceneColorTexture = device.makeTexture(descriptor: colorDesc)
+        
+        // 2. Offscreen Depth Texture
+        let depthDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .depth32Float,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        depthDesc.usage = [.renderTarget, .shaderRead]
+        #if os(macOS)
+        depthDesc.storageMode = .private
+        #else
+        depthDesc.storageMode = .private
+        #endif
+        self.sceneDepthTexture = device.makeTexture(descriptor: depthDesc)
+    }
+    
+    /// Prepares and returns a `MetalRenderContext` for Pass 1 (Scene Geometry Pass).
+    /// - Parameter commandBuffer: The command buffer for the current frame.
+    /// - Returns: A `MetalRenderContext` targeting the offscreen color and depth textures.
+    public func beginScenePass(commandBuffer: any MTLCommandBuffer) -> MetalRenderContext? {
+        guard let colorTex = sceneColorTexture, let depthTex = sceneDepthTexture else {
+            return nil
+        }
+        
+        sceneRenderPassDescriptor.colorAttachments[0].texture = colorTex
+        sceneRenderPassDescriptor.colorAttachments[0].loadAction = .clear
+        sceneRenderPassDescriptor.colorAttachments[0].storeAction = .store
+        sceneRenderPassDescriptor.colorAttachments[0].clearColor = clearColor
+        
+        sceneRenderPassDescriptor.depthAttachment.texture = depthTex
+        sceneRenderPassDescriptor.depthAttachment.loadAction = .clear
+        sceneRenderPassDescriptor.depthAttachment.storeAction = .store
+        sceneRenderPassDescriptor.depthAttachment.clearDepth = 1.0
+        
+        return MetalRenderContext(renderPassDescriptor: sceneRenderPassDescriptor, commandBuffer: commandBuffer)
+    }
+    
+    /// Executes Pass 2 (Fullscreen Post-Process Pass) drawing into the destination drawable.
+    /// - Parameters:
+    ///   - commandBuffer: The Metal command buffer.
+    ///   - destinationDescriptor: The render pass descriptor targeting the drawable.
+    ///   - viewProjectionMatrix: The camera view-projection matrix from Pass 1.
+    ///   - cameraPosition: The camera world position.
+    ///   - playerPosition: The player character world position.
+    ///   - deltaTime: Delta time in seconds.
+    public func renderPostProcess(
+        commandBuffer: any MTLCommandBuffer,
+        destinationDescriptor: MTLRenderPassDescriptor,
+        viewProjectionMatrix: Matrix4x4,
+        cameraPosition: SIMD3<Float>,
+        playerPosition: SIMD3<Float> = .zero,
+        deltaTime: Double
+    ) {
+        guard let pipeline = pipelineState,
+              let colorTex = sceneColorTexture,
+              let depthTex = sceneDepthTexture else {
+            return
+        }
+        
+        uniforms.time += Float(deltaTime)
+        uniforms.cameraPosition = SIMD4<Float>(cameraPosition.x, cameraPosition.y, cameraPosition.z, 1.0)
+        uniforms.playerPosition = SIMD4<Float>(playerPosition.x, playerPosition.y, playerPosition.z, 1.0)
+        uniforms.inverseViewProjectionMatrix = viewProjectionMatrix.inverse.asSIMD
+        uniforms.viewProjectionMatrix = viewProjectionMatrix.asSIMD
+        
+        destinationDescriptor.colorAttachments[0].loadAction = .dontCare
+        destinationDescriptor.colorAttachments[0].storeAction = .store
+        // Disable depth write on destination pass
+        destinationDescriptor.depthAttachment.texture = nil
+        
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: destinationDescriptor) else {
+            return
+        }
+        
+        encoder.setRenderPipelineState(pipeline)
+        encoder.setFragmentTexture(colorTex, index: 0)
+        encoder.setFragmentTexture(depthTex, index: 1)
+        
+        var u = uniforms
+        encoder.setFragmentBytes(&u, length: MemoryLayout<PostApocalypticUniforms>.stride, index: 0)
+        
+        // Draw fullscreen triangle (3 procedural vertices)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        encoder.endEncoding()
+    }
+    
+    // MARK: - Pipeline Compilation
+    
+    private static func buildPipelineState(device: any MTLDevice, pixelFormat: MTLPixelFormat) -> (any MTLRenderPipelineState)? {
+        var library: (any MTLLibrary)? = nil
+        
+        // 1. Try Bundle.main
+        if let defaultLib = device.makeDefaultLibrary() {
+            if defaultLib.makeFunction(name: "postprocess_vertex") != nil {
+                library = defaultLib
+            }
+        }
+        
+        // 2. Try loading from file
+        if library == nil,
+           let url = Bundle.main.url(forResource: "PostProcessShaders", withExtension: "metal"),
+           let source = try? String(contentsOf: url, encoding: .utf8) {
+            library = try? device.makeLibrary(source: source, options: nil)
+        }
+        
+        // 3. Fallback to embedded shader source string
+        if library == nil {
+            library = try? device.makeLibrary(source: embeddedShaderSource, options: nil)
+        }
+        
+        guard let lib = library,
+              let vertFunc = lib.makeFunction(name: "postprocess_vertex"),
+              let fragFunc = lib.makeFunction(name: "postprocess_fragment") else {
+            print("PostApocalypticPostProcess: Failed to find required shader functions")
+            return nil
+        }
+        
+        let desc = MTLRenderPipelineDescriptor()
+        desc.label = "Post-Apocalyptic Moss Pipeline"
+        desc.vertexFunction = vertFunc
+        desc.fragmentFunction = fragFunc
+        desc.colorAttachments[0].pixelFormat = pixelFormat
+        
+        do {
+            return try device.makeRenderPipelineState(descriptor: desc)
+        } catch {
+            print("PostApocalypticPostProcess: Pipeline creation failed: \(error)")
+            return nil
+        }
+    }
+    
+    // Fallback embedded shader source ensuring 100% reliability regardless of bundle packaging
+    private static let embeddedShaderSource = """
+    #include <metal_stdlib>
+    using namespace metal;
+
+    struct VertexOutPostProcess {
+        float4 position [[position]];
+        float2 texCoord;
+    };
+
+    struct PostApocalypticUniforms {
+        float4x4 inverseViewProjectionMatrix;
+        float4x4 viewProjectionMatrix;
+        float4 cameraPosition;
+        float4 playerPosition;
+        float4 mossColorDark;
+        float4 mossColorLight;
+        float4 mossColorLichen;
+        float4 skyFogColor;
+        float mossDensity;
+        float mossScale;
+        float weatheringAmount;
+        float fogDensity;
+        float time;
+        float isEnabled;
+        float ssaoIntensity;
+        float ssaoRadius;
+        float ssaoBias;
+        float pad0;
+        float pad1;
+        float pad2;
+    };
+
+    vertex VertexOutPostProcess postprocess_vertex(uint vertexID [[vertex_id]]) {
+        VertexOutPostProcess out;
+        float2 positions[3] = {
+            float2(-1.0, -1.0),
+            float2( 3.0, -1.0),
+            float2(-1.0,  3.0)
+        };
+        float2 pos = positions[vertexID];
+        out.position = float4(pos, 0.0, 1.0);
+        out.texCoord = float2(pos.x * 0.5 + 0.5, 1.0 - (pos.y * 0.5 + 0.5));
+        return out;
+    }
+
+    namespace {
+        float2 hashGradient(int2 p) {
+            uint2 u = as_type<uint2>(p);
+            uint h = u.x * 374761393u + u.y * 668265263u;
+            h = (h ^ (h >> 13u)) * 1274126177u;
+            h = h ^ (h >> 16u);
+            float angle = float(h & 255u) * (6.28318530718 / 256.0);
+            return float2(cos(angle), sin(angle));
+        }
+
+        float perlinNoise(float2 p) {
+            int2 i = int2(floor(p));
+            float2 f = fract(p);
+            // Quintic Hermite interpolant for C2 continuity
+            float2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+            
+            float n00 = dot(hashGradient(i + int2(0, 0)), f - float2(0.0, 0.0));
+            float n10 = dot(hashGradient(i + int2(1, 0)), f - float2(1.0, 0.0));
+            float n01 = dot(hashGradient(i + int2(0, 1)), f - float2(0.0, 1.0));
+            float n11 = dot(hashGradient(i + int2(1, 1)), f - float2(1.0, 1.0));
+            
+            return mix(mix(n00, n10, u.x), mix(n01, n11, u.x), u.y);
+        }
+
+        float fbm(float2 p, int octaves) {
+            float value = 0.0;
+            float amplitude = 0.5;
+            float2x2 rot = float2x2(0.87758, 0.47942, -0.47942, 0.87758);
+            for (int i = 0; i < octaves; ++i) {
+                value += amplitude * perlinNoise(p);
+                p = rot * p * 2.02 + float2(17.3, 31.7);
+                amplitude *= 0.5;
+            }
+            return value * 0.5 + 0.5;
+        }
+
+        // MARK: - Screen Space Ambient Occlusion (SSAO)
+        float evaluateSSAO(
+            float3 worldPos,
+            float3 normal,
+            float2 screenUV,
+            texture2d<float> depthTex,
+            sampler ptSampler,
+            constant PostApocalypticUniforms &u
+        ) {
+            if (u.ssaoIntensity <= 0.001) {
+                return 1.0;
+            }
+
+            float camDist = length(worldPos - u.cameraPosition.xyz);
+            if (camDist > 350.0) {
+                return 1.0;
+            }
+
+            // Project world-space radius (ssaoRadius meters) to screen UV space
+            float screenRadius = (u.ssaoRadius / max(camDist, 1.0)) * 0.45;
+            screenRadius = clamp(screenRadius, 0.003, 0.09);
+
+            // Pseudo-random per-pixel rotation angle to break regular concentric pattern
+            float hash = fract(sin(dot(screenUV * 1000.0, float2(12.9898, 78.233))) * 43758.5453);
+            float phi = hash * 6.2831853;
+
+            float totalOcclusion = 0.0;
+            const int SAMPLE_COUNT = 16;
+            const float GOLDEN_ANGLE = 2.39996323;
+
+            for (int i = 0; i < SAMPLE_COUNT; ++i) {
+                float fi = float(i);
+                float theta = fi * GOLDEN_ANGLE + phi;
+                // Vogel disk quadratic radial distribution
+                float r = sqrt((fi + 0.5) / float(SAMPLE_COUNT));
+                float2 offsetUV = float2(cos(theta), sin(theta)) * (r * screenRadius);
+                float2 sampleUV = screenUV + offsetUV;
+
+                if (sampleUV.x < 0.0 || sampleUV.x > 1.0 || sampleUV.y < 0.0 || sampleUV.y > 1.0) {
+                    continue;
+                }
+
+                float sampleDepth = depthTex.sample(ptSampler, sampleUV).r;
+                if (sampleDepth >= 0.9999) {
+                    continue;
+                }
+
+                // Reconstruct neighbor 3D world position
+                float2 sNdc = float2(sampleUV.x * 2.0 - 1.0, (1.0 - sampleUV.y) * 2.0 - 1.0);
+                float4 sClip = float4(sNdc, sampleDepth, 1.0);
+                float4 sWorldH = u.inverseViewProjectionMatrix * sClip;
+                float3 sWorld = sWorldH.xyz / max(sWorldH.w, 1e-6);
+
+                float3 occluderVec = sWorld - worldPos;
+                float occluderDist = length(occluderVec);
+
+                // Skip self-samples and samples beyond influence radius
+                if (occluderDist < 0.03 || occluderDist > u.ssaoRadius) {
+                    continue;
+                }
+
+                float3 occluderDir = occluderVec / occluderDist;
+                float cosAngle = dot(normal, occluderDir);
+
+                // Occlusion only occurs if sample point lies above tangent plane horizon
+                if (cosAngle > u.ssaoBias) {
+                    float angleWeight = cosAngle - u.ssaoBias;
+                    float distFalloff = max(0.0, 1.0 - occluderDist / u.ssaoRadius);
+                    totalOcclusion += angleWeight * (distFalloff * distFalloff);
+                }
+            }
+
+            float rawAO = totalOcclusion / float(SAMPLE_COUNT);
+            float aoFactor = clamp(1.0 - rawAO * u.ssaoIntensity * 2.2, 0.0, 1.0);
+
+            // Smooth distance fade out towards 350m
+            float distFade = clamp(1.0 - (camDist - 150.0) / 200.0, 0.0, 1.0);
+            return mix(1.0, aoFactor, distFade);
+        }
+    }
+
+    fragment float4 postprocess_fragment(
+        VertexOutPostProcess in [[stage_in]],
+        texture2d<float> sceneColorTexture [[texture(0)]],
+        texture2d<float> sceneDepthTexture [[texture(1)]],
+        constant PostApocalypticUniforms &uniforms [[buffer(0)]]
+    ) {
+        constexpr sampler linearSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+        constexpr sampler pointSampler(coord::normalized, address::clamp_to_edge, filter::nearest);
+
+        float4 sceneColor = sceneColorTexture.sample(linearSampler, in.texCoord);
+        float depth = sceneDepthTexture.sample(pointSampler, in.texCoord).r;
+
+        if (uniforms.isEnabled <= 0.001) {
+            return sceneColor;
+        }
+
+        if (depth >= 0.9999) {
+            float skyGradient = clamp(in.texCoord.y * 1.6, 0.0, 1.0);
+            float skyClouds = fbm(in.texCoord * 4.0 + float2(uniforms.time * 0.015, 0.0), 3);
+            float3 skyHorizon = uniforms.skyFogColor.rgb * 1.15;
+            float3 skyZenith = uniforms.skyFogColor.rgb * 0.42;
+            float3 skyColor = mix(skyZenith, skyHorizon, skyGradient);
+            skyColor += (skyClouds - 0.5) * 0.06;
+            return float4(skyColor, 1.0);
+        }
+
+        float2 ndcXY = float2(in.texCoord.x * 2.0 - 1.0, (1.0 - in.texCoord.y) * 2.0 - 1.0);
+        float4 clipPos = float4(ndcXY, depth, 1.0);
+        float4 worldPosH = uniforms.inverseViewProjectionMatrix * clipPos;
+        float3 worldPos = worldPosH.xyz / max(worldPosH.w, 1e-6);
+
+        float3 dPdx = dfdx(worldPos);
+        float3 dPdy = dfdy(worldPos);
+        float3 normal = normalize(cross(dPdx, dPdy));
+        if (dot(normal, uniforms.cameraPosition.xyz - worldPos) < 0.0) {
+            normal = -normal;
+        }
+
+        // 3. Exclude Player Character Avatar and Beacon Ring from Moss Post-Processing
+        float playerDistXZ = length(worldPos.xz - uniforms.playerPosition.xz);
+        float playerDeltaY = worldPos.y - uniforms.playerPosition.y;
+        bool isPlayerAvatar = (playerDistXZ <= 0.60 && playerDeltaY >= 0.03 && playerDeltaY <= 2.10);
+        bool isPlayerBeacon = (playerDistXZ >= 0.65 && playerDistXZ <= 2.30 && playerDeltaY >= 0.05 && playerDeltaY <= 0.25 && normal.y > 0.7);
+        if (isPlayerAvatar || isPlayerBeacon) {
+            return sceneColor;
+        }
+
+        // 4. Multi-Octave Procedural Perlin Noise Moss Evaluation
+        // Macro patch noise (large organic clumps) & micro detail noise (leafy clusters)
+        float nMacro = fbm(worldPos.xz * uniforms.mossScale, 4);
+        float nMicro = fbm(worldPos.xz * uniforms.mossScale * 3.8, 3);
+        float clump = nMacro * 0.65 + nMicro * 0.35;
+
+        // Crack-following moss growth along concrete seams and asphalt fissures
+        float crackNoise = abs(perlinNoise(worldPos.xz * 0.18));
+        float crackGrowth = (1.0 - smoothstep(0.005, 0.035, crackNoise)) * 0.15 * uniforms.mossDensity;
+        clump += crackGrowth;
+
+        // Organic thresholding: produces distinct patches of overgrown moss rather than a solid sheet
+        float threshold = 0.42 + (1.0 - uniforms.mossDensity) * 0.22;
+        float mossMask = smoothstep(threshold - 0.05, threshold + 0.05, clump);
+        
+        // Flat-surface moss applied to upward-facing horizontal planes (roofs, roads, terrain)
+        mossMask *= smoothstep(0.25, 0.65, normal.y);
+
+        // 5. Vertical Wall Overgrowth: Foundation Creep, Climbing Ivy, Drainage Runoff, & Ledges
+        // Only apply wall effects to vertical and steeply angled surfaces (normal.y near 0)
+        float isWall = smoothstep(0.70, 0.25, abs(normal.y));
+
+        // Multi-faceted wall coordinate combining both horizontal facade dimensions
+        float wallCoordX = worldPos.x * abs(normal.z) + worldPos.z * abs(normal.x);
+        float2 wallUV = float2(wallCoordX, worldPos.y);
+
+        // A. Foundation & Mid-Wall Creep: climbing up to 14.0 meters from ground level
+        float wallBaseCreep = clamp(1.0 - worldPos.y / 14.0, 0.0, 1.0);
+        float creepNoise = fbm(wallUV * float2(0.28, 0.35), 4);
+        float wallCreep = wallBaseCreep * smoothstep(0.35, 0.62, creepNoise);
+
+        // B. Vertical Climbing Ivy & Vine Tendrils reaching up to 35+ meters
+        float vineNoise = abs(perlinNoise(wallUV * float2(0.55, 0.14)));
+        float vineCluster = fbm(wallUV * float2(0.16, 0.07), 3);
+        float vines = (1.0 - smoothstep(0.015, 0.085, vineNoise)) * smoothstep(0.32, 0.62, vineCluster);
+
+        // C. Vertical drainage runoff streaks from building rooftops and ledges
+        float streakNoise = fbm(wallUV * float2(0.32, 0.04), 3);
+        float streaks = smoothstep(0.48, 0.72, streakNoise) * 0.85;
+
+        // D. Window ledges, decorative moldings, and architectural crevices
+        float ledgeMoss = smoothstep(0.15, 0.50, normal.y) * smoothstep(0.85, 0.55, normal.y) * smoothstep(0.35, 0.65, nMicro);
+
+        // Total wall moss coverage
+        float totalWallMoss = (wallCreep * 1.35 + vines * 1.10 + streaks * 0.85 + ledgeMoss * 0.70) * uniforms.mossDensity * isWall;
+        totalWallMoss = clamp(totalWallMoss, 0.0, 1.0);
+        mossMask = max(mossMask, totalWallMoss);
+
+        // 6. Multi-Palette Botanical Shading with High Color Variation
+        // Botanical color definitions
+        float3 colDeepVelvet = float3(0.06, 0.16, 0.04);   // Dark, moist sheltered moss
+        float3 colLushEmerald = float3(0.24, 0.52, 0.13);  // Vibrant active spring moss
+        float3 colBuddingTip  = float3(0.58, 0.74, 0.16);  // Chartreuse youthful sporing highlights
+        float3 colGoldLichen  = float3(0.84, 0.68, 0.16);  // Warm xanthoria / golden sun lichen
+        float3 colSageLichen  = float3(0.38, 0.55, 0.44);  // Pale crustose mint/sage lichen
+        float3 colDryPeat     = float3(0.34, 0.22, 0.10);  // Decayed brownish-ochre dry vegetation
+        float3 colIvyGreen    = float3(0.11, 0.28, 0.10);  // Darker waxy ivy leaves on building facades
+
+        // Independent chromatic noise field (uncorrelated with mask boundaries)
+        float nColorMacro = fbm(worldPos.xz * uniforms.mossScale * 1.6 + float2(13.7, 47.1), 3);
+        float nColorMicro = perlinNoise(worldPos.xz * uniforms.mossScale * 6.8 + float2(89.3, 12.9));
+        float nLichenSpots = fbm(worldPos.xz * uniforms.mossScale * 3.4 + float2(51.2, 73.6), 3);
+
+        // Base vegetative gradient between deep velvet and vibrant emerald
+        float3 baseMoss = mix(colDeepVelvet, colLushEmerald, smoothstep(0.25, 0.70, nMicro));
+
+        // Blend in dry ochre/peat patches in exposed areas
+        baseMoss = mix(baseMoss, colDryPeat, smoothstep(0.18, 0.35, nColorMacro) * (1.0 - smoothstep(0.35, 0.52, nColorMacro)) * 0.85);
+
+        // Blend in golden xanthoria lichen colonies
+        baseMoss = mix(baseMoss, colGoldLichen, smoothstep(0.62, 0.78, nLichenSpots));
+
+        // Blend in pale sage/mint crustose lichen patches
+        baseMoss = mix(baseMoss, colSageLichen, smoothstep(0.68, 0.84, nColorMacro));
+
+        // Bright chartreuse budding tips / sporing highlights on micro crests
+        baseMoss = mix(baseMoss, colBuddingTip, smoothstep(0.35, 0.75, nColorMicro) * 0.65);
+
+        // For vertical building facades, blend towards deeper waxy ivy foliage
+        float3 mossColor = mix(baseMoss, colIvyGreen, isWall * 0.45);
+
+        // Damp dark decay halo along borders of moss patches
+        float edgeDecay = smoothstep(threshold - 0.12, threshold - 0.02, clump) * (1.0 - mossMask);
+        float3 decayedScene = mix(sceneColor.rgb, sceneColor.rgb * 0.40, edgeDecay * 0.75 * uniforms.weatheringAmount);
+
+        // 7. Weathering, Grime & Desaturation for Post-Apocalyptic Mood
+        float grimeNoise = fbm(worldPos.xz * 0.14 + worldPos.y * 0.08, 3);
+        float luma = dot(decayedScene, float3(0.299, 0.587, 0.114));
+        float3 weathered = mix(decayedScene, float3(luma * 0.90), uniforms.weatheringAmount * 0.35);
+        weathered *= (1.0 - grimeNoise * 0.18 * uniforms.weatheringAmount);
+
+        // Combine moss with weathered base scene
+        float3 sceneWithMoss = mix(weathered, mossColor, mossMask);
+
+        // 8. Screen Space Ambient Occlusion (SSAO)
+        // Darkens building base seams, inner corners, alleyways, and architectural crevices
+        float ao = evaluateSSAO(worldPos, normal, in.texCoord, sceneDepthTexture, pointSampler, uniforms);
+        float aoMultiplier = mix(0.35, 1.0, ao);
+        float3 occludedScene = sceneWithMoss * aoMultiplier;
+
+        // 9. Distance Fog (Atmospheric Post-Apocalyptic Haze)
+        float dist = length(worldPos - uniforms.cameraPosition.xyz);
+        float fog = 1.0 - exp(-dist * uniforms.fogDensity);
+        float3 finalScene = mix(occludedScene, uniforms.skyFogColor.rgb, clamp(fog, 0.0, 1.0));
+
+        // 10. Cinematic Edge Vignette
+        float2 vigUV = in.texCoord * (1.0 - in.texCoord);
+        float vignette = vigUV.x * vigUV.y * 15.0;
+        vignette = clamp(pow(vignette, 0.16), 0.0, 1.0);
+        finalScene *= mix(0.70, 1.0, vignette);
+
+        return float4(finalScene, 1.0);
+    }
+    """
+}

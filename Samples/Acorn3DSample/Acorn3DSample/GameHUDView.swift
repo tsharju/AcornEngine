@@ -70,9 +70,21 @@ public final class GameHUDView: UIView {
     /// Called when the user requests camera recentering behind the player.
     public var onRecenterCamera: (() -> Void)?
     
+    /// Called when the user toggles post-apocalyptic rendering mode.
+    public var onPostApocalypticToggled: ((Bool) -> Void)?
+    
+    /// Called when the user adjusts procedural moss density.
+    public var onMossDensityChanged: ((Float) -> Void)?
+    
+    /// Called when the user toggles Screen Space Ambient Occlusion (SSAO).
+    public var onSSAOToggled: ((Bool) -> Void)?
+    
     // MARK: - State
     
     public private(set) var currentSpeedPreset: MovementSpeedPreset = .run
+    public private(set) var isPostApocalypticEnabled: Bool = true
+    public private(set) var isSSAOEnabled: Bool = true
+    public private(set) var mossDensity: Float = 0.70
     
     // MARK: - UI Elements
     
@@ -87,6 +99,12 @@ public final class GameHUDView: UIView {
     private let joystickMaxRadius: CGFloat = 35.0
     
     private let controlsStackView = UIStackView()
+    private let postApocButton = UIButton(type: .system)
+    private let mossContainer = UIView()
+    private let mossMinusButton = UIButton(type: .system)
+    private let mossLabel = UILabel()
+    private let mossPlusButton = UIButton(type: .system)
+    private let ssaoButton = UIButton(type: .system)
     private let speedButton = UIButton(type: .system)
     private let cityButton = UIButton(type: .system)
     private let recenterButton = UIButton(type: .system)
@@ -238,6 +256,22 @@ public final class GameHUDView: UIView {
         controlsStackView.alignment = .trailing
         addSubview(controlsStackView)
         
+        // Post-Apocalyptic Toggle Button
+        configurePillButton(postApocButton, title: "☣️ Post-Apoc: ON")
+        postApocButton.backgroundColor = UIColor(red: 0.30, green: 0.22, blue: 0.10, alpha: 0.85)
+        postApocButton.addTarget(self, action: #selector(handlePostApocTapped), for: .touchUpInside)
+        controlsStackView.addArrangedSubview(postApocButton)
+        
+        // Moss Density Stepper Pill
+        setupMossControl()
+        controlsStackView.addArrangedSubview(mossContainer)
+        
+        // SSAO Toggle Button
+        configurePillButton(ssaoButton, title: "🕶️ SSAO: ON")
+        ssaoButton.backgroundColor = UIColor(red: 0.18, green: 0.28, blue: 0.38, alpha: 0.85)
+        ssaoButton.addTarget(self, action: #selector(handleSSAOTapped), for: .touchUpInside)
+        controlsStackView.addArrangedSubview(ssaoButton)
+        
         // Speed Button
         configurePillButton(speedButton, title: currentSpeedPreset.title)
         speedButton.addTarget(self, action: #selector(handleSpeedTapped), for: .touchUpInside)
@@ -293,6 +327,49 @@ public final class GameHUDView: UIView {
         cityButton.showsMenuAsPrimaryAction = true
     }
     
+    private func setupMossControl() {
+        mossContainer.translatesAutoresizingMaskIntoConstraints = false
+        mossContainer.backgroundColor = UIColor(white: 0.12, alpha: 0.75)
+        mossContainer.layer.cornerRadius = 18.0
+        mossContainer.layer.borderWidth = 1.0
+        mossContainer.layer.borderColor = UIColor(white: 1.0, alpha: 0.25).cgColor
+        mossContainer.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        
+        mossMinusButton.translatesAutoresizingMaskIntoConstraints = false
+        mossMinusButton.setTitle("−", for: .normal)
+        mossMinusButton.setTitleColor(.white, for: .normal)
+        mossMinusButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        mossMinusButton.addTarget(self, action: #selector(handleMossMinusTapped), for: .touchUpInside)
+        
+        let pct = Int(mossDensity * 100)
+        mossLabel.translatesAutoresizingMaskIntoConstraints = false
+        mossLabel.text = "Moss: \(pct)%"
+        mossLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+        mossLabel.textColor = UIColor(red: 0.55, green: 0.85, blue: 0.35, alpha: 1.0)
+        mossLabel.textAlignment = .center
+        
+        mossPlusButton.translatesAutoresizingMaskIntoConstraints = false
+        mossPlusButton.setTitle("+", for: .normal)
+        mossPlusButton.setTitleColor(.white, for: .normal)
+        mossPlusButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        mossPlusButton.addTarget(self, action: #selector(handleMossPlusTapped), for: .touchUpInside)
+        
+        let stack = UIStackView(arrangedSubviews: [mossMinusButton, mossLabel, mossPlusButton])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .horizontal
+        stack.spacing = 8.0
+        stack.alignment = .center
+        mossContainer.addSubview(stack)
+        
+        NSLayoutConstraint.activate([
+            mossMinusButton.widthAnchor.constraint(equalToConstant: 24),
+            mossPlusButton.widthAnchor.constraint(equalToConstant: 24),
+            stack.leadingAnchor.constraint(equalTo: mossContainer.leadingAnchor, constant: 10),
+            stack.trailingAnchor.constraint(equalTo: mossContainer.trailingAnchor, constant: -10),
+            stack.centerYAnchor.constraint(equalTo: mossContainer.centerYAnchor)
+        ])
+    }
+    
     // MARK: - Actions
     
     @objc private func handleJoystickPan(_ recognizer: UIPanGestureRecognizer) {
@@ -338,5 +415,37 @@ public final class GameHUDView: UIView {
     
     @objc private func handleRecenterTapped() {
         onRecenterCamera?()
+    }
+    
+    @objc private func handlePostApocTapped() {
+        isPostApocalypticEnabled.toggle()
+        let status = isPostApocalypticEnabled ? "ON" : "OFF"
+        postApocButton.setTitle("☣️ Post-Apoc: \(status)", for: .normal)
+        postApocButton.backgroundColor = isPostApocalypticEnabled ? UIColor(red: 0.30, green: 0.22, blue: 0.10, alpha: 0.85) : UIColor(white: 0.12, alpha: 0.75)
+        mossContainer.isHidden = !isPostApocalypticEnabled
+        ssaoButton.isHidden = !isPostApocalypticEnabled
+        onPostApocalypticToggled?(isPostApocalypticEnabled)
+    }
+    
+    @objc private func handleSSAOTapped() {
+        isSSAOEnabled.toggle()
+        let status = isSSAOEnabled ? "ON" : "OFF"
+        ssaoButton.setTitle("🕶️ SSAO: \(status)", for: .normal)
+        ssaoButton.backgroundColor = isSSAOEnabled ? UIColor(red: 0.18, green: 0.28, blue: 0.38, alpha: 0.85) : UIColor(white: 0.12, alpha: 0.75)
+        onSSAOToggled?(isSSAOEnabled)
+    }
+    
+    @objc private func handleMossMinusTapped() {
+        mossDensity = max(0.0, mossDensity - 0.15)
+        let pct = Int(round(mossDensity * 100))
+        mossLabel.text = "Moss: \(pct)%"
+        onMossDensityChanged?(mossDensity)
+    }
+    
+    @objc private func handleMossPlusTapped() {
+        mossDensity = min(1.0, mossDensity + 0.15)
+        let pct = Int(round(mossDensity * 100))
+        mossLabel.text = "Moss: \(pct)%"
+        onMossDensityChanged?(mossDensity)
     }
 }

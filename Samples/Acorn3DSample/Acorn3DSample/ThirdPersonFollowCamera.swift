@@ -118,8 +118,8 @@ public final class ThirdPersonFollowCamera {
         let camZ = targetPos.z + hDist * cos(yaw)
         let camPos = SIMD3<Float>(camX, camY, camZ)
         
-        // Target look-at point slightly above ground/feet
-        let lookTarget = targetPos + SIMD3<Float>(0, 2.0, 0)
+        // Target look-at point at character torso (1.0m above ground)
+        let lookTarget = targetPos + SIMD3<Float>(0, 1.0, 0)
         let dx = lookTarget.x - camPos.x
         let dy = camPos.y - lookTarget.y
         let dz = lookTarget.z - camPos.z
@@ -134,7 +134,26 @@ public final class ThirdPersonFollowCamera {
         var transform = world.component(ofType: TransformComponent.self, for: entity) ?? TransformComponent()
         transform.position = camPos
         transform.rotation = SIMD3<Float>(lookPitch, lookYaw, 0.0)
+        // Invert X to adapt right-handed world space (+X East, +Y Up, -Z North)
+        // to left-handed camera view space (+X Right, +Y Up, +Z Forward).
+        transform.scale = SIMD3<Float>(-1, 1, 1)
         world.addComponent(transform, to: entity)
+    }
+    
+    /// Smoothly rotates the camera yaw to follow behind the target's movement heading.
+    /// - Parameters:
+    ///   - targetHeading: The target heading in radians.
+    ///   - deltaTime: The elapsed frame time in seconds.
+    ///   - lerpRate: Follow interpolation speed (default 2.5).
+    public func followHeading(_ targetHeading: Float, deltaTime: Double, lerpRate: Float = 2.5) {
+        var diff = targetHeading - yaw
+        while diff < -.pi { diff += 2 * .pi }
+        while diff > .pi { diff -= 2 * .pi }
+        
+        let t = min(1.0, max(0.0, 1.0 - exp(-lerpRate * Float(deltaTime))))
+        yaw += diff * t
+        while yaw < -.pi { yaw += 2 * .pi }
+        while yaw > .pi { yaw -= 2 * .pi }
     }
     
     /// Orbits the camera around the target by the given yaw and pitch deltas.

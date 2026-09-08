@@ -13,6 +13,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
     
     private var engine: Engine!
     private var renderer: MetalRenderer!
+    private var postProcess: PostApocalypticPostProcess?
     private var commandQueue: MTLCommandQueue!
     private var lastRenderTime: CFTimeInterval = 0
     
@@ -37,6 +38,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
     
     // Camera gesture state
     private var lastPanTranslation: CGPoint = .zero
+    private var isCameraPanning: Bool = false
     
     // GPS tracking state
     private var isFirstLocationUpdate: Bool = true
@@ -60,8 +62,8 @@ class GameViewController: UIViewController, MTKViewDelegate {
         mtkView.device = defaultDevice
         mtkView.colorPixelFormat = .bgra8Unorm_srgb
         mtkView.depthStencilPixelFormat = .depth32Float
-        // Atmospheric sky clear color
-        mtkView.clearColor = MTLClearColor(red: 0.52, green: 0.72, blue: 0.90, alpha: 1.0)
+        // Atmospheric post-apocalyptic sky clear color
+        mtkView.clearColor = MTLClearColor(red: 0.30, green: 0.34, blue: 0.32, alpha: 1.0)
         
         guard let queue = defaultDevice.makeCommandQueue() else {
             print("GameViewController: Failed to create MTLCommandQueue")
@@ -71,6 +73,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         do {
             self.renderer = try MetalRenderer(device: defaultDevice)
+            self.postProcess = PostApocalypticPostProcess(device: defaultDevice, pixelFormat: mtkView.colorPixelFormat)
             self.engine = Engine(renderer: self.renderer)
             
             // Register engine systems
@@ -83,7 +86,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
             setupGestureRecognizers()
             setupLocationTracking()
             
-            // Set initial aspect ratio
+            // Set initial aspect ratio and post-process texture sizes
             self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
         } catch {
             print("GameViewController: Failed to initialize MetalRenderer: \(error)")
@@ -124,7 +127,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         self.followCamera = ThirdPersonFollowCamera.create(
             in: engine.world,
             target: playerCharacter.entity,
-            distance: 65.0,
+            distance: 42.0,
             pitch: 0.75, // ~43 degrees
             yaw: 0.0
         )
@@ -137,21 +140,21 @@ class GameViewController: UIViewController, MTKViewDelegate {
     }
     
     private func setupLighting() {
-        // Ambient Light: soft skylight
+        // Ambient Light: moody cool overcast skylight
         let ambientEntity = engine.world.createEntity()
         let ambientLight = LightComponent(
             type: .ambient,
-            color: SIMD3<Float>(1.0, 1.0, 1.0),
-            intensity: 0.45
+            color: SIMD3<Float>(0.65, 0.70, 0.66),
+            intensity: 0.50
         )
         engine.world.addComponent(ambientLight, to: ambientEntity)
         
-        // Directional Sun Light: warm sun angled to define 3D building walls and roofs
+        // Directional Sun Light: muted diffuse sunlight angled through overcast smog
         let sunEntity = engine.world.createEntity()
         let sunLight = LightComponent(
             type: .directional,
-            color: SIMD3<Float>(1.0, 0.96, 0.90),
-            intensity: 0.90
+            color: SIMD3<Float>(0.90, 0.86, 0.78),
+            intensity: 0.75
         )
         engine.world.addComponent(sunLight, to: sunEntity)
         
@@ -167,7 +170,8 @@ class GameViewController: UIViewController, MTKViewDelegate {
         #endif
         
         let groundHalfSize: Float = 5000.0
-        let groundColor = SIMD4<Float>(0.87, 0.88, 0.85, 1.0)
+        // Weathered overgrown wasteland earth
+        let groundColor = SIMD4<Float>(0.42, 0.45, 0.39, 1.0)
         let upNormal = SIMD3<Float>(0, 1, 0)
         
         let groundVertices: [Vertex] = [
@@ -219,6 +223,18 @@ class GameViewController: UIViewController, MTKViewDelegate {
         hud.onRecenterCamera = { [weak self] in
             guard let self = self else { return }
             self.followCamera.resetBehind(heading: self.playerCharacter.heading)
+        }
+        
+        hud.onPostApocalypticToggled = { [weak self] isEnabled in
+            self?.postProcess?.uniforms.isEnabled = isEnabled ? 1.0 : 0.0
+        }
+        
+        hud.onMossDensityChanged = { [weak self] newDensity in
+            self?.postProcess?.uniforms.mossDensity = newDensity
+        }
+        
+        hud.onSSAOToggled = { [weak self] isEnabled in
+            self?.postProcess?.uniforms.ssaoIntensity = isEnabled ? 1.25 : 0.0
         }
         
         self.hudView = hud
@@ -288,8 +304,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         switch recognizer.state {
         case .began:
+            isCameraPanning = true
             lastPanTranslation = translation
         case .changed:
+            isCameraPanning = true
             let dx = Float(translation.x - lastPanTranslation.x)
             let dy = Float(translation.y - lastPanTranslation.y)
             lastPanTranslation = translation
@@ -297,6 +315,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
             let sensitivity: Float = 0.006
             followCamera.orbit(deltaYaw: -dx * sensitivity, deltaPitch: -dy * sensitivity)
         case .ended, .cancelled:
+            isCameraPanning = false
             lastPanTranslation = .zero
         default:
             break
@@ -365,6 +384,8 @@ class GameViewController: UIViewController, MTKViewDelegate {
             camera.aspectRatio = aspect
             engine.world.addComponent(camera, to: entityId)
         }
+        
+        postProcess?.updateDrawableSize(size)
     }
     
     func draw(in view: MTKView) {
@@ -395,7 +416,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
         )
         playerCharacter.updateWorld(world: engine.world)
         
-        // 3. Update third-person follow camera
+        // 3. Update third-person follow camera (smoothly follow movement direction with lerp)
+        if !isCameraPanning && (abs(activeInput.x) > 0.05 || abs(activeInput.y) > 0.05) {
+            followCamera.followHeading(playerCharacter.heading, deltaTime: deltaTime, lerpRate: 2.2)
+        }
         followCamera.update(world: engine.world)
         
         // 4. Update MapTileSystem with player's GPS position
@@ -416,11 +440,33 @@ class GameViewController: UIViewController, MTKViewDelegate {
         hudView.updateGPS(playerCharacter.currentGPS)
         hudView.updateTile(coordinate: currentTile, loadedCount: mapTileSystem.activeTileEntities.count)
         
-        // 7. Render 3D scene
-        let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
-        _ = context.getOrCreateEncoder()
-        engine.render(context: context)
-        context.endEncoding()
+        // 7. Render 3D scene (Pass 1: Offscreen Scene Pass & Pass 2: Post-Process Pass)
+        let camPos = engine.world.component(ofType: TransformComponent.self, for: followCamera.entity)?.position ?? SIMD3<Float>(0, 30, 60)
+        let camera = engine.world.component(ofType: CameraComponent.self, for: followCamera.entity) ?? CameraComponent(fovY: .pi / 3.0, nearZ: 0.5, farZ: 3000.0)
+        let viewMatrix = engine.world.worldMatrix(for: followCamera.entity).inverse
+        let projMatrix = camera.projectionMatrix()
+        let viewProj = projMatrix * viewMatrix
+        
+        if let pp = postProcess, let sceneContext = pp.beginScenePass(commandBuffer: commandBuffer) {
+            _ = sceneContext.getOrCreateEncoder()
+            engine.render(context: sceneContext)
+            sceneContext.endEncoding()
+            
+            // Pass 2: Fullscreen Post-Process Pass (Moss & Post-Apocalyptic Atmosphere)
+            pp.renderPostProcess(
+                commandBuffer: commandBuffer,
+                destinationDescriptor: descriptor,
+                viewProjectionMatrix: viewProj,
+                cameraPosition: camPos,
+                playerPosition: playerCharacter.worldPosition,
+                deltaTime: deltaTime
+            )
+        } else {
+            let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
+            _ = context.getOrCreateEncoder()
+            engine.render(context: context)
+            context.endEncoding()
+        }
         
         commandBuffer.present(drawable)
         commandBuffer.commit()

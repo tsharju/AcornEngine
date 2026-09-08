@@ -169,7 +169,7 @@ public final class PlayerCharacter {
         #if DEBUG
         world.setName("PlayerBeaconRing", for: beaconEntity)
         #endif
-        let beaconTransform = TransformComponent(position: SIMD3<Float>(0, 0.35, 0))
+        let beaconTransform = TransformComponent(position: SIMD3<Float>(0, 0.08, 0))
         world.addComponent(beaconTransform, to: beaconEntity)
         world.addComponent(ParentComponent(parent: playerEntity), to: beaconEntity)
         
@@ -309,8 +309,8 @@ public final class PlayerCharacter {
     private static func generateBeaconRingVertices() -> [Vertex] {
         var vertices: [Vertex] = []
         let segments = 36
-        let innerRadius: Float = 2.6
-        let outerRadius: Float = 3.6
+        let innerRadius: Float = 0.85
+        let outerRadius: Float = 1.20
         let ringColor = SIMD4<Float>(0.2, 0.85, 1.0, 0.95) // Bright cyan
         let pointerColor = SIMD4<Float>(1.0, 0.85, 0.15, 1.0) // Bright gold
         let upNormal = SIMD3<Float>(0, 1, 0)
@@ -347,9 +347,9 @@ public final class PlayerCharacter {
         }
         
         // Front compass arrow tip pointing forward (-Z)
-        let tip = SIMD3<Float>(0, 0.05, -outerRadius - 2.0)
-        let leftBase = SIMD3<Float>(-1.0, 0.05, -outerRadius + 0.3)
-        let rightBase = SIMD3<Float>(1.0, 0.05, -outerRadius + 0.3)
+        let tip = SIMD3<Float>(0, 0.02, -outerRadius - 0.70)
+        let leftBase = SIMD3<Float>(-0.35, 0.02, -outerRadius + 0.10)
+        let rightBase = SIMD3<Float>(0.35, 0.02, -outerRadius + 0.10)
         
         vertices.append(contentsOf: [
             Vertex(position: tip, color: pointerColor, texCoord: .zero, normal: upNormal),
@@ -366,21 +366,21 @@ public final class PlayerCharacter {
     
     private static func generateAvatarVertices() -> [Vertex] {
         var vertices: [Vertex] = []
-        // Body cylinder (radius 1.0, height 2.6)
+        // Body cylinder (radius 0.25, height 1.40) - representing average adult male torso & legs
         let bodyColor = SIMD4<Float>(0.1, 0.55, 1.0, 1.0)
-        let bodyVerts = BasicShapeGenerator.generateCylinder(radius: 1.0, height: 2.6, segments: 20, color: bodyColor)
+        let bodyVerts = BasicShapeGenerator.generateCylinder(radius: 0.25, height: 1.40, segments: 20, color: bodyColor)
         for v in bodyVerts {
             var vOffset = v
-            vOffset.position.y += 1.3 // Sit on ground
+            vOffset.position.y += 0.70 // Sit on ground (spans y: 0.0 to 1.40)
             vertices.append(vOffset)
         }
         
-        // Head sphere (radius 0.65)
+        // Head sphere (radius 0.19) - top of head reaches 1.78m (average adult male height)
         let headColor = SIMD4<Float>(1.0, 0.85, 0.25, 1.0)
-        let headVerts = BasicShapeGenerator.generateSphere(radius: 0.65, rings: 12, segments: 20, color: headColor)
+        let headVerts = BasicShapeGenerator.generateSphere(radius: 0.19, rings: 12, segments: 20, color: headColor)
         for v in headVerts {
             var vOffset = v
-            vOffset.position.y += 3.2 // Above body
+            vOffset.position.y += 1.59 // Centered at 1.59m (spans y: 1.40 to 1.78)
             vertices.append(vOffset)
         }
         

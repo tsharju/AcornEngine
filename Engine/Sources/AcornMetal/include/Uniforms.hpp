@@ -52,4 +52,13 @@ namespace Acorn {
         simd_float4 colorTint;
         simd_float4 uvRect;
     };
+
+    struct RoadUniforms {
+        simd_float4x4 modelViewProjectionMatrix;
+        simd_float4 outlineColor;
+        float outlineWidth;
+        float edgeWidth;
+        float widthScale;
+        float renderMode;
+    };
 }

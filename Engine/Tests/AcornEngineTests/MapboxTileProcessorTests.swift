@@ -282,7 +282,7 @@ struct MapboxTileProcessorTests {
         }
     }
     
-    @Test("Unknown layers (e.g. roads, admin) are ignored and not extruded as buildings")
+    @Test("Unknown layers (e.g. admin) are ignored and not extruded as buildings")
     func testUnknownLayerIgnored() async {
         var outerRing = AcornMap.PolygonRing()
         outerRing.addPoint(1000.0, 1000.0)
@@ -291,7 +291,7 @@ struct MapboxTileProcessorTests {
         outerRing.addPoint(1000.0, 2000.0)
         
         let testTileRes = AcornMap.MapboxTileProcessor.createTestTile(
-            std.__1.string("roads"),
+            std.__1.string("admin"),
             outerRing,
             10.0,
             0.0
@@ -311,4 +311,229 @@ struct MapboxTileProcessorTests {
         #expect(mesh.vertices.isEmpty)
         #expect(mesh.indices.isEmpty)
     }
+    
+    @Test("Road linestring processing generates ribbon geometry with width and outline attributes")
+    func testRoadLineStringProcessing() async {
+        var roadPoints = AcornMap.PolygonRing()
+        roadPoints.addPoint(500.0, 500.0)
+        roadPoints.addPoint(1500.0, 500.0)
+        roadPoints.addPoint(2500.0, 1500.0)
+        
+        let testTileRes = AcornMap.MapboxTileProcessor.createTestRoadTile(
+            std.__1.string("road"),
+            roadPoints,
+            std.__1.string("primary")
+        )
+        #expect(testTileRes.success)
+        
+        var tileBytes = [UInt8](repeating: 0, count: testTileRes.size())
+        tileBytes.withUnsafeMutableBufferPointer { buf in
+            testTileRes.copyTo(buf.baseAddress)
+        }
+        let tileData = Data(tileBytes)
+        
+        let loader = MapTileLoader()
+        let coord = TileCoordinate(zoom: 15, x: 100, y: 100)
+        let meshData = await loader.processTileData(data: tileData, coordinate: coord, referenceLatitude: 60.0)
+        
+        #expect(meshData.surfaceMesh.vertices.isEmpty)
+        let roadMesh = meshData.roadMesh
+        
+        // 3 points on the road path -> 2 vertices per point = 6 vertices
+        #expect(roadMesh.vertices.count == 6)
+        // 2 segments -> 2 quads -> 4 triangles = 12 indices
+        #expect(roadMesh.indices.count == 12)
+        
+        for v in roadMesh.vertices {
+            // Road ribbon should be slightly elevated above terrain
+            #expect(abs(v.position.y - 0.08) < 0.001)
+            // Primary road base width is 10.5 meters (miter joints may scale slightly up)
+            #expect(v.normal.y >= 10.5 - 0.001)
+            // Ribbon side in texCoord.x should be -1.0 or +1.0
+            #expect(abs(abs(v.texCoord.x) - 1.0) < 0.001)
+            // Outline ratio in texCoord.y should be 0.18
+            #expect(abs(v.texCoord.y - 0.18) < 0.001)
+        }
+    }
+    
+    @Test("Road classification styles map correctly to widths")
+    func testRoadClassificationStyles() async {
+        let classesAndExpectedWidths: [(String, Float)] = [
+            ("motorway", 14.0),
+            ("trunk", 12.0),
+            ("primary", 10.5),
+            ("street", 6.0),
+            ("service", 4.5)
+        ]
+        
+        for (roadClass, expectedWidth) in classesAndExpectedWidths {
+            var roadPoints = AcornMap.PolygonRing()
+            roadPoints.addPoint(100.0, 100.0)
+            roadPoints.addPoint(500.0, 100.0)
+            
+            let testTileRes = AcornMap.MapboxTileProcessor.createTestRoadTile(
+                std.__1.string("road"),
+                roadPoints,
+                std.__1.string(roadClass)
+            )
+            #expect(testTileRes.success)
+            
+            var tileBytes = [UInt8](repeating: 0, count: testTileRes.size())
+            tileBytes.withUnsafeMutableBufferPointer { buf in
+                testTileRes.copyTo(buf.baseAddress)
+            }
+            let tileData = Data(tileBytes)
+            
+            let loader = MapTileLoader()
+            let coord = TileCoordinate(zoom: 15, x: 100, y: 100)
+            let meshData = await loader.processTileData(data: tileData, coordinate: coord, referenceLatitude: 60.0)
+            let roadMesh = meshData.roadMesh
+            
+            #expect(!roadMesh.vertices.isEmpty)
+            for v in roadMesh.vertices {
+                #expect(abs(v.normal.y - expectedWidth) < 0.001)
+            }
+        }
+    }
+    
+    @Test("Non-car road layers (pedestrian, path, cycleway) are filtered out by carOnly configuration")
+    func testNonCarRoadsFilteredOut() async {
+        let nonCarClasses = ["pedestrian", "path", "cycleway", "footway", "steps", "track"]
+        
+        for nonCarClass in nonCarClasses {
+            var roadPoints = AcornMap.PolygonRing()
+            roadPoints.addPoint(100.0, 100.0)
+            roadPoints.addPoint(500.0, 100.0)
+            
+            let testTileRes = AcornMap.MapboxTileProcessor.createTestRoadTile(
+                std.__1.string("road"),
+                roadPoints,
+                std.__1.string(nonCarClass)
+            )
+            #expect(testTileRes.success)
+            
+            var tileBytes = [UInt8](repeating: 0, count: testTileRes.size())
+            tileBytes.withUnsafeMutableBufferPointer { buf in
+                testTileRes.copyTo(buf.baseAddress)
+            }
+            let tileData = Data(tileBytes)
+            
+            // Default loader uses .carOnly
+            let loader = MapTileLoader(roadConfiguration: .carOnly)
+            let coord = TileCoordinate(zoom: 15, x: 100, y: 100)
+            let meshData = await loader.processTileData(data: tileData, coordinate: coord, referenceLatitude: 60.0)
+            
+            // All non-car layers must be omitted completely
+            #expect(meshData.roadMesh.vertices.isEmpty, "Road class '\(nonCarClass)' should be filtered out by carOnly configuration")
+            #expect(meshData.roadMesh.indices.isEmpty)
+        }
+    }
+    
+    @Test("Non-car road layers are rendered when using allRoads configuration")
+    func testAllRoadsConfigurationIncludesNonCarLayers() async {
+        var roadPoints = AcornMap.PolygonRing()
+        roadPoints.addPoint(100.0, 100.0)
+        roadPoints.addPoint(500.0, 100.0)
+        
+        let testTileRes = AcornMap.MapboxTileProcessor.createTestRoadTile(
+            std.__1.string("road"),
+            roadPoints,
+            std.__1.string("path")
+        )
+        #expect(testTileRes.success)
+        
+        var tileBytes = [UInt8](repeating: 0, count: testTileRes.size())
+        tileBytes.withUnsafeMutableBufferPointer { buf in
+            testTileRes.copyTo(buf.baseAddress)
+        }
+        let tileData = Data(tileBytes)
+        
+        let loader = MapTileLoader(roadConfiguration: .allRoads)
+        let coord = TileCoordinate(zoom: 15, x: 100, y: 100)
+        let meshData = await loader.processTileData(data: tileData, coordinate: coord, referenceLatitude: 60.0)
+        
+        #expect(!meshData.roadMesh.vertices.isEmpty)
+        for v in meshData.roadMesh.vertices {
+            #expect(abs(v.normal.y - 3.0) < 0.001)
+        }
+    }
+    
+    @Test("Custom road configuration allows modifying widths and filtering")
+    func testCustomRoadConfiguration() async {
+        var roadPoints = AcornMap.PolygonRing()
+        roadPoints.addPoint(100.0, 100.0)
+        roadPoints.addPoint(500.0, 100.0)
+        
+        let testTileRes = AcornMap.MapboxTileProcessor.createTestRoadTile(
+            std.__1.string("road"),
+            roadPoints,
+            std.__1.string("primary")
+        )
+        #expect(testTileRes.success)
+        
+        var tileBytes = [UInt8](repeating: 0, count: testTileRes.size())
+        tileBytes.withUnsafeMutableBufferPointer { buf in
+            testTileRes.copyTo(buf.baseAddress)
+        }
+        let tileData = Data(tileBytes)
+        
+        // Customize primary road width to 18.0m
+        var customConfig = RoadConfiguration.carOnly
+        customConfig.setStyle(RoadLayerStyle(width: 18.0), for: "primary")
+        
+        let loader = MapTileLoader(roadConfiguration: customConfig)
+        let coord = TileCoordinate(zoom: 15, x: 100, y: 100)
+        let meshData = await loader.processTileData(data: tileData, coordinate: coord, referenceLatitude: 60.0)
+        
+        #expect(!meshData.roadMesh.vertices.isEmpty)
+        for v in meshData.roadMesh.vertices {
+            #expect(abs(v.normal.y - 18.0) < 0.001)
+        }
+    }
+    
+    @Test("Road junction caps generation produces circular fan caps at endpoints")
+    func testRoadJunctionCapGeneration() async {
+        var roadPoints = AcornMap.PolygonRing()
+        roadPoints.addPoint(500.0, 500.0)
+        roadPoints.addPoint(1500.0, 500.0)
+        roadPoints.addPoint(2500.0, 1500.0)
+        
+        let testTileRes = AcornMap.MapboxTileProcessor.createTestRoadTile(
+            std.__1.string("road"),
+            roadPoints,
+            std.__1.string("primary"),
+            true // generateCaps = true
+        )
+        #expect(testTileRes.success)
+        
+        var tileBytes = [UInt8](repeating: 0, count: testTileRes.size())
+        tileBytes.withUnsafeMutableBufferPointer { buf in
+            testTileRes.copyTo(buf.baseAddress)
+        }
+        let tileData = Data(tileBytes)
+        
+        let loader = MapTileLoader()
+        let coord = TileCoordinate(zoom: 15, x: 100, y: 100)
+        let meshData = await loader.processTileData(data: tileData, coordinate: coord, referenceLatitude: 60.0)
+        
+        let roadMesh = meshData.roadMesh
+        // 3 line points -> 6 ribbon vertices + 2 caps * 9 vertices (1 center + 8 perimeter) = 24 vertices
+        #expect(roadMesh.vertices.count == 24)
+        // 2 segments -> 12 ribbon indices + 2 caps * (8 * 3 = 24) = 60 indices
+        #expect(roadMesh.indices.count == 60)
+        
+        // Check that we have center vertices with u = 0.0 and perimeter vertices with u = 1.0
+        var centerCapCount = 0
+        var perimCapCount = 0
+        for v in roadMesh.vertices {
+            if v.texCoord.x == 0.0 && v.normal.x == 0.0 && v.normal.z == 0.0 {
+                centerCapCount += 1
+            } else if v.texCoord.x == 1.0 && (v.normal.x != 0.0 || v.normal.z != 0.0) {
+                perimCapCount += 1
+            }
+        }
+        #expect(centerCapCount == 2)
+        #expect(perimCapCount >= 16)
+    }
 }
+

@@ -377,6 +377,34 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
             )
         }
     }
+    
+    /// Renders roads using the dedicated road shader with line width and outline.
+    public func renderRoads(
+        mesh: any Mesh,
+        uniforms: RoadUniforms,
+        context: any RenderContext
+    ) {
+        guard let metalContext = context as? MetalRenderContext,
+              let metalMesh = mesh as? MetalMesh else {
+            return
+        }
+        
+        guard let encoder = metalContext.getOrCreateEncoder() else {
+            return
+        }
+        
+        let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
+        
+        var cxxUniforms = Acorn.RoadUniforms()
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix.asSIMD
+        cxxUniforms.outlineColor = uniforms.outlineColor
+        cxxUniforms.outlineWidth = uniforms.outlineWidth
+        cxxUniforms.edgeWidth = uniforms.edgeWidth
+        cxxUniforms.widthScale = uniforms.widthScale
+        cxxUniforms.renderMode = uniforms.renderMode
+        
+        cxxRenderer.pointee.renderRoads(metalMesh.cxxMesh, cxxUniforms, encoderPtr)
+    }
 }
 #endif
 

@@ -136,4 +136,32 @@ struct MapTileSystemTests {
         // Tile (100, 100) should NOT have been spawned because camera moved out of range
         #expect(system.activeTileEntities[startCoord] == nil)
     }
+    
+    @Test("Tile spawning with RoadComponent when roadMesh is present")
+    func testTileSpawningWithRoadComponent() {
+        let world = World()
+        let helsinki = GPSCoordinate(latitude: 60.1699, longitude: 24.9384)
+        let system = MapTileSystem(initialReference: helsinki, zoomLevel: 15, loadRadius: 1)
+        let coord = TileCoordinate(coordinate: helsinki, zoom: 15)
+        
+        let surfaceMesh = CPUMeshData(
+            vertices: [Vertex(position: SIMD3<Float>(0, 0, 0), color: SIMD4<Float>(1, 1, 1, 1))],
+            indices: [0]
+        )
+        let roadMesh = CPUMeshData(
+            vertices: [
+                Vertex(position: SIMD3<Float>(0, 0.05, 0), color: .one, texCoord: SIMD2<Float>(-1, 0.18), normal: SIMD3<Float>(0, 6.0, 1)),
+                Vertex(position: SIMD3<Float>(0, 0.05, 0), color: .one, texCoord: SIMD2<Float>(1, 0.18), normal: SIMD3<Float>(0, 6.0, 1))
+            ],
+            indices: [0, 1]
+        )
+        let tileMeshData = TileMeshData(surfaceMesh: surfaceMesh, roadMesh: roadMesh)
+        
+        let entity = system.spawnTile(coord: coord, tileMeshData: tileMeshData, world: world)
+        
+        let roadComp = world.component(ofType: RoadComponent.self, for: entity)
+        #expect(roadComp != nil)
+        #expect(roadComp?.outlineWidth == 0.18)
+        #expect(roadComp?.widthScale == 1.0)
+    }
 }

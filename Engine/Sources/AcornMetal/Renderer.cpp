@@ -13,7 +13,7 @@ namespace Acorn {
 
     AcornMetalRenderer::AcornMetalRenderer(void* devicePtr, void* libraryPtr, unsigned long pixelFormat)
         : device((MTL::Device*)devicePtr), library((MTL::Library*)libraryPtr), pixelFormat(pixelFormat), defaultPipelineState(nullptr),
-          instancedMeshPipelineState(nullptr), instancedSpritePipelineState(nullptr) {
+          instancedMeshPipelineState(nullptr), instancedSpritePipelineState(nullptr), roadPipelineState(nullptr), roadDepthStencilState(nullptr) {
         
         if (this->device) ((MTL::Device*)this->device)->retain();
         if (this->library) ((MTL::Library*)this->library)->retain();
@@ -46,6 +46,12 @@ namespace Acorn {
         transparentDepthDesc->setDepthWriteEnabled(false);
         transparentDepthStencilState = ((MTL::Device*)device)->newDepthStencilState(transparentDepthDesc);
         transparentDepthDesc->release();
+        
+        MTL::DepthStencilDescriptor* roadDepthDesc = MTL::DepthStencilDescriptor::alloc()->init();
+        roadDepthDesc->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
+        roadDepthDesc->setDepthWriteEnabled(false);
+        roadDepthStencilState = ((MTL::Device*)device)->newDepthStencilState(roadDepthDesc);
+        roadDepthDesc->release();
         
         // SDF Pipeline
         MTL::Function* sdfVertexFunction = ((MTL::Library*)library)->newFunction(NS::String::string("sdf_vertex", NS::UTF8StringEncoding));
@@ -152,6 +158,35 @@ namespace Acorn {
         instancedSpritePipelineDescriptor->release();
         if (instancedSpriteVertexFunction) instancedSpriteVertexFunction->release();
         if (instancedSpriteFragmentFunction) instancedSpriteFragmentFunction->release();
+
+        // Road Pipeline
+        MTL::Function* roadVertexFunction = ((MTL::Library*)library)->newFunction(NS::String::string("road_vertex", NS::UTF8StringEncoding));
+        MTL::Function* roadFragmentFunction = ((MTL::Library*)library)->newFunction(NS::String::string("road_fragment", NS::UTF8StringEncoding));
+        
+        MTL::RenderPipelineDescriptor* roadPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+        roadPipelineDescriptor->setLabel(NS::String::string("Road Pipeline", NS::UTF8StringEncoding));
+        roadPipelineDescriptor->setVertexFunction(roadVertexFunction);
+        roadPipelineDescriptor->setFragmentFunction(roadFragmentFunction);
+        
+        MTL::RenderPipelineColorAttachmentDescriptor* roadColorAttachment = roadPipelineDescriptor->colorAttachments()->object(0);
+        roadColorAttachment->setPixelFormat((MTL::PixelFormat)pixelFormat);
+        roadColorAttachment->setBlendingEnabled(true);
+        roadColorAttachment->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+        roadColorAttachment->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+        roadColorAttachment->setRgbBlendOperation(MTL::BlendOperationAdd);
+        roadColorAttachment->setSourceAlphaBlendFactor(MTL::BlendFactorSourceAlpha);
+        roadColorAttachment->setDestinationAlphaBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+        roadColorAttachment->setAlphaBlendOperation(MTL::BlendOperationAdd);
+        
+        roadPipelineDescriptor->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
+        
+        roadPipelineState = ((MTL::Device*)device)->newRenderPipelineState(roadPipelineDescriptor, &error);
+        if (error) {
+            std::cerr << "Failed to create road pipeline state: " << error->localizedDescription()->utf8String() << std::endl;
+        }
+        roadPipelineDescriptor->release();
+        if (roadVertexFunction) roadVertexFunction->release();
+        if (roadFragmentFunction) roadFragmentFunction->release();
     }
 
     AcornMetalRenderer::~AcornMetalRenderer() {
@@ -159,10 +194,12 @@ namespace Acorn {
         if (this->library) ((MTL::Library*)this->library)->release();
         if (this->depthStencilState) ((MTL::DepthStencilState*)this->depthStencilState)->release();
         if (this->transparentDepthStencilState) ((MTL::DepthStencilState*)this->transparentDepthStencilState)->release();
+        if (this->roadDepthStencilState) ((MTL::DepthStencilState*)this->roadDepthStencilState)->release();
         if (this->sdfTextPipelineState) ((MTL::RenderPipelineState*)this->sdfTextPipelineState)->release();
         if (this->spritePipelineState) ((MTL::RenderPipelineState*)this->spritePipelineState)->release();
         if (this->instancedMeshPipelineState) ((MTL::RenderPipelineState*)this->instancedMeshPipelineState)->release();
         if (this->instancedSpritePipelineState) ((MTL::RenderPipelineState*)this->instancedSpritePipelineState)->release();
+        if (this->roadPipelineState) ((MTL::RenderPipelineState*)this->roadPipelineState)->release();
         if (this->defaultPipelineState) ((MTL::RenderPipelineState*)this->defaultPipelineState)->release();
         if (this->vertexFunction) ((MTL::Function*)this->vertexFunction)->release();
         if (this->fragmentFunction) ((MTL::Function*)this->fragmentFunction)->release();
@@ -314,5 +351,23 @@ namespace Acorn {
         }
         
         encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, (NS::UInteger)0, (NS::UInteger)mesh->getVertexCount(), instanceCount);
+    }
+
+    void AcornMetalRenderer::renderRoads(AcornMetalMesh* mesh, const RoadUniforms& uniforms, void* encoderPtr) {
+        MTL::RenderCommandEncoder* encoder = (MTL::RenderCommandEncoder*)encoderPtr;
+        if (!mesh || !encoder || !roadPipelineState) return;
+        
+        encoder->setRenderPipelineState((MTL::RenderPipelineState*)roadPipelineState);
+        encoder->setDepthStencilState((MTL::DepthStencilState*)roadDepthStencilState);
+        
+        encoder->setVertexBuffer((MTL::Buffer*)mesh->getVertexBuffer(), 0, 0);
+        encoder->setVertexBytes(&uniforms, sizeof(RoadUniforms), 1);
+        encoder->setFragmentBytes(&uniforms, sizeof(RoadUniforms), 0);
+        
+        if (mesh->getIndexBuffer()) {
+            encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, mesh->getIndexCount(), MTL::IndexTypeUInt32, (MTL::Buffer*)mesh->getIndexBuffer(), 0);
+        } else {
+            encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, (NS::UInteger)0, (NS::UInteger)mesh->getVertexCount());
+        }
     }
 }

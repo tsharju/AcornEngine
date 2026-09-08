@@ -2,10 +2,30 @@ import Foundation
 import Compression
 import AcornMapGeometry
 
+/// Container holding processed meshes for a tile, separating 3D surfaces (buildings, water, landuse) from 2D road networks.
+public struct TileMeshData: Sendable {
+    /// 3D extruded building and terrain/water surface mesh.
+    public var surfaceMesh: CPUMeshData
+    /// Road ribbon mesh containing line segments with road-type-based widths and outlines.
+    public var roadMesh: CPUMeshData
+    
+    /// Initializes new tile mesh data.
+    public init(surfaceMesh: CPUMeshData = CPUMeshData(), roadMesh: CPUMeshData = CPUMeshData()) {
+        self.surfaceMesh = surfaceMesh
+        self.roadMesh = roadMesh
+    }
+}
+
 /// Actor responsible for asynchronously loading, decompressing, and processing Mapbox Vector Tiles into engine meshes.
 public actor MapTileLoader {
-    /// Initializes a new MapTileLoader.
-    public init() {}
+    /// Configuration specifying which road layers are rendered and their styles.
+    public var roadConfiguration: RoadConfiguration
+    
+    /// Initializes a new MapTileLoader with the specified road configuration.
+    /// - Parameter roadConfiguration: Road rendering configuration (defaults to `.carOnly`).
+    public init(roadConfiguration: RoadConfiguration = .carOnly) {
+        self.roadConfiguration = roadConfiguration
+    }
     
     /// Decompresses GZIP-compressed data using native Apple libcompression, with fallback to zlib.
     /// Returns the original data if not GZIP-compressed.
@@ -115,31 +135,39 @@ public actor MapTileLoader {
         return nil
     }
     
-    /// Processes raw tile data (compressed or uncompressed MVT bytes) into CPUMeshData.
+    /// Processes raw tile data into both 3D surface mesh and 2D road network mesh.
     /// - Parameters:
     ///   - data: The raw vector tile byte data (.pbf / .mvt).
     ///   - coordinate: The slippy tile coordinate.
     ///   - referenceLatitude: The reference latitude in degrees for metric scale calculation.
-    /// - Returns: CPUMeshData containing 3D vertex positions, normals, colors, and indices.
-    public func processTile(
+    ///   - roadConfiguration: Optional road configuration overriding actor default.
+    /// - Returns: TileMeshData containing surfaceMesh and roadMesh.
+    public func processTileData(
         data: Data,
         coordinate: TileCoordinate,
-        referenceLatitude: Double
-    ) -> CPUMeshData {
+        referenceLatitude: Double,
+        roadConfiguration: RoadConfiguration? = nil
+    ) -> TileMeshData {
         let (widthMeters, heightMeters) = coordinate.groundDimensions(atLatitude: referenceLatitude)
+        let activeRoadConfig = roadConfiguration ?? self.roadConfiguration
         
         return data.withUnsafeBytes { buffer in
             guard let baseAddress = buffer.baseAddress?.assumingMemoryBound(to: UInt8.self), buffer.count > 0 else {
-                return CPUMeshData()
+                return TileMeshData()
             }
+            
+            var options = AcornMap.TileProcessorOptions()
+            options.roadConfig = activeRoadConfig.toCxx()
             
             let result = AcornMap.MapboxTileProcessor.processTile(
                 baseAddress,
                 buffer.count,
                 Float(widthMeters),
-                Float(heightMeters)
+                Float(heightMeters),
+                options
             )
             
+            // 1. Extract surface mesh (buildings, water, landuse)
             let vertexCount = result.getVertexCount()
             var vertices = [Vertex]()
             vertices.reserveCapacity(vertexCount)
@@ -159,9 +187,50 @@ public actor MapTileLoader {
             for i in 0..<indexCount {
                 indices.append(result.getIndex(i))
             }
+            let surfaceMesh = CPUMeshData(vertices: vertices, indices: indices)
             
-            return CPUMeshData(vertices: vertices, indices: indices)
+            // 2. Extract road network mesh
+            let roadVertexCount = result.getRoadVertexCount()
+            var roadVertices = [Vertex]()
+            roadVertices.reserveCapacity(roadVertexCount)
+            for i in 0..<roadVertexCount {
+                let v = result.getRoadVertex(i)
+                roadVertices.append(Vertex(
+                    position: SIMD3<Float>(v.x, v.y, v.z),
+                    color: SIMD4<Float>(v.r, v.g, v.b, v.a),
+                    texCoord: SIMD2<Float>(v.u, v.v),
+                    normal: SIMD3<Float>(v.nx, v.ny, v.nz)
+                ))
+            }
+            
+            let roadIndexCount = result.getRoadIndexCount()
+            var roadIndices = [UInt32]()
+            roadIndices.reserveCapacity(roadIndexCount)
+            for i in 0..<roadIndexCount {
+                roadIndices.append(result.getRoadIndex(i))
+            }
+            let roadMesh = CPUMeshData(vertices: roadVertices, indices: roadIndices)
+            
+            return TileMeshData(surfaceMesh: surfaceMesh, roadMesh: roadMesh)
         }
+    }
+    
+    /// Processes raw tile data (compressed or uncompressed MVT bytes) into CPUMeshData.
+    /// - Parameters:
+    ///   - data: The raw vector tile byte data (.pbf / .mvt).
+    ///   - coordinate: The slippy tile coordinate.
+    ///   - referenceLatitude: The reference latitude in degrees for metric scale calculation.
+    /// - Returns: CPUMeshData containing 3D vertex positions, normals, colors, and indices.
+    public func processTile(
+        data: Data,
+        coordinate: TileCoordinate,
+        referenceLatitude: Double
+    ) -> CPUMeshData {
+        return processTileData(
+            data: data,
+            coordinate: coordinate,
+            referenceLatitude: referenceLatitude
+        ).surfaceMesh
     }
     
     /// Fetches a vector tile from a network URL or file URL, decompresses, and meshes it.

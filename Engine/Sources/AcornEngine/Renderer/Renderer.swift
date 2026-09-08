@@ -235,6 +235,39 @@ public struct SpriteInstanceData: Sendable, Equatable {
     }
 }
 
+/// Uniforms used by the road line and outline shader.
+public struct RoadUniforms: Sendable, Equatable {
+    /// The combined model-view-projection matrix.
+    public var modelViewProjectionMatrix: Matrix4x4
+    /// The outline color.
+    public var outlineColor: SIMD4<Float>
+    /// The width ratio of the outline (0.0 for no outline, e.g. 0.18 for 18% border on each side).
+    public var outlineWidth: Float
+    /// The edge anti-aliasing smoothing factor.
+    public var edgeWidth: Float
+    /// Global road width multiplier scale.
+    public var widthScale: Float
+    /// Render pass mode: 0.0 = single pass, 1.0 = casing pass (outlines only), 2.0 = fill pass (inners only).
+    public var renderMode: Float
+    
+    /// Initializes road rendering uniforms.
+    public init(
+        modelViewProjectionMatrix: Matrix4x4 = .identity,
+        outlineColor: SIMD4<Float> = SIMD4<Float>(0.55, 0.55, 0.58, 1.0),
+        outlineWidth: Float = 0.18,
+        edgeWidth: Float = 0.04,
+        widthScale: Float = 1.0,
+        renderMode: Float = 0.0
+    ) {
+        self.modelViewProjectionMatrix = modelViewProjectionMatrix
+        self.outlineColor = outlineColor
+        self.outlineWidth = outlineWidth
+        self.edgeWidth = edgeWidth
+        self.widthScale = widthScale
+        self.renderMode = renderMode
+    }
+}
+
 /// The base protocol for all rendering backends.
 public protocol Renderer: Sendable {
     /// A shared unit quad mesh used for 2D sprite batching.
@@ -322,6 +355,17 @@ public protocol Renderer: Sendable {
         uniforms: SpriteFrameUniforms,
         context: any RenderContext
     )
+    
+    /// Renders roads using the dedicated road shader with line width and outline.
+    /// - Parameters:
+    ///   - mesh: The road mesh.
+    ///   - uniforms: The road rendering uniforms.
+    ///   - context: The render context for the current frame.
+    func renderRoads(
+        mesh: any Mesh,
+        uniforms: RoadUniforms,
+        context: any RenderContext
+    )
 }
 
 public extension Renderer {
@@ -354,6 +398,12 @@ public extension Renderer {
         texture: any Texture,
         instances: [SpriteInstanceData],
         uniforms: SpriteFrameUniforms,
+        context: any RenderContext
+    ) {}
+    
+    func renderRoads(
+        mesh: any Mesh,
+        uniforms: RoadUniforms,
         context: any RenderContext
     ) {}
 }

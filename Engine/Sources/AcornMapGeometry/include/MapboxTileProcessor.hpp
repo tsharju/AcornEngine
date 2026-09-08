@@ -5,7 +5,7 @@
 #include <cstring>
 #include <vector>
 #include <array>
-#include <utility>
+#include <string>
 
 namespace AcornMap {
 
@@ -27,19 +27,98 @@ struct MapVertex {
 struct TileMeshResult {
     std::vector<MapVertex> vertices;
     std::vector<uint32_t> indices;
+    std::vector<MapVertex> roadVertices;
+    std::vector<uint32_t> roadIndices;
 
     size_t getVertexCount() const { return vertices.size(); }
     size_t getIndexCount() const { return indices.size(); }
     MapVertex getVertex(size_t i) const { return vertices[i]; }
     uint32_t getIndex(size_t i) const { return indices[i]; }
+
+    size_t getRoadVertexCount() const { return roadVertices.size(); }
+    size_t getRoadIndexCount() const { return roadIndices.size(); }
+    MapVertex getRoadVertex(size_t i) const { return roadVertices[i]; }
+    uint32_t getRoadIndex(size_t i) const { return roadIndices[i]; }
+};
+
+struct RoadLayerStyle {
+    float widthMeters = 6.0f;
+    float outlineRatio = 0.18f;
+    float elevation = 0.05f;
+    float r = 0.98f;
+    float g = 0.98f;
+    float b = 0.98f;
+    float a = 1.0f;
+    float outlineR = 0.55f;
+    float outlineG = 0.55f;
+    float outlineB = 0.60f;
+    float outlineA = 1.0f;
+};
+
+struct RoadConfiguration {
+    bool filterNonCarRoads = true;
+    bool renderOnlyConfiguredClasses = true;
+    bool hasDefaultStyle = false;
+    RoadLayerStyle defaultStyle;
+
+    std::vector<std::string> classes;
+    std::vector<RoadLayerStyle> styles;
+
+    void addStyle(const std::string& roadClass, const RoadLayerStyle& style) {
+        for (size_t i = 0; i < classes.size(); ++i) {
+            if (classes[i] == roadClass) {
+                styles[i] = style;
+                return;
+            }
+        }
+        classes.push_back(roadClass);
+        styles.push_back(style);
+    }
+
+    void clearStyles() {
+        classes.clear();
+        styles.clear();
+    }
+
+    size_t styleCount() const {
+        return classes.size();
+    }
+
+    std::string getClass(size_t index) const {
+        if (index < classes.size()) return classes[index];
+        return "";
+    }
+
+    RoadLayerStyle getStyleByIndex(size_t index) const {
+        if (index < styles.size()) return styles[index];
+        return RoadLayerStyle{};
+    }
+
+    bool getStyle(const std::string& roadClass, RoadLayerStyle& outStyle) const {
+        for (size_t i = 0; i < classes.size(); ++i) {
+            if (classes[i] == roadClass) {
+                outStyle = styles[i];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool shouldRender(const std::string& roadClass, RoadLayerStyle& outStyle) const;
+
+    static RoadConfiguration carOnly();
+    static RoadConfiguration allRoads();
 };
 
 struct TileProcessorOptions {
     bool processBuildings = true;
     bool processWater = true;
     bool processLanduse = true;
+    bool processRoads = true;
+    bool generateRoadJunctionCaps = true;
     double defaultBuildingHeight = 10.0;
     double defaultBuildingMinHeight = 0.0;
+    RoadConfiguration roadConfig = RoadConfiguration::carOnly();
 };
 
 struct DecompressionResult {
@@ -121,6 +200,14 @@ public:
         const PolygonRing& outerRing,
         double height,
         double minHeight
+    );
+
+    /// Helper to create an in-memory MVT vector tile protobuf containing a test road linestring.
+    static DecompressionResult createTestRoadTile(
+        const std::string& layerName,
+        const PolygonRing& linePoints,
+        const std::string& roadClass,
+        bool generateCaps = false
     );
 };
 

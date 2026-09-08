@@ -260,3 +260,85 @@ vertex VertexOutSprite sprite_vertex_instanced(uint vertexID [[vertex_id]],
     return out;
 }
 
+// --- Road Rendering Shaders ---
+
+struct RoadUniforms {
+    float4x4 modelViewProjectionMatrix;
+    float4 outlineColor;
+    float outlineWidth; // default outline width fraction (e.g. 0.18)
+    float edgeWidth;    // anti-aliasing edge width (e.g. 0.04)
+    float widthScale;   // global road width scale (e.g. 1.0)
+    float renderMode;   // 0 = unified single-pass, 1 = casing pass (outlines only), 2 = fill pass (inners only)
+};
+
+struct VertexOutRoad {
+    float4 position [[position]];
+    float4 roadColor;
+    float4 outlineColor;
+    float2 texCoord; // x: normalized across-line coordinate [-1, 1], y: outline ratio [0, 0.5]
+    float3 worldPosition;
+};
+
+vertex VertexOutRoad road_vertex(uint vertexID [[vertex_id]],
+                                 constant VertexIn *vertices [[buffer(0)]],
+                                 constant RoadUniforms &uniforms [[buffer(1)]]) {
+    VertexOutRoad out;
+    VertexIn v = vertices[vertexID];
+    
+    float widthScale = uniforms.widthScale > 0.0 ? uniforms.widthScale : 1.0;
+    float baseHalfWidth = (v.normal.y * 0.5) * widthScale;
+    
+    float outlineRatio = v.texCoord.y > 0.0 ? v.texCoord.y : uniforms.outlineWidth;
+    float effectiveHalfWidth = baseHalfWidth;
+    
+    // In fill pass (renderMode == 2.0), scale ribbon down to inner pavement width
+    if (uniforms.renderMode > 1.5) {
+        effectiveHalfWidth = baseHalfWidth * max(0.0, 1.0 - outlineRatio);
+    }
+    
+    float3 offset = float3(v.normal.x, 0.0, v.normal.z) * (v.texCoord.x * effectiveHalfWidth);
+    float3 worldPos = v.position + offset;
+    
+    out.position = uniforms.modelViewProjectionMatrix * float4(worldPos, 1.0);
+    out.worldPosition = worldPos;
+    
+    if (uniforms.renderMode > 0.5 && uniforms.renderMode < 1.5) {
+        // Casing pass: color is the outline color
+        out.roadColor = uniforms.outlineColor;
+    } else {
+        // Fill or single pass: color is vertex road color
+        out.roadColor = v.color;
+    }
+    
+    out.outlineColor = uniforms.outlineColor;
+    out.texCoord = v.texCoord;
+    return out;
+}
+
+fragment float4 road_fragment(VertexOutRoad in [[stage_in]],
+                               constant RoadUniforms &uniforms [[buffer(0)]]) {
+    // in.texCoord.x is normalized across-line coordinate in [-1.0, 1.0]
+    float d = abs(in.texCoord.x);
+    float edgeWidth = uniforms.edgeWidth > 0.0 ? uniforms.edgeWidth : 0.04;
+    
+    if (uniforms.renderMode > 0.5) {
+        // Two-pass mode (1.0 = casing pass, 2.0 = fill pass):
+        // Each pass renders a solid ribbon with smooth outer anti-aliasing
+        float alpha = 1.0 - smoothstep(1.0 - edgeWidth, 1.0, d);
+        float4 color = in.roadColor;
+        color.a *= alpha;
+        return color;
+    }
+    
+    // Fallback: single-pass mode (renderMode == 0.0)
+    float outlineRatio = in.texCoord.y > 0.0 ? in.texCoord.y : uniforms.outlineWidth;
+    float innerEdge = 1.0 - outlineRatio;
+    float outlineFactor = smoothstep(innerEdge - edgeWidth, innerEdge + edgeWidth, d);
+    float alpha = 1.0 - smoothstep(1.0 - edgeWidth, 1.0, d);
+    
+    float4 color = mix(in.roadColor, in.outlineColor, outlineFactor);
+    color.a *= alpha;
+    
+    return color;
+}
+

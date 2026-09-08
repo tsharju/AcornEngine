@@ -11,6 +11,7 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <unordered_set>
 
 namespace AcornMap {
 
@@ -471,7 +472,305 @@ void clipAndProcessPolygon(
     extractPolyTree(extractPolyTree, &polyTree);
 }
 
+// MARK: - Road Processing
+
+struct VtzeroLineHandler {
+    std::vector<std::vector<vtzero::point>> lines;
+    std::vector<vtzero::point> currentLine;
+
+    void linestring_begin(uint32_t count) {
+        currentLine.clear();
+        currentLine.reserve(count);
+    }
+    void linestring_point(vtzero::point p) {
+        currentLine.push_back(p);
+    }
+    void linestring_end() {
+        if (currentLine.size() >= 2) {
+            lines.push_back(std::move(currentLine));
+        }
+        currentLine.clear();
+    }
+};
+
+void addJunctionCap(
+    const Point2D& center,
+    const RoadLayerStyle& style,
+    TileMeshResult& outResult
+) {
+    constexpr int M = 8;
+    uint32_t centerIdx = static_cast<uint32_t>(outResult.roadVertices.size());
+
+    // Center vertex (u = 0.0)
+    MapVertex vCenter;
+    vCenter.x = static_cast<float>(center.x);
+    vCenter.y = style.elevation;
+    vCenter.z = static_cast<float>(center.y);
+    vCenter.nx = 0.0f;
+    vCenter.ny = style.widthMeters;
+    vCenter.nz = 0.0f;
+    vCenter.r = style.r;
+    vCenter.g = style.g;
+    vCenter.b = style.b;
+    vCenter.a = style.a;
+    vCenter.u = 0.0f;
+    vCenter.v = style.outlineRatio;
+    outResult.roadVertices.push_back(vCenter);
+
+    // Perimeter vertices (u = 1.0, radial direction in nx, nz)
+    uint32_t perimStart = static_cast<uint32_t>(outResult.roadVertices.size());
+    for (int k = 0; k < M; ++k) {
+        double angle = 2.0 * 3.14159265358979323846 * k / M;
+        float nx = static_cast<float>(std::cos(angle));
+        float nz = static_cast<float>(std::sin(angle));
+
+        MapVertex vPerim;
+        vPerim.x = static_cast<float>(center.x);
+        vPerim.y = style.elevation;
+        vPerim.z = static_cast<float>(center.y);
+        vPerim.nx = nx;
+        vPerim.ny = style.widthMeters;
+        vPerim.nz = nz;
+        vPerim.r = style.r;
+        vPerim.g = style.g;
+        vPerim.b = style.b;
+        vPerim.a = style.a;
+        vPerim.u = 1.0f;
+        vPerim.v = style.outlineRatio;
+        outResult.roadVertices.push_back(vPerim);
+    }
+
+    // Fan triangles: centerIdx -> perimStart + k -> perimStart + (k+1)%M
+    for (int k = 0; k < M; ++k) {
+        outResult.roadIndices.push_back(centerIdx);
+        outResult.roadIndices.push_back(perimStart + k);
+        outResult.roadIndices.push_back(perimStart + ((k + 1) % M));
+    }
+}
+
+void processRoadLineString(
+    const std::vector<vtzero::point>& line,
+    const RoadLayerStyle& style,
+    int extent,
+    float tileGroundWidth,
+    float tileGroundHeight,
+    TileMeshResult& outResult,
+    bool generateJunctionCaps = true
+) {
+    if (line.size() < 2) return;
+
+    std::vector<Point2D> pts;
+    pts.reserve(line.size());
+    for (const auto& p : line) {
+        double mx = p.x / static_cast<double>(extent) * tileGroundWidth;
+        double mz = p.y / static_cast<double>(extent) * tileGroundHeight;
+        if (!pts.empty()) {
+            double dx = mx - pts.back().x;
+            double dz = mz - pts.back().y;
+            if (dx * dx + dz * dz < 1e-4) {
+                continue;
+            }
+        }
+        pts.push_back({mx, mz});
+    }
+
+    if (pts.size() < 2) return;
+
+    size_t n = pts.size();
+    uint32_t baseVertex = static_cast<uint32_t>(outResult.roadVertices.size());
+
+    struct MiterPoint {
+        double nx = 0.0;
+        double nz = 0.0;
+        double miterScale = 1.0;
+    };
+    std::vector<MiterPoint> miters(n);
+
+    std::vector<Point2D> segNormals(n - 1);
+    for (size_t i = 0; i < n - 1; ++i) {
+        double dx = pts[i + 1].x - pts[i].x;
+        double dz = pts[i + 1].y - pts[i].y;
+        double len = std::sqrt(dx * dx + dz * dz);
+        if (len > 1e-6) {
+            segNormals[i] = {-dz / len, dx / len};
+        } else {
+            segNormals[i] = {0.0, 1.0};
+        }
+    }
+
+    miters[0].nx = segNormals[0].x;
+    miters[0].nz = segNormals[0].y;
+    miters[0].miterScale = 1.0;
+
+    miters[n - 1].nx = segNormals[n - 2].x;
+    miters[n - 1].nz = segNormals[n - 2].y;
+    miters[n - 1].miterScale = 1.0;
+
+    for (size_t i = 1; i < n - 1; ++i) {
+        double sx = segNormals[i - 1].x + segNormals[i].x;
+        double sz = segNormals[i - 1].y + segNormals[i].y;
+        double slen = std::sqrt(sx * sx + sz * sz);
+        if (slen < 1e-4) {
+            miters[i].nx = segNormals[i].x;
+            miters[i].nz = segNormals[i].y;
+            miters[i].miterScale = 1.0;
+        } else {
+            double mx = sx / slen;
+            double mz = sz / slen;
+            double cosA = mx * segNormals[i - 1].x + mz * segNormals[i - 1].y;
+            double mScale = (cosA > 0.35) ? (1.0 / cosA) : 2.0;
+            miters[i].nx = mx;
+            miters[i].nz = mz;
+            miters[i].miterScale = std::min(mScale, 2.0);
+        }
+    }
+
+    float roadY = style.elevation;
+
+    for (size_t i = 0; i < n; ++i) {
+        float effectiveWidth = style.widthMeters * static_cast<float>(miters[i].miterScale);
+
+        // Left vertex (u = -1.0)
+        MapVertex vLeft;
+        vLeft.x = static_cast<float>(pts[i].x);
+        vLeft.y = roadY;
+        vLeft.z = static_cast<float>(pts[i].y);
+        vLeft.nx = static_cast<float>(miters[i].nx);
+        vLeft.ny = effectiveWidth;
+        vLeft.nz = static_cast<float>(miters[i].nz);
+        vLeft.r = style.r;
+        vLeft.g = style.g;
+        vLeft.b = style.b;
+        vLeft.a = style.a;
+        vLeft.u = -1.0f;
+        vLeft.v = style.outlineRatio;
+        outResult.roadVertices.push_back(vLeft);
+
+        // Right vertex (u = +1.0)
+        MapVertex vRight;
+        vRight.x = static_cast<float>(pts[i].x);
+        vRight.y = roadY;
+        vRight.z = static_cast<float>(pts[i].y);
+        vRight.nx = static_cast<float>(miters[i].nx);
+        vRight.ny = effectiveWidth;
+        vRight.nz = static_cast<float>(miters[i].nz);
+        vRight.r = style.r;
+        vRight.g = style.g;
+        vRight.b = style.b;
+        vRight.a = style.a;
+        vRight.u = 1.0f;
+        vRight.v = style.outlineRatio;
+        outResult.roadVertices.push_back(vRight);
+    }
+
+    for (size_t i = 0; i < n - 1; ++i) {
+        uint32_t i0 = baseVertex + static_cast<uint32_t>(2 * i);
+        uint32_t i1 = baseVertex + static_cast<uint32_t>(2 * i + 1);
+        uint32_t i2 = baseVertex + static_cast<uint32_t>(2 * (i + 1) + 1);
+        uint32_t i3 = baseVertex + static_cast<uint32_t>(2 * (i + 1));
+
+        // Triangle 1: i0 -> i1 -> i2
+        outResult.roadIndices.push_back(i0);
+        outResult.roadIndices.push_back(i1);
+        outResult.roadIndices.push_back(i2);
+
+        // Triangle 2: i0 -> i2 -> i3
+        outResult.roadIndices.push_back(i0);
+        outResult.roadIndices.push_back(i2);
+        outResult.roadIndices.push_back(i3);
+    }
+
+    if (generateJunctionCaps) {
+        addJunctionCap(pts.front(), style, outResult);
+        addJunctionCap(pts.back(), style, outResult);
+    }
+}
+
 } // anonymous namespace
+
+// MARK: - Road Configuration Implementation
+
+bool RoadConfiguration::shouldRender(const std::string& roadClass, RoadLayerStyle& outStyle) const {
+    if (filterNonCarRoads) {
+        static const std::unordered_set<std::string> nonCarClasses = {
+            "pedestrian", "path", "cycleway", "footway", "steps",
+            "track", "bridleway", "corridor", "sidewalk", "crossing",
+            "ferry", "aerialway", "golf_cart"
+        };
+        if (nonCarClasses.find(roadClass) != nonCarClasses.end()) {
+            return false;
+        }
+    }
+
+    if (getStyle(roadClass, outStyle)) {
+        return true;
+    }
+
+    if (!renderOnlyConfiguredClasses && hasDefaultStyle) {
+        outStyle = defaultStyle;
+        return true;
+    }
+
+    return false;
+}
+
+RoadConfiguration RoadConfiguration::carOnly() {
+    RoadConfiguration config;
+    config.filterNonCarRoads = true;
+    config.renderOnlyConfiguredClasses = true;
+    config.hasDefaultStyle = false;
+
+    // Motorway
+    config.addStyle("motorway", {14.0f, 0.18f, 0.10f, 0.98f, 0.70f, 0.35f, 1.0f, 0.45f, 0.30f, 0.15f, 1.0f});
+    config.addStyle("motorway_link", {14.0f, 0.18f, 0.10f, 0.98f, 0.70f, 0.35f, 1.0f, 0.45f, 0.30f, 0.15f, 1.0f});
+
+    // Trunk
+    config.addStyle("trunk", {12.0f, 0.18f, 0.09f, 0.98f, 0.78f, 0.40f, 1.0f, 0.50f, 0.35f, 0.20f, 1.0f});
+    config.addStyle("trunk_link", {12.0f, 0.18f, 0.09f, 0.98f, 0.78f, 0.40f, 1.0f, 0.50f, 0.35f, 0.20f, 1.0f});
+
+    // Primary
+    config.addStyle("primary", {10.5f, 0.18f, 0.08f, 0.99f, 0.88f, 0.55f, 1.0f, 0.55f, 0.45f, 0.25f, 1.0f});
+    config.addStyle("primary_link", {10.5f, 0.18f, 0.08f, 0.99f, 0.88f, 0.55f, 1.0f, 0.55f, 0.45f, 0.25f, 1.0f});
+
+    // Secondary
+    config.addStyle("secondary", {8.5f, 0.18f, 0.07f, 0.96f, 0.95f, 0.88f, 1.0f, 0.50f, 0.50f, 0.52f, 1.0f});
+    config.addStyle("secondary_link", {8.5f, 0.18f, 0.07f, 0.96f, 0.95f, 0.88f, 1.0f, 0.50f, 0.50f, 0.52f, 1.0f});
+
+    // Tertiary
+    config.addStyle("tertiary", {7.0f, 0.18f, 0.06f, 0.93f, 0.93f, 0.93f, 1.0f, 0.55f, 0.55f, 0.58f, 1.0f});
+    config.addStyle("tertiary_link", {7.0f, 0.18f, 0.06f, 0.93f, 0.93f, 0.93f, 1.0f, 0.55f, 0.55f, 0.58f, 1.0f});
+
+    // Residential and streets
+    config.addStyle("street", {6.0f, 0.18f, 0.05f, 0.98f, 0.98f, 0.98f, 1.0f, 0.55f, 0.55f, 0.60f, 1.0f});
+    config.addStyle("residential", {6.0f, 0.18f, 0.05f, 0.98f, 0.98f, 0.98f, 1.0f, 0.55f, 0.55f, 0.60f, 1.0f});
+    config.addStyle("street_limited", {6.0f, 0.18f, 0.05f, 0.98f, 0.98f, 0.98f, 1.0f, 0.55f, 0.55f, 0.60f, 1.0f});
+    config.addStyle("living_street", {6.0f, 0.18f, 0.05f, 0.98f, 0.98f, 0.98f, 1.0f, 0.55f, 0.55f, 0.60f, 1.0f});
+
+    // Service, driveway, alley
+    config.addStyle("service", {4.5f, 0.20f, 0.045f, 0.88f, 0.88f, 0.88f, 1.0f, 0.60f, 0.60f, 0.62f, 1.0f});
+    config.addStyle("driveway", {4.5f, 0.20f, 0.045f, 0.88f, 0.88f, 0.88f, 1.0f, 0.60f, 0.60f, 0.62f, 1.0f});
+    config.addStyle("alley", {4.5f, 0.20f, 0.045f, 0.88f, 0.88f, 0.88f, 1.0f, 0.60f, 0.60f, 0.62f, 1.0f});
+
+    return config;
+}
+
+RoadConfiguration RoadConfiguration::allRoads() {
+    RoadConfiguration config = carOnly();
+    config.filterNonCarRoads = false;
+    config.renderOnlyConfiguredClasses = false;
+    config.hasDefaultStyle = true;
+    config.defaultStyle = {5.5f, 0.18f, 0.05f, 0.92f, 0.92f, 0.92f, 1.0f, 0.55f, 0.55f, 0.58f, 1.0f};
+
+    // Non-car layers
+    config.addStyle("pedestrian", {4.0f, 0.22f, 0.04f, 0.85f, 0.82f, 0.78f, 1.0f, 0.60f, 0.58f, 0.55f, 1.0f});
+    config.addStyle("path", {3.0f, 0.22f, 0.04f, 0.85f, 0.82f, 0.78f, 1.0f, 0.60f, 0.58f, 0.55f, 1.0f});
+    config.addStyle("cycleway", {3.0f, 0.20f, 0.04f, 0.80f, 0.85f, 0.82f, 1.0f, 0.50f, 0.58f, 0.55f, 1.0f});
+    config.addStyle("footway", {2.5f, 0.22f, 0.04f, 0.85f, 0.82f, 0.78f, 1.0f, 0.60f, 0.58f, 0.55f, 1.0f});
+    config.addStyle("steps", {2.5f, 0.25f, 0.04f, 0.82f, 0.80f, 0.80f, 1.0f, 0.55f, 0.55f, 0.55f, 1.0f});
+    config.addStyle("track", {3.5f, 0.22f, 0.04f, 0.82f, 0.78f, 0.72f, 1.0f, 0.58f, 0.54f, 0.50f, 1.0f});
+
+    return config;
+}
 
 // MARK: - Public API
 
@@ -554,11 +853,55 @@ TileMeshResult MapboxTileProcessor::processTile(
             bool isBuilding = (layerName == "building" || layerName == "building:part" || layerName == "buildings");
             bool isWater = (layerName == "water" || layerName == "waterway" || layerName == "ocean" || layerName == "lake");
             bool isLanduse = (layerName == "landuse" || layerName == "landcover" || layerName == "earth");
+            bool isRoad = (layerName == "road" || layerName == "roads" || layerName == "transportation");
 
             if (isBuilding && !options.processBuildings) continue;
             if (isWater && !options.processWater) continue;
             if (isLanduse && !options.processLanduse) continue;
-            if (!isBuilding && !isWater && !isLanduse) continue;
+            if (isRoad && !options.processRoads) continue;
+            if (!isBuilding && !isWater && !isLanduse && !isRoad) continue;
+
+            if (isRoad) {
+                while (auto feature = layer.next_feature()) {
+                    if (feature.geometry_type() != vtzero::GeomType::LINESTRING) {
+                        continue;
+                    }
+
+                    std::string roadClass = "street";
+                    std::string roadType = "";
+                    bool generateCaps = options.generateRoadJunctionCaps;
+                    while (auto prop = feature.next_property()) {
+                        std::string key(prop.key());
+                        if (key == "class") {
+                            if (prop.value().type() == vtzero::property_value_type::string_value) {
+                                roadClass = std::string(prop.value().string_value());
+                            }
+                        } else if (key == "type") {
+                            if (prop.value().type() == vtzero::property_value_type::string_value) {
+                                roadType = std::string(prop.value().string_value());
+                            }
+                        } else if (key == "generate_caps") {
+                            generateCaps = extractBool(prop.value(), generateCaps);
+                        }
+                    }
+                    if (roadClass.empty() && !roadType.empty()) {
+                        roadClass = roadType;
+                    }
+
+                    RoadLayerStyle style;
+                    if (!options.roadConfig.shouldRender(roadClass, style)) {
+                        continue;
+                    }
+
+                    VtzeroLineHandler handler;
+                    vtzero::decode_linestring_geometry(feature.geometry(), handler);
+
+                    for (const auto& line : handler.lines) {
+                        processRoadLineString(line, style, extent, tileGroundWidth, tileGroundHeight, result, generateCaps);
+                    }
+                }
+                continue;
+            }
 
             std::array<float, 4> wallColor = {0.85f, 0.85f, 0.88f, 1.0f};
             std::array<float, 4> roofColor = {0.75f, 0.75f, 0.78f, 1.0f};
@@ -666,6 +1009,39 @@ DecompressionResult MapboxTileProcessor::createTestTile(
 
         fbuilder.add_property("height", height);
         fbuilder.add_property("min_height", minHeight);
+        fbuilder.commit();
+
+        std::string serialized = tbuilder.serialize();
+        res.data.assign(serialized.begin(), serialized.end());
+        res.success = true;
+    } catch (...) {
+        res.success = false;
+    }
+
+    return res;
+}
+
+DecompressionResult MapboxTileProcessor::createTestRoadTile(
+    const std::string& layerName,
+    const PolygonRing& linePoints,
+    const std::string& roadClass,
+    bool generateCaps
+) {
+    DecompressionResult res;
+    if (linePoints.points.size() < 2) return res;
+
+    try {
+        vtzero::tile_builder tbuilder;
+        vtzero::layer_builder lbuilder{tbuilder, layerName, 2, 4096};
+        vtzero::linestring_feature_builder fbuilder{lbuilder};
+
+        fbuilder.add_linestring(static_cast<uint32_t>(linePoints.points.size()));
+        for (const auto& pt : linePoints.points) {
+            fbuilder.set_point(static_cast<int32_t>(pt.x), static_cast<int32_t>(pt.y));
+        }
+
+        fbuilder.add_property("class", roadClass);
+        fbuilder.add_property("generate_caps", generateCaps);
         fbuilder.commit();
 
         std::string serialized = tbuilder.serialize();

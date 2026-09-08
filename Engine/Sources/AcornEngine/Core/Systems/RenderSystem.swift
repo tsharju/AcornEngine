@@ -127,6 +127,57 @@ public struct RenderSystem {
             }
         }
         
+        // Render road components (rendered after terrain/buildings with depth test LessEqual and depth write disabled)
+        // Two-pass rendering: Pass 1 (Casing) draws outer perimeter outlines; Pass 2 (Fill) draws inner road pavement.
+        // This ensures crossroads and overlapping roads merge seamlessly into a single unbroken roadbed with a single outline.
+        let roadEntities = world.entities(with: RoadComponent.self)
+        if !roadEntities.isEmpty {
+            var validRoads: [(RoadComponent, Matrix4x4)] = []
+            validRoads.reserveCapacity(roadEntities.count)
+            for (entity, roadComponent) in roadEntities {
+                guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
+                    continue
+                }
+                let modelMatrix = world.worldMatrix(for: entity)
+                let mvp = viewProjectionMatrix * modelMatrix
+                validRoads.append((roadComponent, mvp))
+            }
+            
+            // Pass 1: Casing (full width with outline color)
+            for (roadComponent, mvp) in validRoads {
+                let casingUniforms = RoadUniforms(
+                    modelViewProjectionMatrix: mvp,
+                    outlineColor: roadComponent.outlineColor,
+                    outlineWidth: roadComponent.outlineWidth,
+                    edgeWidth: 0.04,
+                    widthScale: roadComponent.widthScale,
+                    renderMode: 1.0
+                )
+                renderer.renderRoads(
+                    mesh: roadComponent.mesh,
+                    uniforms: casingUniforms,
+                    context: context
+                )
+            }
+            
+            // Pass 2: Fill (inner pavement width with road color)
+            for (roadComponent, mvp) in validRoads {
+                let fillUniforms = RoadUniforms(
+                    modelViewProjectionMatrix: mvp,
+                    outlineColor: roadComponent.outlineColor,
+                    outlineWidth: roadComponent.outlineWidth,
+                    edgeWidth: 0.04,
+                    widthScale: roadComponent.widthScale,
+                    renderMode: 2.0
+                )
+                renderer.renderRoads(
+                    mesh: roadComponent.mesh,
+                    uniforms: fillUniforms,
+                    context: context
+                )
+            }
+        }
+        
         // Render tile map components
         let tileMapEntities = world.entities(with: TileMapComponent.self)
         for (entity, tileMapComponent) in tileMapEntities {

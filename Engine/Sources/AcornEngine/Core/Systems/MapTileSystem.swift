@@ -58,21 +58,23 @@ public class MapTileSystem: System {
     ///   - zoomLevel: Tile zoom level (default 15).
     ///   - loadRadius: Tile load radius around camera (default 1).
     ///   - recenterThresholdMeters: Distance threshold before recentering the origin (default 5000.0 m).
-    ///   - tileLoader: TileLoader actor instance.
+    ///   - roadConfiguration: Road rendering configuration (defaults to `.carOnly`).
+    ///   - tileLoader: Optional TileLoader actor instance. If nil, one is created using `roadConfiguration`.
     ///   - renderer: Optional renderer for creating GPU meshes.
     public init(
         initialReference: GPSCoordinate,
         zoomLevel: Int = 15,
         loadRadius: Int = 1,
         recenterThresholdMeters: Double = 5000.0,
-        tileLoader: MapTileLoader = MapTileLoader(),
+        roadConfiguration: RoadConfiguration = .carOnly,
+        tileLoader: MapTileLoader? = nil,
         renderer: (any Renderer)? = nil
     ) {
         self.referenceCoordinate = initialReference
         self.zoomLevel = zoomLevel
         self.loadRadius = loadRadius
         self.recenterThresholdMeters = recenterThresholdMeters
-        self.tileLoader = tileLoader
+        self.tileLoader = tileLoader ?? MapTileLoader(roadConfiguration: roadConfiguration)
         self.renderer = renderer
     }
     
@@ -151,9 +153,9 @@ public class MapTileSystem: System {
         }
     }
     
-    /// Spawns a tile directly from pre-computed CPUMeshData (useful for synchronous tests or instant loading).
+    /// Spawns a tile directly from pre-computed TileMeshData.
     @discardableResult
-    public func spawnTile(coord: TileCoordinate, cpuMesh: CPUMeshData, world: World) -> Entity {
+    public func spawnTile(coord: TileCoordinate, tileMeshData: TileMeshData, world: World) -> Entity {
         // Destroy existing entity if any
         if let existing = activeTileEntities[coord] {
             world.destroyEntity(existing)
@@ -163,9 +165,16 @@ public class MapTileSystem: System {
         let worldPos = coord.worldPosition(relativeTo: referenceCoordinate)
         world.addComponent(TransformComponent(position: worldPos), to: entity)
         
-        let mesh = createMesh(from: cpuMesh)
-        if let mesh = mesh {
-            world.addComponent(MeshComponent(mesh: mesh), to: entity)
+        if !tileMeshData.surfaceMesh.vertices.isEmpty {
+            if let mesh = createMesh(from: tileMeshData.surfaceMesh) {
+                world.addComponent(MeshComponent(mesh: mesh), to: entity)
+            }
+        }
+        
+        if !tileMeshData.roadMesh.vertices.isEmpty {
+            if let roadMesh = createMesh(from: tileMeshData.roadMesh) {
+                world.addComponent(RoadComponent(mesh: roadMesh), to: entity)
+            }
         }
         
         let (widthMeters, heightMeters) = coord.groundDimensions(atLatitude: referenceCoordinate.latitude)
@@ -181,6 +190,16 @@ public class MapTileSystem: System {
         return entity
     }
     
+    /// Spawns a tile directly from pre-computed CPUMeshData (useful for synchronous tests or instant loading).
+    @discardableResult
+    public func spawnTile(coord: TileCoordinate, cpuMesh: CPUMeshData, world: World) -> Entity {
+        return spawnTile(
+            coord: coord,
+            tileMeshData: TileMeshData(surfaceMesh: cpuMesh, roadMesh: CPUMeshData()),
+            world: world
+        )
+    }
+    
     private func startLoadingTile(coord: TileCoordinate, world: World) {
         guard let dataProvider = self.tileDataProvider else { return }
         
@@ -191,7 +210,7 @@ public class MapTileSystem: System {
         let task = Task { @MainActor [weak self] in
             do {
                 guard let data = try await dataProvider(coord) else {
-                    self?.finishLoading(coord: coord, cpuMesh: nil, world: world)
+                    self?.finishLoading(coord: coord, tileMeshData: nil, world: world)
                     return
                 }
                 
@@ -201,7 +220,7 @@ public class MapTileSystem: System {
                     return
                 }
                 
-                let cpuMesh = await loader.processTile(
+                let tileMeshData = await loader.processTileData(
                     data: data,
                     coordinate: coord,
                     referenceLatitude: refLat
@@ -213,20 +232,20 @@ public class MapTileSystem: System {
                     return
                 }
                 
-                self?.finishLoading(coord: coord, cpuMesh: cpuMesh, world: world)
+                self?.finishLoading(coord: coord, tileMeshData: tileMeshData, world: world)
             } catch {
-                self?.finishLoading(coord: coord, cpuMesh: nil, world: world)
+                self?.finishLoading(coord: coord, tileMeshData: nil, world: world)
             }
         }
         
         loadingTasks[coord] = task
     }
     
-    private func finishLoading(coord: TileCoordinate, cpuMesh: CPUMeshData?, world: World) {
+    private func finishLoading(coord: TileCoordinate, tileMeshData: TileMeshData?, world: World) {
         pendingCoordinates.remove(coord)
         loadingTasks.removeValue(forKey: coord)
         
-        guard let cpuMesh = cpuMesh else { return }
+        guard let tileMeshData = tileMeshData else { return }
         
         // Verify tile is still within the current camera visible radius
         if let cameraGPS = self.cameraCoordinate {
@@ -235,7 +254,7 @@ public class MapTileSystem: System {
             guard visibleTileSet.contains(coord) else { return }
         }
         
-        spawnTile(coord: coord, cpuMesh: cpuMesh, world: world)
+        spawnTile(coord: coord, tileMeshData: tileMeshData, world: world)
     }
     
     private func createMesh(from cpuMesh: CPUMeshData) -> (any Mesh)? {

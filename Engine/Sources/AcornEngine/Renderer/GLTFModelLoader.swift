@@ -1,6 +1,9 @@
 import Foundation
+
+#if canImport(Metal)
 import Metal
 import AcornMetal
+#endif
 
 /// Represents a node within a loaded glTF scene.
 public struct GLTFNode: Sendable {
@@ -29,20 +32,39 @@ public func quaternionToEuler(_ q: SIMD4<Float>) -> SIMD3<Float> {
 
 /// A loader class responsible for loading glTF models from disk.
 public final class GLTFModelLoader: Sendable {
+    #if canImport(Metal)
     /// The Metal device to create mesh buffers on.
-    private let device: any MTLDevice
+    private let device: (any MTLDevice)?
+    #endif
+    
+    /// The generic renderer used to create meshes, if available.
+    public let renderer: (any Renderer)?
 
-    /// Initializes a new GLTFModelLoader.
+    /// Initializes a new GLTFModelLoader with an abstract Renderer.
+    /// - Parameter renderer: The Renderer backend to use.
+    public init(renderer: any Renderer) {
+        self.renderer = renderer
+        #if canImport(Metal)
+        self.device = (renderer as? MetalRenderer)?.device
+        #endif
+    }
+
+    #if canImport(Metal)
+    /// Initializes a new GLTFModelLoader with a Metal device.
     /// - Parameter device: The Metal device.
     public init(device: any MTLDevice) {
         self.device = device
+        self.renderer = nil
     }
 
-    /// Loads a glTF model from a local file URL.
+    /// Loads a glTF model from a local file URL producing MetalMesh instances.
     /// - Parameter url: The file URL of the model (.glb or .gltf).
     /// - Returns: A tuple containing the loaded meshes, nodes, and the raw texture data, if any.
     /// - Throws: An error if loading fails.
     public func load(from url: URL) throws -> (meshes: [MetalMesh], nodes: [GLTFNode], textureData: Data?) {
+        guard let device = self.device else {
+            throw NSError(domain: "GLTFModelLoaderErrorDomain", code: 4, userInfo: [NSLocalizedDescriptionKey: "Metal device required for loading MetalMesh."])
+        }
         guard url.isFileURL else {
             throw NSError(domain: "GLTFModelLoaderErrorDomain", code: 1, userInfo: [NSLocalizedDescriptionKey: "Only file URLs are supported."])
         }
@@ -98,18 +120,18 @@ public final class GLTFModelLoader: Sendable {
                 nameBytes = Array(nameBytes[..<nullIndex])
             }
             let nodeName = String(decoding: nameBytes.map { UInt8(bitPattern: $0) }, as: UTF8.self)
-            
-            let meshIndex = data.meshIndex >= 0 ? Int(data.meshIndex) : nil
-            let parentIndex = data.parentIndex >= 0 ? Int(data.parentIndex) : nil
-            
+
+            let meshIdx = data.meshIndex >= 0 ? Int(data.meshIndex) : nil
+            let parentIdx = data.parentIndex >= 0 ? Int(data.parentIndex) : nil
+
             let translation = SIMD3<Float>(data.translation.0, data.translation.1, data.translation.2)
             let rotation = SIMD4<Float>(data.rotation.0, data.rotation.1, data.rotation.2, data.rotation.3)
             let scale = SIMD3<Float>(data.scale.0, data.scale.1, data.scale.2)
-            
+
             nodes.append(GLTFNode(
                 name: nodeName,
-                meshIndex: meshIndex,
-                parentIndex: parentIndex,
+                meshIndex: meshIdx,
+                parentIndex: parentIdx,
                 translation: translation,
                 rotation: rotation,
                 scale: scale
@@ -118,9 +140,24 @@ public final class GLTFModelLoader: Sendable {
 
         var textureData: Data? = nil
         if let texPtr = textureDataPtr, textureSize > 0 {
-            textureData = Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: texPtr), count: Int(textureSize), deallocator: .free)
+            textureData = Data(bytes: texPtr, count: Int(textureSize))
         }
 
-        return (meshes, nodes, textureData)
+        return (meshes: meshes, nodes: nodes, textureData: textureData)
+    }
+    #endif
+
+    /// Loads a glTF model returning platform-agnostic Mesh resources.
+    /// - Parameter url: The file URL of the model (.glb or .gltf).
+    /// - Returns: A tuple containing the loaded meshes, nodes, and the raw texture data, if any.
+    /// - Throws: An error if loading fails.
+    public func loadMeshes(from url: URL) throws -> (meshes: [any Mesh], nodes: [GLTFNode], textureData: Data?) {
+        #if canImport(Metal)
+        if self.device != nil {
+            let result = try load(from: url)
+            return (meshes: result.meshes, nodes: result.nodes, textureData: result.textureData)
+        }
+        #endif
+        throw NSError(domain: "GLTFModelLoaderErrorDomain", code: 2, userInfo: [NSLocalizedDescriptionKey: "Loading meshes requires a supported rendering device."])
     }
 }

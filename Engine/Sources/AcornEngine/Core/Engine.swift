@@ -21,6 +21,15 @@ public class Engine {
     /// The system responsible for 2D sprite flipbook animation.
     public let spriteAnimationSystem: SpriteAnimationSystem
     
+    /// The maximum allowable delta time per tick, preventing large spikes upon app resume.
+    public var maxDeltaTime: Double = 0.1
+    
+    /// Indicates whether a valid render surface is currently attached and available for drawing.
+    public private(set) var isSurfaceAvailable: Bool = true
+    
+    /// Indicates whether the engine is currently paused.
+    public private(set) var isPaused: Bool = false
+    
     /// Initializes a new engine.
     /// - Parameters:
     ///   - renderer: The renderer.
@@ -45,16 +54,48 @@ public class Engine {
         self.world.registerSystem(self.audioSystem)
     }
     
-    /// Ticks the engine, updating the world.
+    /// Ticks the engine, updating the world if not paused.
+    /// Clamps `deltaTime` to `maxDeltaTime` to avoid physics and rendering explosion upon resume.
     /// - Parameter deltaTime: The time elapsed since the last tick.
     public func tick(deltaTime: Double) {
-        world.update(deltaTime: deltaTime)
+        guard !isPaused else { return }
+        let clampedDeltaTime = min(deltaTime, maxDeltaTime)
+        world.update(deltaTime: clampedDeltaTime)
         inputSystem.advanceFrame()
     }
     
-    /// Renders the current state of the world.
+    /// Renders the current state of the world if a native surface is available.
     /// - Parameter context: The render context for the current frame.
     public func render(context: RenderContext) {
+        guard isSurfaceAvailable else { return }
         renderSystem.render(world: world, context: context)
+    }
+    
+    /// Pauses the engine, stopping tick updates, resetting active inputs, and dispatching `AppPauseEvent`.
+    public func pause() {
+        guard !isPaused else { return }
+        isPaused = true
+        inputSystem.reset()
+        world.eventBus.publish(AppPauseEvent())
+    }
+    
+    /// Resumes the engine, resuming tick updates and dispatching `AppResumeEvent`.
+    public func resume() {
+        guard isPaused else { return }
+        isPaused = false
+        world.eventBus.publish(AppResumeEvent())
+    }
+    
+    /// Notifies the engine that the native rendering surface has been created or resumed.
+    public func surfaceCreated() {
+        isSurfaceAvailable = true
+        world.eventBus.publish(SurfaceCreatedEvent())
+    }
+    
+    /// Notifies the engine that the native rendering surface has been destroyed.
+    /// Halts any subsequent render calls until a new surface is created.
+    public func surfaceDestroyed() {
+        isSurfaceAvailable = false
+        world.eventBus.publish(SurfaceDestroyedEvent())
     }
 }

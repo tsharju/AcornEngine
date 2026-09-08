@@ -1,3 +1,4 @@
+#if canImport(Metal)
 import Foundation
 import Metal
 import AcornMetal
@@ -117,8 +118,13 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
     }
     
     /// Creates a Metal mesh from vertices.
-    public func createMesh(vertices: [Vertex]) -> Mesh? {
+    public func createMesh(vertices: [Vertex]) -> (any Mesh)? {
         return MetalMesh(device: device, vertices: vertices)
+    }
+    
+    /// Creates a Metal mesh from CPU mesh data containing vertices and optional indices.
+    public func createMesh(meshData: CPUMeshData) -> (any Mesh)? {
+        return MetalMesh(device: device, vertices: meshData.vertices, indices: meshData.indices)
     }
     
     /// Creates a Metal texture from raw pixel data.
@@ -132,6 +138,9 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
             bytesPerPixel = 1
         case .rgba8Unorm:
             pixelFormat = .rgba8Unorm
+            bytesPerPixel = 4
+        case .bgra8Unorm:
+            pixelFormat = .bgra8Unorm
             bytesPerPixel = 4
         }
         guard pixelData.count == width * height * bytesPerPixel else { return nil }
@@ -369,3 +378,5 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         }
     }
 }
+#endif
+

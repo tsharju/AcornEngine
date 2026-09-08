@@ -27,7 +27,11 @@ let package = Package(
         ),
         .target(
             name: "AcornEngine",
-            dependencies: ["box2d", "AcornMetal", "AcornMath"],
+            dependencies: [
+                "box2d",
+                .target(name: "AcornMetal", condition: .when(platforms: [.iOS, .macOS, .tvOS, .visionOS])),
+                "AcornMath"
+            ],
             resources: [
                 .process("Renderer/Shaders.metal")
             ],

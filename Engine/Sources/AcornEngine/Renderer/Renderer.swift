@@ -17,10 +17,34 @@ public protocol Mesh: Sendable {
     /// The number of vertices in the mesh.
     var vertexCount: Int { get }
     
+    /// The number of indices in the mesh, if indexed (defaults to 0 for non-indexed meshes).
+    var indexCount: Int { get }
+    
     #if DEBUG
     /// The CPU-side vertices of the mesh.
     var vertices: [Vertex] { get }
     #endif
+}
+
+public extension Mesh {
+    var indexCount: Int { 0 }
+}
+
+/// Platform-agnostic vertex and index buffer representation in host CPU memory.
+public struct CPUMeshData: Sendable, Equatable {
+    /// The vertex elements of the mesh.
+    public var vertices: [Vertex]
+    /// The optional index buffer elements for indexed rendering.
+    public var indices: [UInt32]
+    
+    /// Initializes a new CPU mesh data container.
+    /// - Parameters:
+    ///   - vertices: An array of vertices.
+    ///   - indices: An optional array of 32-bit indices.
+    public init(vertices: [Vertex] = [], indices: [UInt32] = []) {
+        self.vertices = vertices
+        self.indices = indices
+    }
 }
 
 /// Opaque protocol representing the context for the current frame (e.g., command buffer, render target).
@@ -221,6 +245,11 @@ public protocol Renderer: Sendable {
     /// - Returns: A backend-specific `Mesh` resource, or `nil` if creation fails.
     func createMesh(vertices: [Vertex]) -> Mesh?
     
+    /// Creates a backend-specific mesh resource from host CPU mesh data.
+    /// - Parameter meshData: The CPU mesh data (vertices and optional indices).
+    /// - Returns: A backend-specific `Mesh` resource, or `nil` if creation fails.
+    func createMesh(meshData: CPUMeshData) -> (any Mesh)?
+    
     /// Creates a backend-specific texture resource from raw pixel data.
     /// - Parameters:
     ///   - width: The width of the texture in pixels.
@@ -298,6 +327,10 @@ public protocol Renderer: Sendable {
 public extension Renderer {
     var unitQuadMesh: (any Mesh)? {
         return createMesh(vertices: SpriteMeshGenerator.generateUnitQuad())
+    }
+    
+    func createMesh(meshData: CPUMeshData) -> (any Mesh)? {
+        return createMesh(vertices: meshData.vertices)
     }
     
     func createTexture(width: Int, height: Int, pixelData: [UInt8], format: TextureFormat) -> (any Texture)? {

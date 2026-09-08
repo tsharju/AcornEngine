@@ -1,3 +1,4 @@
+#if canImport(Metal)
 import Foundation
 import Metal
 import AcornMetal
@@ -37,3 +38,5 @@ public final class MetalTexture: Texture, @unchecked Sendable {
         cxxTexture.pointee.destroy()
     }
 }
+#endif
+

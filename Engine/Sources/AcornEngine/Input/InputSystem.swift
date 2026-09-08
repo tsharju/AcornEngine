@@ -279,4 +279,9 @@ public final class InputSystem: System {
         state.updateGamepad(gamepad)
         eventBus?.publish(GamepadAxisEvent(gamepadId: id, axis: axis, value: value))
     }
+    
+    /// Resets all input state back to idle.
+    public func reset() {
+        state.reset()
+    }
 }

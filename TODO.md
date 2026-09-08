@@ -186,8 +186,8 @@ Comprehensive architecture specifications and technical design are documented in
 - [ ] **Phase 2: Subsystem Abstraction**
   - [ ] Implement `AudioBackend` protocol and decouple `AudioClip` from `AVAudioPCMBuffer` using portable `AudioBuffer`.
   - [ ] Implement `GamepadProvider` protocol and add Android keycode mappings (`Key.from(androidKeyCode:)`).
-  - [ ] Abstract font glyph rasterization behind `FontRasterizer` protocol with `stb_truetype` fallback.
-  - [ ] Decouple `GLTFLoader.cpp` to output pure `CPUMeshData` (vertices + indices).
+  - [x] Abstract font glyph rasterization behind `FontRasterizer` protocol with `CoreTextFontRasterizer` (Apple) and `stb_truetype` fallback path.
+  - [x] Introduce `CPUMeshData` (vertices + indices) and `Renderer.createMesh(meshData:)` abstraction.
 - [ ] **Phase 3: Package Modularization & Shaders**
   - [ ] Reorganize `Package.swift` into modular targets: `AcornCore`, `AcornRenderMetal`, `AcornRenderVulkan`, `AcornAudioAVF`, `AcornAudioOboe`.
   - [ ] Set up shader cross-compilation pipeline (Slang / HLSL -> SPIR-V & MSL).

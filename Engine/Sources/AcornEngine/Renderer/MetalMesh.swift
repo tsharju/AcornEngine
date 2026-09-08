@@ -1,3 +1,4 @@
+#if canImport(Metal)
 import Foundation
 import Metal
 import AcornMetal
@@ -10,6 +11,11 @@ public final class MetalMesh: Mesh, @unchecked Sendable {
     /// The number of vertices in the mesh.
     public var vertexCount: Int {
         return Int(cxxMesh.pointee.getVertexCount())
+    }
+
+    /// The number of indices in the mesh, if indexed (0 for non-indexed meshes).
+    public var indexCount: Int {
+        return Int(cxxMesh.pointee.getIndexCount())
     }
 
     /// The underlying Metal vertex buffer.
@@ -48,27 +54,54 @@ public final class MetalMesh: Mesh, @unchecked Sendable {
         self.cxxMesh = cxxMesh
     }
 
+    /// Creates a mesh from an array of vertices and optional indices.
+    /// - Parameters:
+    ///   - device: The Metal device used to create the buffers.
+    ///   - vertices: An array of `Vertex` structures.
+    ///   - indices: An optional array of 32-bit indices.
+    /// - Returns: A new `MetalMesh`, or `nil` if buffer creation fails.
+    public convenience init?(device: any MTLDevice, vertices: [Vertex], indices: [UInt32] = []) {
+        let size = vertices.count * MemoryLayout<Vertex>.stride
+        guard let buffer = device.makeBuffer(bytes: vertices, length: size, options: .storageModeShared) else {
+            return nil
+        }
+        
+        let iBuffer: (any MTLBuffer)?
+        let iBufferPtr: UnsafeMutableRawPointer?
+        if !indices.isEmpty {
+            let iSize = indices.count * MemoryLayout<UInt32>.stride
+            guard let ib = device.makeBuffer(bytes: indices, length: iSize, options: .storageModeShared) else {
+                return nil
+            }
+            iBuffer = ib
+            iBufferPtr = Unmanaged.passUnretained(ib).toOpaque()
+        } else {
+            iBuffer = nil
+            iBufferPtr = nil
+        }
+        
+        let devicePtr = Unmanaged.passUnretained(device).toOpaque()
+        let bufferPtr = Unmanaged.passUnretained(buffer).toOpaque()
+        
+        guard let mesh = Acorn.AcornMetalMesh.create(devicePtr, vertices.count, bufferPtr, iBufferPtr, indices.count) else {
+            return nil
+        }
+        _ = (buffer, iBuffer)
+        self.init(cxxMesh: mesh)
+    }
+
     /// Creates a mesh from an array of vertices.
     /// - Parameters:
     ///   - device: The Metal device used to create the buffers.
     ///   - vertices: An array of `Vertex` structures.
     /// - Returns: A new `MetalMesh`, or `nil` if buffer creation fails.
     public convenience init?(device: any MTLDevice, vertices: [Vertex]) {
-        let size = vertices.count * MemoryLayout<Vertex>.stride
-        guard let buffer = device.makeBuffer(bytes: vertices, length: size, options: .storageModeShared) else {
-            return nil
-        }
-        
-        let devicePtr = Unmanaged.passUnretained(device).toOpaque()
-        let bufferPtr = Unmanaged.passUnretained(buffer).toOpaque()
-        
-        guard let mesh = Acorn.AcornMetalMesh.create(devicePtr, vertices.count, bufferPtr, nil, 0) else {
-            return nil
-        }
-        self.init(cxxMesh: mesh)
+        self.init(device: device, vertices: vertices, indices: [])
     }
     
     deinit {
         cxxMesh.pointee.destroy()
     }
 }
+#endif
+

@@ -1,51 +1,76 @@
 import Foundation
+import AcornMath
+
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+
+#if canImport(CoreText)
 import CoreText
+#endif
+
+#if canImport(Metal)
 import Metal
+#endif
 
 /// Errors that can occur during SDF Font Atlas generation.
-public enum SDFFontAtlasGeneratorError: Error {
-    /// Failed to create the Metal texture resource.
+public enum SDFFontAtlasGeneratorError: Error, Equatable {
+    /// Failed to create the texture resource on the renderer/device.
     case textureCreationFailed
+    /// A font rasterizer is required on this platform.
+    case rasterizerRequired
+    /// Cell size must be greater than zero.
+    case invalidCellSize
+    /// Font size must be greater than zero.
+    case invalidFontSize
 }
 
 /// A generator that dynamically builds a signed distance field (SDF) font atlas.
 public struct SDFFontAtlasGenerator {
     
-    /// Generates a `FontAtlas` dynamically for a given font and set of characters.
-    /// - Parameters:
-    ///   - fontName: The PostScript or family name of the font (e.g., "Helvetica", "Courier").
-    ///   - fontSize: The size of the font in points.
-    ///   - characters: The set of characters to generate glyphs for.
-    ///   - device: The Metal device to use for creating the texture.
-    ///   - cellSize: The width and height of each glyph's cell in pixels. Defaults to 64.
-    ///   - searchRadius: The distance radius in pixels to search for boundaries during SDF calculation. Defaults to 8.0.
-    /// - Returns: A fully generated `FontAtlas`.
-    /// - Throws: `SDFFontAtlasGeneratorError` if texture creation fails.
-    public static func generate(
+    private static func nextPowerOfTwo(_ value: Int) -> Int {
+        guard value > 0 else { return 1 }
+        var v = value - 1
+        v |= v >> 1
+        v |= v >> 2
+        v |= v >> 4
+        v |= v >> 8
+        v |= v >> 16
+        return max(1, v + 1)
+    }
+
+    /// Internal helper that rasterizes glyphs, calculates signed distance fields, and packs cells into an atlas buffer.
+    private static func buildAtlasData(
         fontName: String,
         fontSize: Float,
-        characters: Set<Character> = Set((32...126).map { Character(UnicodeScalar($0)!) }),
-        device: any MTLDevice,
-        cellSize: Int = 64,
-        searchRadius: Float = 8.0
-    ) throws -> FontAtlas {
-        let fontNameCF = fontName as CFString
-        let ctFont = CTFontCreateWithName(fontNameCF, CGFloat(fontSize), nil)
+        characters: Set<Character>,
+        rasterizer: any FontRasterizer,
+        cellSize: Int,
+        searchRadius: Float
+    ) throws -> (glyphs: [Character: Glyph], atlasBytes: [UInt8], width: Int, height: Int, lineHeight: Float) {
+        guard cellSize > 0 else {
+            throw SDFFontAtlasGeneratorError.invalidCellSize
+        }
+        guard fontSize > 0 else {
+            throw SDFFontAtlasGeneratorError.invalidFontSize
+        }
         
-        let ascent = CTFontGetAscent(ctFont)
-        let descent = CTFontGetDescent(ctFont)
-        let leading = CTFontGetLeading(ctFont)
-        let lineHeight = Float(ascent + descent + leading)
-        
+        let (metrics, rasterizedGlyphs) = try rasterizer.rasterize(
+            fontName: fontName,
+            fontSize: fontSize,
+            characters: characters,
+            cellSize: cellSize
+        )
+        let lineHeight = metrics.lineHeight
         let sortedChars = characters.sorted()
         let numGlyphs = sortedChars.count
         
-        // 1. Pack cells into a square texture atlas (power-of-two)
-        var atlasWidth = 512
-        var atlasHeight = 512
+        // 1. Pack cells into a square texture atlas (power-of-two), ensuring atlas dimensions >= cellSize
+        let minDimension = max(512, nextPowerOfTwo(cellSize))
+        var atlasWidth = minDimension
+        var atlasHeight = minDimension
         while true {
-            let cellsPerRow = atlasWidth / cellSize
+            let cellsPerRow = max(1, atlasWidth / cellSize)
             let numRows = (numGlyphs + cellsPerRow - 1) / cellsPerRow
             if numRows * cellSize <= atlasHeight {
                 break
@@ -54,75 +79,48 @@ public struct SDFFontAtlasGenerator {
             atlasHeight *= 2
         }
         
-        let cellsPerRow = atlasWidth / cellSize
+        let cellsPerRow = max(1, atlasWidth / cellSize)
         var atlasBytes = [UInt8](repeating: 0, count: atlasWidth * atlasHeight)
         var glyphs = [Character: Glyph]()
         
         for (index, char) in sortedChars.enumerated() {
+            guard let rGlyph = rasterizedGlyphs[char] else { continue }
             let row = index / cellsPerRow
             let col = index % cellsPerRow
             let cellX = col * cellSize
             let cellY = row * cellSize
             
-            let utf16Chars = Array(char.utf16)
-            var cgGlyph = CGGlyph()
-            let hasGlyph = CTFontGetGlyphsForCharacters(ctFont, utf16Chars, &cgGlyph, utf16Chars.count)
-            
-            guard hasGlyph else {
-                continue
-            }
-            
-            var advance = CGSize.zero
-            CTFontGetAdvancesForGlyphs(ctFont, .horizontal, &cgGlyph, &advance, 1)
-            
-            var boundingRect = CGRect.zero
-            CTFontGetBoundingRectsForGlyphs(ctFont, .horizontal, &cgGlyph, &boundingRect, 1)
-            
-            let glyphSize = SIMD2<Float>(Float(boundingRect.width), Float(boundingRect.height))
-            let glyphOffset = SIMD2<Float>(Float(boundingRect.origin.x), Float(boundingRect.origin.y))
-            let xAdvance = Float(advance.width)
-            
             var uvRect = SIMD4<Float>(0, 0, 0, 0)
+            let bWidth = rGlyph.boundingRect.z
+            let bHeight = rGlyph.boundingRect.w
             
-            if !boundingRect.isEmpty && boundingRect.width > 0 && boundingRect.height > 0 {
-                // Render grayscale glyph to temp buffer
-                if let grayPixels = renderGlyphGrayscale(
-                    ctFont: ctFont,
-                    glyph: cgGlyph,
-                    boundingRect: boundingRect,
-                    cellSize: cellSize
-                ) {
-                    // Generate SDF representation
-                    let sdfPixels = generateSDF(
-                        pixelBuffer: grayPixels,
-                        cellSize: cellSize,
-                        maxRadius: searchRadius
-                    )
+            if let grayPixels = rGlyph.grayscalePixels, bWidth > 0 && bHeight > 0 {
+                let sdfPixels = generateSDF(
+                    pixelBuffer: grayPixels,
+                    cellSize: cellSize,
+                    maxRadius: searchRadius
+                )
+                
+                // Copy to texture atlas
+                for y in 0..<cellSize {
+                    let srcOffset = y * cellSize
+                    let destOffset = (cellY + y) * atlasWidth + cellX
                     
-                    // Copy to texture atlas
-                    for y in 0..<cellSize {
-                        let srcOffset = y * cellSize
-                        let destOffset = (cellY + y) * atlasWidth + cellX
-                        
-                        // Copy row
-                        atlasBytes.withUnsafeMutableBufferPointer { destPtr in
-                            sdfPixels.withUnsafeBufferPointer { srcPtr in
-                                let destStart = destPtr.baseAddress!.advanced(by: destOffset)
-                                let srcStart = srcPtr.baseAddress!.advanced(by: srcOffset)
-                                destStart.initialize(from: srcStart, count: cellSize)
-                            }
+                    atlasBytes.withUnsafeMutableBufferPointer { destPtr in
+                        sdfPixels.withUnsafeBufferPointer { srcPtr in
+                            let destStart = destPtr.baseAddress!.advanced(by: destOffset)
+                            let srcStart = srcPtr.baseAddress!.advanced(by: srcOffset)
+                            destStart.initialize(from: srcStart, count: cellSize)
                         }
                     }
-                    
-                    // Compute UV coordinates in texture space (mapping to the exact glyph boundary)
-                    let uvX = (Float(cellX) + (Float(cellSize) - Float(boundingRect.width)) / 2.0) / Float(atlasWidth)
-                    let uvY = (Float(cellY) + (Float(cellSize) - Float(boundingRect.height)) / 2.0) / Float(atlasHeight)
-                    let uvWidth = Float(boundingRect.width) / Float(atlasWidth)
-                    let uvHeight = Float(boundingRect.height) / Float(atlasHeight)
-                    uvRect = SIMD4<Float>(uvX, uvY, uvWidth, uvHeight)
                 }
+                
+                let uvX = Float(cellX) / Float(atlasWidth)
+                let uvY = Float(cellY) / Float(atlasHeight)
+                let uvWidth = Float(cellSize) / Float(atlasWidth)
+                let uvHeight = Float(cellSize) / Float(atlasHeight)
+                uvRect = SIMD4<Float>(uvX, uvY, uvWidth, uvHeight)
             } else {
-                // Empty/whitespace glyph: just use a portion of the atlas mapped to cell bounds
                 let uvX = Float(cellX) / Float(atlasWidth)
                 let uvY = Float(cellY) / Float(atlasHeight)
                 let uvWidth = Float(cellSize) / Float(atlasWidth)
@@ -133,17 +131,95 @@ public struct SDFFontAtlasGenerator {
             glyphs[char] = Glyph(
                 char: char,
                 uvRect: uvRect,
-                size: glyphSize,
-                offset: glyphOffset,
-                xAdvance: xAdvance
+                size: rGlyph.size,
+                offset: rGlyph.offset,
+                xAdvance: rGlyph.xAdvance
             )
         }
         
-        // 2. Create Metal texture
+        return (glyphs: glyphs, atlasBytes: atlasBytes, width: atlasWidth, height: atlasHeight, lineHeight: lineHeight)
+    }
+    
+    /// Generates a `FontAtlas` dynamically for a given font and set of characters using an abstract `Renderer`.
+    /// - Parameters:
+    ///   - fontName: The PostScript or family name of the font (e.g., "Helvetica", "Courier").
+    ///   - fontSize: The size of the font in points.
+    ///   - characters: The set of characters to generate glyphs for.
+    ///   - renderer: The renderer backend used to create the texture.
+    ///   - rasterizer: Optional font rasterizer (defaults to `CoreTextFontRasterizer` on Apple platforms).
+    ///   - cellSize: The width and height of each glyph's cell in pixels. Defaults to 64.
+    ///   - searchRadius: The distance radius in pixels to search for boundaries during SDF calculation. Defaults to 8.0.
+    /// - Returns: A fully generated `FontAtlas`.
+    /// - Throws: `SDFFontAtlasGeneratorError` if texture creation fails or no rasterizer is available.
+    public static func generate(
+        fontName: String,
+        fontSize: Float,
+        characters: Set<Character> = Set((32...126).map { Character(UnicodeScalar($0)!) }),
+        renderer: any Renderer,
+        rasterizer: (any FontRasterizer)? = nil,
+        cellSize: Int = 64,
+        searchRadius: Float = 8.0
+    ) throws -> FontAtlas {
+        #if canImport(CoreText) && canImport(CoreGraphics)
+        let effectiveRasterizer: any FontRasterizer = rasterizer ?? CoreTextFontRasterizer()
+        #else
+        guard let effectiveRasterizer = rasterizer else {
+            throw SDFFontAtlasGeneratorError.rasterizerRequired
+        }
+        #endif
+        
+        let data = try buildAtlasData(
+            fontName: fontName,
+            fontSize: fontSize,
+            characters: characters,
+            rasterizer: effectiveRasterizer,
+            cellSize: cellSize,
+            searchRadius: searchRadius
+        )
+        
+        guard let texture = renderer.createTexture(
+            width: data.width,
+            height: data.height,
+            pixelData: data.atlasBytes,
+            format: .r8Unorm
+        ) else {
+            throw SDFFontAtlasGeneratorError.textureCreationFailed
+        }
+        
+        return FontAtlas(
+            texture: texture,
+            glyphs: data.glyphs,
+            fontSize: fontSize,
+            lineHeight: data.lineHeight
+        )
+    }
+
+    #if canImport(Metal)
+    /// Generates a `FontAtlas` dynamically for a given font and set of characters using an Apple Metal device.
+    /// Backward-compatible overload for Metal-only callers.
+    public static func generate(
+        fontName: String,
+        fontSize: Float,
+        characters: Set<Character> = Set((32...126).map { Character(UnicodeScalar($0)!) }),
+        device: any MTLDevice,
+        cellSize: Int = 64,
+        searchRadius: Float = 8.0
+    ) throws -> FontAtlas {
+        #if canImport(CoreText) && canImport(CoreGraphics)
+        let rasterizer = CoreTextFontRasterizer()
+        let data = try buildAtlasData(
+            fontName: fontName,
+            fontSize: fontSize,
+            characters: characters,
+            rasterizer: rasterizer,
+            cellSize: cellSize,
+            searchRadius: searchRadius
+        )
+        
         let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .r8Unorm,
-            width: atlasWidth,
-            height: atlasHeight,
+            width: data.width,
+            height: data.height,
             mipmapped: false
         )
         textureDescriptor.usage = [.shaderRead]
@@ -160,63 +236,27 @@ public struct SDFFontAtlasGenerator {
         }
         
         mtlTexture.replace(
-            region: MTLRegionMake2D(0, 0, atlasWidth, atlasHeight),
+            region: MTLRegionMake2D(0, 0, data.width, data.height),
             mipmapLevel: 0,
-            withBytes: atlasBytes,
-            bytesPerRow: atlasWidth
+            withBytes: data.atlasBytes,
+            bytesPerRow: data.width
         )
         
         let texture = MetalTexture(texture: mtlTexture)
         return FontAtlas(
             texture: texture,
-            glyphs: glyphs,
+            glyphs: data.glyphs,
             fontSize: fontSize,
-            lineHeight: lineHeight
+            lineHeight: data.lineHeight
         )
+        #else
+        throw SDFFontAtlasGeneratorError.rasterizerRequired
+        #endif
     }
-    
-    /// Renders a single glyph in a centered cell to a grayscale pixel buffer.
-    private static func renderGlyphGrayscale(
-        ctFont: CTFont,
-        glyph: CGGlyph,
-        boundingRect: CGRect,
-        cellSize: Int
-    ) -> [UInt8]? {
-        let colorSpace = CGColorSpaceCreateDeviceGray()
-        var pixelBuffer = [UInt8](repeating: 0, count: cellSize * cellSize)
-        
-        guard let context = CGContext(
-            data: &pixelBuffer,
-            width: cellSize,
-            height: cellSize,
-            bitsPerComponent: 8,
-            bytesPerRow: cellSize,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else {
-            return nil
-        }
-        
-        // Clear background to black (0)
-        context.setFillColor(gray: 0.0, alpha: 1.0)
-        context.fill(CGRect(x: 0, y: 0, width: cellSize, height: cellSize))
-        
-        // Center the glyph's bounding box in the cell
-        let drawX = CGFloat(cellSize) / 2.0 - boundingRect.origin.x - boundingRect.width / 2.0
-        let drawY = CGFloat(cellSize) / 2.0 - boundingRect.origin.y - boundingRect.height / 2.0
-        
-        context.textMatrix = .identity
-        context.setFillColor(gray: 1.0, alpha: 1.0)
-        
-        var mutableGlyph = glyph
-        var glyphPosition = CGPoint(x: drawX, y: drawY)
-        CTFontDrawGlyphs(ctFont, &mutableGlyph, &glyphPosition, 1, context)
-        
-        return pixelBuffer
-    }
+    #endif
     
     /// Generates a signed distance field (SDF) from a grayscale pixel buffer.
-    private static func generateSDF(
+    public static func generateSDF(
         pixelBuffer: [UInt8],
         cellSize: Int,
         maxRadius: Float

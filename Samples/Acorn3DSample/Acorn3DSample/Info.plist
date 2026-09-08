@@ -26,5 +26,9 @@
 		<key>UIColorName</key>
 		<string>Black</string>
 	</dict>
+	<key>MBXAccessToken</key>
+	<string>YOUR_MAPBOX_ACCESS_TOKEN</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Location is used to display your character and load 3D map tiles for your current location.</string>
 </dict>
 </plist>

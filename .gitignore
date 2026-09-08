@@ -9,9 +9,14 @@ xcuserdata/
 
 build_output/
 build_output_3d/
+build_output_device/
 imgui.ini
 *.log
 build_matchacorn/
 build_jump/
 fix_pbxproj.py
 test_renderer.swift
+
+# Secrets and credentials
+*MapboxCredentials.plist
+

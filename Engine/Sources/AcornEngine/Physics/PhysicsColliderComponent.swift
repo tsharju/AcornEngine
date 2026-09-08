@@ -1,5 +1,4 @@
 import box2d
-import simd
 
 /// Defines a shape attached to a physics body.
 public struct PhysicsColliderComponent: Component, @unchecked Sendable {

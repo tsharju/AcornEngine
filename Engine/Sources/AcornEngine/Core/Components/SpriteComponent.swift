@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A component that renders a single sprite from a SpriteSheet.
 public struct SpriteComponent: Component {

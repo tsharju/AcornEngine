@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A utility for generating vertex data for text rendering from a string and a `FontAtlas`.
 public enum TextMeshGenerator {

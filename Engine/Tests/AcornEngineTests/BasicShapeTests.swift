@@ -1,5 +1,4 @@
 import Testing
-import simd
 @testable import AcornEngine
 
 struct BasicShapeTests {
@@ -51,8 +50,8 @@ struct BasicShapeTests {
         #expect(vertices.count == expectedCount)
         
         for vertex in vertices {
-            let length = simd_length(vertex.position)
-            #expect(abs(length - 1.0) < 0.001) // Distance to center should equal radius
+            let len = length(vertex.position)
+            #expect(abs(len - 1.0) < 0.001) // Distance to center should equal radius
         }
     }
     

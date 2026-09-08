@@ -10,6 +10,10 @@ let package = Package(
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
+            name: "AcornMath",
+            targets: ["AcornMath"]
+        ),
+        .library(
             name: "AcornEngine",
             targets: ["AcornEngine"]
         ),
@@ -18,12 +22,20 @@ let package = Package(
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
+            name: "AcornMath",
+            path: "Sources/AcornMath"
+        ),
+        .target(
             name: "AcornEngine",
-            dependencies: ["box2d", "AcornMetal"],
+            dependencies: ["box2d", "AcornMetal", "AcornMath"],
             resources: [
                 .process("Renderer/Shaders.metal")
             ],
             swiftSettings: [.interoperabilityMode(.Cxx)]
+        ),
+        .testTarget(
+            name: "AcornMathTests",
+            dependencies: ["AcornMath"]
         ),
         .testTarget(
             name: "AcornEngineTests",

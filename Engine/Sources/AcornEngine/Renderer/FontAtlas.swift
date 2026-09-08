@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A description of a single glyph's layout and texture coordinates.
 public struct Glyph: Sendable {

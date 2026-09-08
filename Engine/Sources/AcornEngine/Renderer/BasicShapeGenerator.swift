@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A utility for generating vertices of basic 3D shapes.
 public enum BasicShapeGenerator {

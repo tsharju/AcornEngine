@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// Represents detailed information about a physical collision contact point.
 public struct CollisionContactPoint: Sendable, Hashable {

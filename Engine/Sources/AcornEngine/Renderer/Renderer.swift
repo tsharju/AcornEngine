@@ -1,5 +1,5 @@
 import Foundation
-import simd
+import AcornMath
 
 /// An error that can occur during renderer initialization.
 public enum RendererError: Error {
@@ -29,13 +29,13 @@ public protocol RenderContext: Sendable {}
 /// Global uniforms passed to the renderer.
 public struct GlobalUniforms: Sendable, Equatable {
     /// The combined model-view-projection matrix.
-    public var modelViewProjectionMatrix: simd_float4x4
+    public var modelViewProjectionMatrix: Matrix4x4
     
     /// The model matrix.
-    public var modelMatrix: simd_float4x4
+    public var modelMatrix: Matrix4x4
     
     /// The normal matrix (inverse transpose of model matrix).
-    public var normalMatrix: simd_float4x4
+    public var normalMatrix: Matrix4x4
     
     /// The ambient light color.
     public var ambientLightColor: SIMD4<Float>
@@ -57,9 +57,9 @@ public struct GlobalUniforms: Sendable, Equatable {
     
     /// Initializes a new set of global uniforms.
     public init(
-        modelViewProjectionMatrix: simd_float4x4 = .identity,
-        modelMatrix: simd_float4x4 = .identity,
-        normalMatrix: simd_float4x4 = .identity,
+        modelViewProjectionMatrix: Matrix4x4 = .identity,
+        modelMatrix: Matrix4x4 = .identity,
+        normalMatrix: Matrix4x4 = .identity,
         ambientLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
         directionalLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
         directionalLightDirection: SIMD4<Float> = SIMD4<Float>(0, -1, 0, 0),
@@ -82,12 +82,12 @@ public struct GlobalUniforms: Sendable, Equatable {
 /// Uniforms used by the sprite shader.
 public struct SpriteUniforms: Sendable, Equatable {
     /// The combined model-view-projection matrix.
-    public var modelViewProjectionMatrix: simd_float4x4
+    public var modelViewProjectionMatrix: Matrix4x4
     /// A global color tint for the sprite.
     public var colorTint: SIMD4<Float>
     
     /// Initializes a new set of sprite uniforms.
-    public init(modelViewProjectionMatrix: simd_float4x4 = .identity, colorTint: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)) {
+    public init(modelViewProjectionMatrix: Matrix4x4 = .identity, colorTint: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)) {
         self.modelViewProjectionMatrix = modelViewProjectionMatrix
         self.colorTint = colorTint
     }
@@ -106,7 +106,7 @@ public struct SDFUniforms: Sendable, Equatable {
     /// Padding.
     public var padding: SIMD2<Float>
     /// The combined model-view-projection matrix.
-    public var modelViewProjectionMatrix: simd_float4x4
+    public var modelViewProjectionMatrix: Matrix4x4
     
     /// Initializes a new set of SDF rendering uniforms.
     public init(
@@ -114,7 +114,7 @@ public struct SDFUniforms: Sendable, Equatable {
         outlineColor: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
         outlineWidth: Float = 0.0,
         edgeWidth: Float = 0.05,
-        modelViewProjectionMatrix: simd_float4x4 = .identity
+        modelViewProjectionMatrix: Matrix4x4 = .identity
     ) {
         self.textColor = textColor
         self.outlineColor = outlineColor
@@ -128,7 +128,7 @@ public struct SDFUniforms: Sendable, Equatable {
 /// Frame-level uniforms for 3D rendering passes.
 public struct FrameUniforms: Sendable, Equatable {
     /// The camera view-projection matrix.
-    public var viewProjectionMatrix: simd_float4x4
+    public var viewProjectionMatrix: Matrix4x4
     /// The ambient light color.
     public var ambientLightColor: SIMD4<Float>
     /// The directional light color.
@@ -142,7 +142,7 @@ public struct FrameUniforms: Sendable, Equatable {
     
     /// Initializes a new set of frame uniforms.
     public init(
-        viewProjectionMatrix: simd_float4x4 = .identity,
+        viewProjectionMatrix: Matrix4x4 = .identity,
         ambientLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
         directionalLightColor: SIMD4<Float> = SIMD4<Float>(repeating: 0.0),
         directionalLightDirection: SIMD4<Float> = SIMD4<Float>(0, -1, 0, 0),
@@ -161,16 +161,16 @@ public struct FrameUniforms: Sendable, Equatable {
 /// Per-instance data for instanced 3D mesh rendering.
 public struct MeshInstanceData: Sendable, Equatable {
     /// The model transformation matrix.
-    public var modelMatrix: simd_float4x4
+    public var modelMatrix: Matrix4x4
     /// The normal matrix (inverse transpose of model matrix).
-    public var normalMatrix: simd_float4x4
+    public var normalMatrix: Matrix4x4
     /// The color tint for this instance.
     public var color: SIMD4<Float>
     
     /// Initializes instance data for a 3D mesh.
     public init(
-        modelMatrix: simd_float4x4 = .identity,
-        normalMatrix: simd_float4x4 = .identity,
+        modelMatrix: Matrix4x4 = .identity,
+        normalMatrix: Matrix4x4 = .identity,
         color: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)
     ) {
         self.modelMatrix = modelMatrix
@@ -182,10 +182,10 @@ public struct MeshInstanceData: Sendable, Equatable {
 /// Frame-level uniforms for 2D sprite rendering passes.
 public struct SpriteFrameUniforms: Sendable, Equatable {
     /// The camera view-projection matrix.
-    public var viewProjectionMatrix: simd_float4x4
+    public var viewProjectionMatrix: Matrix4x4
     
     /// Initializes sprite frame uniforms.
-    public init(viewProjectionMatrix: simd_float4x4 = .identity) {
+    public init(viewProjectionMatrix: Matrix4x4 = .identity) {
         self.viewProjectionMatrix = viewProjectionMatrix
     }
 }
@@ -193,7 +193,7 @@ public struct SpriteFrameUniforms: Sendable, Equatable {
 /// Per-instance data for instanced 2D sprite rendering.
 public struct SpriteInstanceData: Sendable, Equatable {
     /// The model transformation matrix.
-    public var modelMatrix: simd_float4x4
+    public var modelMatrix: Matrix4x4
     /// The color tint for this sprite instance.
     public var colorTint: SIMD4<Float>
     /// The normalized UV rectangle (uMin, vMin, uMax, vMax).
@@ -201,7 +201,7 @@ public struct SpriteInstanceData: Sendable, Equatable {
     
     /// Initializes instance data for a 2D sprite.
     public init(
-        modelMatrix: simd_float4x4 = .identity,
+        modelMatrix: Matrix4x4 = .identity,
         colorTint: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
         uvRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1)
     ) {

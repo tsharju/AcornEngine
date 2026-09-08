@@ -1,5 +1,4 @@
 import box2d
-import simd
 
 /// Represents a physical body in the physics simulation.
 public struct PhysicsBodyComponent: Component, @unchecked Sendable {

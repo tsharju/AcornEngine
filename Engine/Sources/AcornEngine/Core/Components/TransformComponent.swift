@@ -1,5 +1,5 @@
 import Foundation
-import simd
+import AcornMath
 
 /// A component that represents an entity's position, rotation, and scale in 3D space.
 public struct TransformComponent: Component {
@@ -24,7 +24,7 @@ public struct TransformComponent: Component {
     }
     
     /// The 4x4 transformation matrix derived from position, rotation, and scale.
-    public var matrix: simd_float4x4 {
-        simd_float4x4(position: position, rotation: rotation, scale: scale)
+    public var matrix: Matrix4x4 {
+        Matrix4x4(position: position, rotation: rotation, scale: scale)
     }
 }

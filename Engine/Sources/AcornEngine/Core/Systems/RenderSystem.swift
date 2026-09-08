@@ -1,5 +1,5 @@
 import Foundation
-import simd
+import AcornMath
 
 /// A system that queries the world for renderable entities and submits them to the renderer.
 @MainActor
@@ -18,9 +18,9 @@ public struct RenderSystem {
     ///   - world: The ECS world.
     ///   - context: The render context for the current frame.
     ///   - overrideViewProjection: Optional override for the camera matrix.
-    public func render(world: World, context: RenderContext, overrideViewProjection: simd_float4x4? = nil) {
+    public func render(world: World, context: RenderContext, overrideViewProjection: Matrix4x4? = nil) {
         // Find active camera
-        var viewProjectionMatrix = simd_float4x4.identity
+        var viewProjectionMatrix = Matrix4x4.identity
         
         if let override = overrideViewProjection {
             viewProjectionMatrix = override
@@ -29,7 +29,7 @@ public struct RenderSystem {
             if world.component(ofType: TransformComponent.self, for: cameraEntity.0) != nil {
                 let viewMatrix = world.worldMatrix(for: cameraEntity.0).inverse
                 let projectionMatrix = camera.projectionMatrix()
-                viewProjectionMatrix = matrix_multiply(projectionMatrix, viewMatrix)
+                viewProjectionMatrix = projectionMatrix * viewMatrix
             }
         }
         
@@ -49,7 +49,7 @@ public struct RenderSystem {
                 directionalColor = SIMD4<Float>(c.x, c.y, c.z, 1.0)
                 if world.component(ofType: TransformComponent.self, for: entity) != nil {
                     let dir = world.worldMatrix(for: entity) * SIMD4<Float>(0, 0, -1, 0)
-                    let len = simd_length(SIMD3<Float>(dir.x, dir.y, dir.z))
+                    let len = length(SIMD3<Float>(dir.x, dir.y, dir.z))
                     if len > 0.0001 {
                         directionalDirection = SIMD4<Float>(dir.x / len, dir.y / len, dir.z / len, 0)
                     }
@@ -146,7 +146,7 @@ public struct RenderSystem {
             
             if let mesh = currentComponent.mesh {
                 let modelMatrix = world.worldMatrix(for: entity)
-                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
+                let mvp = viewProjectionMatrix * modelMatrix
                 let uniforms = SpriteUniforms(modelViewProjectionMatrix: mvp, colorTint: SIMD4<Float>(1, 1, 1, 1))
                 
                 renderer.renderSprite(
@@ -202,8 +202,8 @@ public struct RenderSystem {
                 let frame = spriteComponent.spriteSheet.frame(named: spriteComponent.frameName)
                 let width = Float(frame?.sourceSize.w ?? 1)
                 let height = Float(frame?.sourceSize.h ?? 1)
-                let sizeScale = simd_float4x4(diagonal: SIMD4<Float>(width, height, 1.0, 1.0))
-                let modelMatrix = matrix_multiply(world.worldMatrix(for: entity), sizeScale)
+                let sizeScale = Matrix4x4(diagonal: SIMD4<Float>(width, height, 1.0, 1.0))
+                let modelMatrix = world.worldMatrix(for: entity) * sizeScale
                 
                 let uvRect = SpriteMeshGenerator.uvRect(for: spriteComponent.frameName, in: spriteComponent.spriteSheet)
                 let instance = SpriteInstanceData(
@@ -243,21 +243,21 @@ public struct RenderSystem {
                 let baseScale: Float = 0.003
                 let finalScale = transform.scale * SIMD3<Float>(repeating: baseScale)
                 
-                let localMatrix = simd_float4x4(
+                let localMatrix = Matrix4x4(
                     position: transform.position,
                     rotation: transform.rotation,
                     scale: finalScale
                 )
                 
-                let parentMatrix: simd_float4x4
+                let parentMatrix: Matrix4x4
                 if let parentComp = world.component(ofType: ParentComponent.self, for: entity) {
                     parentMatrix = world.worldMatrix(for: parentComp.parent)
                 } else {
                     parentMatrix = .identity
                 }
                 
-                let modelMatrix = matrix_multiply(parentMatrix, localMatrix)
-                let mvp = matrix_multiply(viewProjectionMatrix, modelMatrix)
+                let modelMatrix = parentMatrix * localMatrix
+                let mvp = viewProjectionMatrix * modelMatrix
                 
                 let uniforms = SDFUniforms(
                     textColor: currentComponent.textColor,

@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A component that stores parameters and state for rendering SDF text.
 public struct TextComponent: Component {

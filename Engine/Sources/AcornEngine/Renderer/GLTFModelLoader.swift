@@ -1,7 +1,6 @@
 import Foundation
 import Metal
 import AcornMetal
-import simd
 
 /// Represents a node within a loaded glTF scene.
 public struct GLTFNode: Sendable {

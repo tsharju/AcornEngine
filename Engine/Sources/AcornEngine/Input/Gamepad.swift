@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// Represents standard physical or virtual gamepad buttons.
 public enum GamepadButton: String, Sendable, CaseIterable, Hashable {

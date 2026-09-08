@@ -184,9 +184,9 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
         
         var cxxUniforms = Acorn.GlobalUniforms()
-        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix
-        cxxUniforms.modelMatrix = uniforms.modelMatrix
-        cxxUniforms.normalMatrix = uniforms.normalMatrix
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix.asSIMD
+        cxxUniforms.modelMatrix = uniforms.modelMatrix.asSIMD
+        cxxUniforms.normalMatrix = uniforms.normalMatrix.asSIMD
         cxxUniforms.ambientLightColor = uniforms.ambientLightColor
         cxxUniforms.directionalLightColor = uniforms.directionalLightColor
         cxxUniforms.directionalLightDirection = uniforms.directionalLightDirection
@@ -225,7 +225,7 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         cxxUniforms.outlineWidth = uniforms.outlineWidth
         cxxUniforms.edgeWidth = uniforms.edgeWidth
         cxxUniforms.padding = uniforms.padding
-        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix.asSIMD
         
         cxxRenderer.pointee.renderText(metalMesh.cxxMesh, metalTexture.cxxTexture, cxxUniforms, encoderPtr)
     }
@@ -250,7 +250,7 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
         
         var cxxUniforms = Acorn.SpriteUniforms()
-        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix.asSIMD
         cxxUniforms.colorTint = uniforms.colorTint
         
         cxxRenderer.pointee.renderSprite(metalMesh.cxxMesh, metalTexture.cxxTexture, cxxUniforms, encoderPtr)
@@ -293,7 +293,7 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
         
         var cxxUniforms = Acorn.FrameUniforms()
-        cxxUniforms.viewProjectionMatrix = uniforms.viewProjectionMatrix
+        cxxUniforms.viewProjectionMatrix = uniforms.viewProjectionMatrix.asSIMD
         cxxUniforms.ambientLightColor = uniforms.ambientLightColor
         cxxUniforms.directionalLightColor = uniforms.directionalLightColor
         cxxUniforms.directionalLightDirection = uniforms.directionalLightDirection
@@ -305,8 +305,8 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         
         let cxxInstances = instances.map { inst -> Acorn.MeshInstanceData in
             var d = Acorn.MeshInstanceData()
-            d.modelMatrix = inst.modelMatrix
-            d.normalMatrix = inst.normalMatrix
+            d.modelMatrix = inst.modelMatrix.asSIMD
+            d.normalMatrix = inst.normalMatrix.asSIMD
             d.color = inst.color
             return d
         }
@@ -346,11 +346,11 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
         
         var cxxUniforms = Acorn.SpriteFrameUniforms()
-        cxxUniforms.viewProjectionMatrix = uniforms.viewProjectionMatrix
+        cxxUniforms.viewProjectionMatrix = uniforms.viewProjectionMatrix.asSIMD
         
         let cxxInstances = instances.map { inst -> Acorn.SpriteInstanceData in
             var d = Acorn.SpriteInstanceData()
-            d.modelMatrix = inst.modelMatrix
+            d.modelMatrix = inst.modelMatrix.asSIMD
             d.colorTint = inst.colorTint
             d.uvRect = inst.uvRect
             return d

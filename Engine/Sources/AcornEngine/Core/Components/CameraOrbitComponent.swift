@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A component that makes an entity (typically a camera) float in the air and orbit around a target.
 public struct CameraOrbitComponent: Component {

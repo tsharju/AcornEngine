@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A component that tracks an entity's real-world GPS location and synchronizes it with its TransformComponent.
 public struct GPSPositionComponent: Component {

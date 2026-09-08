@@ -1,5 +1,4 @@
 import box2d
-import simd
 
 /// A component representing a non-solid sensor / trigger volume attached to an entity's physics body.
 ///

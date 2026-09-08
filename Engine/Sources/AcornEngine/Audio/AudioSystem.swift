@@ -1,6 +1,5 @@
 import Foundation
 @preconcurrency import AVFoundation
-import simd
 
 extension AudioSourceComponent.RenderingAlgorithm {
     /// Maps the engine rendering algorithm to AVFoundation's `AVAudio3DMixingRenderingAlgorithm`.

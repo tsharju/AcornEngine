@@ -1,6 +1,5 @@
 import Foundation
 import box2d
-import simd
 
 /// Key wrapper for Box2D shape identifiers to allow dictionary lookups.
 private struct ShapeKey: Hashable {

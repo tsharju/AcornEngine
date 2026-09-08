@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A component that describes how particles are emitted.
 public struct ParticleEmitterComponent: Component {

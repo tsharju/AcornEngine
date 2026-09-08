@@ -1,5 +1,5 @@
 import Foundation
-import simd
+import AcornMath
 
 /// The type of projection to use for the camera.
 public enum ProjectionType: Sendable {
@@ -56,12 +56,12 @@ public struct CameraComponent: Component {
     }
     
     /// Computes the projection matrix for this camera.
-    public func projectionMatrix() -> simd_float4x4 {
+    public func projectionMatrix() -> Matrix4x4 {
         switch projectionType {
         case .orthographic:
             let right = orthographicSize * aspectRatio
             let top = orthographicSize
-            return simd_float4x4(
+            return Matrix4x4(
                 orthographic: -right,
                 right: right,
                 bottom: -top,
@@ -70,7 +70,7 @@ public struct CameraComponent: Component {
                 farZ: farZ
             )
         case .perspective:
-            return simd_float4x4(
+            return Matrix4x4(
                 perspectiveFovY: fovY,
                 aspect: aspectRatio,
                 nearZ: nearZ,

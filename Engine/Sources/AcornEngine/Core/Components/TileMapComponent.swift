@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A component that renders a 2D tile map using a SpriteSheet.
 public struct TileMapComponent: Component {

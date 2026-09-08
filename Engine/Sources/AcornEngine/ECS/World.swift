@@ -1,4 +1,4 @@
-import simd
+import AcornMath
 
 #if DEBUG
 /// Metadata representing a registered component type, used by the editor inspector.
@@ -300,15 +300,15 @@ public class World {
     /// Includes a recursion depth limit to prevent infinite loops in circular hierarchies.
     /// - Parameter entity: The entity to calculate the world matrix for.
     /// - Returns: The 4x4 world transformation matrix.
-    public func worldMatrix(for entity: Entity) -> simd_float4x4 {
+    public func worldMatrix(for entity: Entity) -> Matrix4x4 {
         var currentEntity = entity
-        var accumulatedMatrix = simd_float4x4.identity
+        var accumulatedMatrix = Matrix4x4.identity
         var depth = 0
         
         while depth < 64 {
             depth += 1
             if let transform = self.component(ofType: TransformComponent.self, for: currentEntity) {
-                accumulatedMatrix = matrix_multiply(transform.matrix, accumulatedMatrix)
+                accumulatedMatrix = transform.matrix * accumulatedMatrix
             }
             if let parentComp = self.component(ofType: ParentComponent.self, for: currentEntity) {
                 currentEntity = parentComp.parent

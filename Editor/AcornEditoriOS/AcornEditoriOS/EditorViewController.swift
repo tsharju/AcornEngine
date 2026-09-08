@@ -428,7 +428,7 @@ extension EditorViewController: MTKViewDelegate {
         ImGui.Checkbox("Use Scene Camera", &useSceneCamera)
         ImGui.SameLine(0, -1.0)
         ImGui.Checkbox("Render Wireframes", &renderWireframes)
-        var viewProj = simd_float4x4()
+        var viewProj = Matrix4x4.identity
         var validCamera = true
         
         if useSceneCamera {
@@ -451,13 +451,13 @@ extension EditorViewController: MTKViewDelegate {
             
             let fov: Float = 60.0 * .pi / 180.0
             let aspect: Float = workSize.y > 0 ? Float(workSize.x / workSize.y) : (16.0 / 9.0)
-            let projection = simd_float4x4(perspectiveFovY: fov, aspect: aspect, nearZ: 0.1, farZ: 1000.0)
+            let projection = Matrix4x4(perspectiveFovY: fov, aspect: aspect, nearZ: 0.1, farZ: 1000.0)
             let pitchR = editorCameraPitch * .pi / 180.0
             let yawR = editorCameraYaw * .pi / 180.0
             
             let pos = SIMD3<Float>(editorCameraPos[0], editorCameraPos[1], editorCameraPos[2])
             let rot = SIMD3<Float>(pitchR, yawR, 0)
-            let transform = simd_float4x4(position: pos, rotation: rot, scale: SIMD3<Float>(1, 1, 1))
+            let transform = Matrix4x4(position: pos, rotation: rot, scale: SIMD3<Float>(1, 1, 1))
             let view = transform.inverse
             viewProj = projection * view
         }

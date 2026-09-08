@@ -1,5 +1,5 @@
 import Foundation
-import simd
+import AcornMath
 
 /// A system that updates camera positions based on their tracking targets.
 @MainActor
@@ -26,7 +26,7 @@ public struct CameraSystem: System {
             
             // Interpolate towards the target position
             // Uses simple linear interpolation for smoothing
-            transform.position = simd_mix(transform.position, targetPosition, SIMD3<Float>(repeating: tracking.smoothing))
+            transform.position = mix(transform.position, targetPosition, t: tracking.smoothing)
             
             world.addComponent(transform, to: entity)
         }

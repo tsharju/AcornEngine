@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// An event to trigger playing a one-shot audio clip.
 public struct PlaySoundEvent: Event {

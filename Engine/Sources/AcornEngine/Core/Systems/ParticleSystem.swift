@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// An ECS System that manages the emission, lifecycle, and physics of particles.
 @MainActor

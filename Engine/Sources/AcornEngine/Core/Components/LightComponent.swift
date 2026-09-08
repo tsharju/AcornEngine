@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// The type of light source.
 public enum LightType: Sendable {

@@ -2,7 +2,6 @@ import Foundation
 import CoreGraphics
 import CoreText
 import Metal
-import simd
 
 /// Errors that can occur during SDF Font Atlas generation.
 public enum SDFFontAtlasGeneratorError: Error {

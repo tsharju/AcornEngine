@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// Maintains the comprehensive, queryable input state across keyboard, mouse, touch, and gamepads.
 @MainActor

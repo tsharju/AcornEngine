@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// Represents the lifecycle phase of a touch point.
 public enum TouchPhase: Sendable, Hashable {

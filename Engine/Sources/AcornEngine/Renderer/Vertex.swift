@@ -1,4 +1,3 @@
-import simd
 
 /// A vertex containing position, color, and texture coordinate information for rendering.
 public struct Vertex: Sendable, Equatable {

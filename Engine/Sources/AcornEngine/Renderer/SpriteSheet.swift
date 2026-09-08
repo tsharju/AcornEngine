@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A 2D rectangle in pixel coordinates.
 public struct SpriteRect: Codable, Sendable, Equatable {

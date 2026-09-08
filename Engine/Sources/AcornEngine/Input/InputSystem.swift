@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A system that manages input state across keyboard, mouse, touch pointers, and game controllers.
 @MainActor

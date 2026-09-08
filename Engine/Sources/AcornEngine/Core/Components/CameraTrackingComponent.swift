@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A component that makes an entity (typically a camera) smoothly track another entity.
 public struct CameraTrackingComponent: Component {

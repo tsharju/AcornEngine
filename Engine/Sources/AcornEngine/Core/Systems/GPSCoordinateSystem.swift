@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// A system that synchronizes `GPSPositionComponent` with `TransformComponent`, mapping real-world coordinates to game world space using the Web Mercator projection.
 @MainActor

@@ -1,5 +1,4 @@
 import Foundation
-import simd
 
 /// Utility for generating meshes for sprites and tile maps.
 public enum SpriteMeshGenerator {

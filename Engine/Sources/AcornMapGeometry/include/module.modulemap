@@ -1,0 +1,5 @@
+module AcornMapGeometry {
+    umbrella header "AcornMapGeometry.hpp"
+    requires cplusplus
+    export *
+}

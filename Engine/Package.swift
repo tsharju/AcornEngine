@@ -30,7 +30,8 @@ let package = Package(
             dependencies: [
                 "box2d",
                 .target(name: "AcornMetal", condition: .when(platforms: [.iOS, .macOS, .tvOS, .visionOS])),
-                "AcornMath"
+                "AcornMath",
+                "AcornMapGeometry"
             ],
             resources: [
                 .process("Renderer/Shaders.metal")
@@ -43,7 +44,10 @@ let package = Package(
         ),
         .testTarget(
             name: "AcornEngineTests",
-            dependencies: ["AcornEngine"],
+            dependencies: [
+                "AcornEngine",
+                "AcornMapGeometry"
+            ],
             swiftSettings: [.interoperabilityMode(.Cxx)]
         ),
         .target(
@@ -76,6 +80,29 @@ let package = Package(
                 .headerSearchPath("../../Dependencies/metal-cpp"),
                 .unsafeFlags(["-std=c++17"]),
                 .define("DEBUG", to: "1", .when(configuration: .debug))
+            ]
+        ),
+        .target(
+            name: "Clipper2",
+            path: "Dependencies/clipper2/CPP/Clipper2Lib",
+            sources: ["src"],
+            publicHeadersPath: "include",
+            cxxSettings: [.unsafeFlags(["-std=c++17"])]
+        ),
+        .target(
+            name: "AcornMapGeometry",
+            dependencies: ["Clipper2"],
+            path: "Sources/AcornMapGeometry",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .headerSearchPath("../../Dependencies/earcut/include"),
+                .headerSearchPath("../../Dependencies/protozero/include"),
+                .headerSearchPath("../../Dependencies/vtzero/include"),
+                .headerSearchPath("../../Dependencies/clipper2/CPP/Clipper2Lib/include"),
+                .unsafeFlags(["-std=c++17"])
+            ],
+            linkerSettings: [
+                .linkedLibrary("z")
             ]
         ),
     ],

@@ -181,6 +181,23 @@ class GameViewController: UIViewController, MTKViewDelegate {
         setupCharacters()
         setupConfetti()
         setupGLTF()
+        setupMapbox3DTile()
+    }
+    
+    private func setupMapbox3DTile() {
+        Task {
+            let loader = MapTileLoader()
+            let cpuMesh = await loader.createDemoBuildingTile(tileWidthMeters: 1.8, tileHeightMeters: 1.8, buildingHeight: 0.8)
+            await MainActor.run {
+                if let mesh = self.renderer.createMesh(meshData: cpuMesh) {
+                    let tileEntity = self.engine.world.createEntity()
+                    // Position to the right of the floor so orbit camera views it cleanly
+                    let transform = TransformComponent(position: SIMD3<Float>(1.5, -1.5, 0.0))
+                    self.engine.world.addComponent(transform, to: tileEntity)
+                    self.engine.world.addComponent(MeshComponent(mesh: mesh), to: tileEntity)
+                }
+            }
+        }
     }
     
     private func setupTileMap() {

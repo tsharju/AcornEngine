@@ -61,17 +61,28 @@ public final class AudioSystem: System {
             return
         }
         
+        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+                        ProcessInfo.processInfo.processName.contains("swiftpm-testing-helper") ||
+                        ProcessInfo.processInfo.processName.contains("xctest") ||
+                        NSClassFromString("XCTest") != nil
+
         #if targetEnvironment(simulator)
-        environmentNode.renderingAlgorithm = .equalPowerPanning
-        do {
-            try audioEngine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
-            audioEngine.attach(environmentNode)
-            audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: format)
-            try audioEngine.start()
-        } catch {
-            print("[AudioSystem] Warning: Failed to start offline AVAudioEngine in simulator: \(error.localizedDescription)")
-        }
+        let forceOffline = true
         #else
+        let forceOffline = isTesting
+        #endif
+
+        if forceOffline {
+            environmentNode.renderingAlgorithm = .equalPowerPanning
+            do {
+                try audioEngine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+                audioEngine.attach(environmentNode)
+                audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: format)
+                try audioEngine.start()
+            } catch {
+                print("[AudioSystem] Warning: Failed to start offline AVAudioEngine in testing/simulator: \(error.localizedDescription)")
+            }
+        } else {
         audioEngine.attach(environmentNode)
         audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: format)
         do {
@@ -89,7 +100,7 @@ public final class AudioSystem: System {
                 print("[AudioSystem] Warning: Failed to start AVAudioEngine: \(error.localizedDescription)")
             }
         }
-        #endif
+        }
     }
     
     #if os(iOS) || os(tvOS) || os(visionOS)

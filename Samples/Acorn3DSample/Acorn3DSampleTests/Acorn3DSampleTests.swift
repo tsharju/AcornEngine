@@ -95,7 +95,7 @@ struct Acorn3DSampleTests {
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
         
-        let service = MapboxTileService(accessToken: "test_token")
+        let service = MapboxTileService(accessToken: "test_token", cacheDirectoryURL: tempDir)
         let coord = TileCoordinate(zoom: 16, x: 37530, y: 18682)
         let cacheURL = await service.cacheFileURL(for: coord)
         
@@ -125,7 +125,11 @@ struct Acorn3DSampleTests {
     
     @Test("MapboxTileService clearCache removes cached files")
     func mapboxTileServiceClearCache() async throws {
-        let service = MapboxTileService(accessToken: "test_token")
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        
+        let service = MapboxTileService(accessToken: "test_token", cacheDirectoryURL: tempDir)
         let coord = TileCoordinate(zoom: 12, x: 200, y: 150)
         let cacheURL = await service.cacheFileURL(for: coord)
         

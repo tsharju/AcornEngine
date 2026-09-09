@@ -70,6 +70,9 @@ public final class GameHUDView: UIView {
     /// Called when the user requests camera recentering behind the player.
     public var onRecenterCamera: (() -> Void)?
     
+    /// Called when the user requests camera focus to return to the player character.
+    public var onFocusPlayer: (() -> Void)?
+    
     /// Called when the user toggles post-apocalyptic rendering mode.
     public var onPostApocalypticToggled: ((Bool) -> Void)?
     
@@ -85,6 +88,7 @@ public final class GameHUDView: UIView {
     public private(set) var isPostApocalypticEnabled: Bool = true
     public private(set) var isSSAOEnabled: Bool = true
     public private(set) var mossDensity: Float = 0.70
+    public private(set) var isFollowingPlayer: Bool = true
     
     // MARK: - UI Elements
     
@@ -107,6 +111,7 @@ public final class GameHUDView: UIView {
     private let ssaoButton = UIButton(type: .system)
     private let speedButton = UIButton(type: .system)
     private let cityButton = UIButton(type: .system)
+    public let focusButton = UIButton(type: .system)
     private let recenterButton = UIButton(type: .system)
     
     // MARK: - Initializers
@@ -160,6 +165,23 @@ public final class GameHUDView: UIView {
     /// - Parameter count: Number of active tiles loaded.
     public func updateLoadedTileCount(_ count: Int) {
         tilesLoadedLabel.text = "Tiles Loaded: \(count)"
+    }
+    
+    /// Updates the focus button title and styling based on whether the camera is following the player.
+    /// - Parameter isFollowingPlayer: Whether camera focus is currently locked onto the player character.
+    public func setFocusState(isFollowingPlayer: Bool) {
+        self.isFollowingPlayer = isFollowingPlayer
+        if isFollowingPlayer {
+            focusButton.setTitle("📍 Focused", for: .normal)
+            focusButton.backgroundColor = UIColor(white: 0.12, alpha: 0.75)
+            focusButton.setTitleColor(UIColor(white: 0.75, alpha: 1.0), for: .normal)
+            focusButton.layer.borderColor = UIColor(white: 1.0, alpha: 0.25).cgColor
+        } else {
+            focusButton.setTitle("📍 Focus Player", for: .normal)
+            focusButton.backgroundColor = UIColor(red: 0.15, green: 0.45, blue: 0.85, alpha: 0.90)
+            focusButton.setTitleColor(.white, for: .normal)
+            focusButton.layer.borderColor = UIColor(red: 0.35, green: 0.65, blue: 1.0, alpha: 0.8).cgColor
+        }
     }
     
     // MARK: - Setup
@@ -281,6 +303,12 @@ public final class GameHUDView: UIView {
         configurePillButton(cityButton, title: "🌍 Cities")
         setupCityMenu()
         controlsStackView.addArrangedSubview(cityButton)
+        
+        // Focus Player Button
+        configurePillButton(focusButton, title: "📍 Focused")
+        focusButton.setTitleColor(UIColor(white: 0.75, alpha: 1.0), for: .normal)
+        focusButton.addTarget(self, action: #selector(handleFocusTapped), for: .touchUpInside)
+        controlsStackView.addArrangedSubview(focusButton)
         
         // Recenter Camera Button
         recenterButton.translatesAutoresizingMaskIntoConstraints = false
@@ -411,6 +439,10 @@ public final class GameHUDView: UIView {
         currentSpeedPreset = currentSpeedPreset.next
         speedButton.setTitle(currentSpeedPreset.title, for: .normal)
         onSpeedChanged?(currentSpeedPreset.speed)
+    }
+    
+    @objc private func handleFocusTapped() {
+        onFocusPlayer?()
     }
     
     @objc private func handleRecenterTapped() {

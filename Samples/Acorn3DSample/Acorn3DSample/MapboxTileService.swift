@@ -21,8 +21,8 @@ public actor MapboxTileService {
     
     /// Resolves the access token from explicit arguments, uncommitted credentials plist, environment variables, or Info.plist.
     public static func resolveAccessToken(explicitToken: String? = nil) -> String? {
-        if let token = explicitToken, !token.isEmpty {
-            return token
+        if let token = explicitToken {
+            return token.isEmpty ? nil : token
         }
         
         // 1. Check for uncommitted MapboxCredentials.plist in main bundle
@@ -62,19 +62,23 @@ public actor MapboxTileService {
     public init(
         accessToken: String? = nil,
         session: URLSession = .shared,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        cacheDirectoryURL: URL? = nil
     ) {
         self.accessToken = Self.resolveAccessToken(explicitToken: accessToken)
         self.session = session
         self.fileManager = fileManager
         
-        let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let tileCacheURL = cachesDirectory.appendingPathComponent("MapboxTileCache", isDirectory: true)
-        self.cacheDirectoryURL = tileCacheURL
+        if let customCache = cacheDirectoryURL {
+            self.cacheDirectoryURL = customCache
+        } else {
+            let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            self.cacheDirectoryURL = cachesDirectory.appendingPathComponent("MapboxTileCache", isDirectory: true)
+        }
         
         // Ensure cache directory exists
-        try? fileManager.createDirectory(at: tileCacheURL, withIntermediateDirectories: true)
+        try? fileManager.createDirectory(at: self.cacheDirectoryURL, withIntermediateDirectories: true)
     }
     
     /// Resolves the local disk cache file URL for the given tile coordinate.

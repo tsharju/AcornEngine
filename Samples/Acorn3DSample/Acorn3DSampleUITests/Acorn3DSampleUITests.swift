@@ -32,6 +32,45 @@ final class Acorn3DSampleUITests: XCTestCase {
         // XCUIAutomation Documentation
         // https://developer.apple.com/documentation/xcuiautomation
     }
+    
+    @MainActor
+    func testMapPanAndRefocusButton() throws {
+        let app = XCUIApplication()
+        app.launch()
+        
+        let focusedButton = app.buttons["📍 Focused"]
+        XCTAssertTrue(focusedButton.waitForExistence(timeout: 5.0))
+        
+        let initialAttachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        initialAttachment.name = "map_focused"
+        initialAttachment.lifetime = .keepAlways
+        add(initialAttachment)
+        
+        // Pan the map across screen
+        let startCoordinate = app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4))
+        let endCoordinate = app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4))
+        startCoordinate.press(forDuration: 0.1, thenDragTo: endCoordinate)
+        
+        // Button changes to "📍 Focus Player"
+        let focusPlayerButton = app.buttons["📍 Focus Player"]
+        XCTAssertTrue(focusPlayerButton.waitForExistence(timeout: 3.0))
+        
+        let pannedAttachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        pannedAttachment.name = "map_panned"
+        pannedAttachment.lifetime = .keepAlways
+        add(pannedAttachment)
+        
+        // Tap "📍 Focus Player" to refocus
+        focusPlayerButton.tap()
+        
+        // Button returns to "📍 Focused"
+        XCTAssertTrue(focusedButton.waitForExistence(timeout: 4.0))
+        
+        let refocusedAttachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        refocusedAttachment.name = "map_refocused"
+        refocusedAttachment.lifetime = .keepAlways
+        add(refocusedAttachment)
+    }
 
     @MainActor
     func testLaunchPerformance() throws {

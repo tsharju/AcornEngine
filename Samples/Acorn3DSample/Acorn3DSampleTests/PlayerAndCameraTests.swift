@@ -302,4 +302,190 @@ struct PlayerAndCameraTests {
         #expect(names.contains("San Francisco"))
         #expect(names.contains("Tokyo"))
     }
+    
+    // MARK: - Camera Panning & Focus Tests
+    
+    @Test("ThirdPersonFollowCamera pan shifts focusPosition and detaches tracking")
+    @MainActor
+    func cameraPanShiftsFocusPosition() {
+        let world = World()
+        let target = world.createEntity()
+        world.addComponent(TransformComponent(position: SIMD3<Float>(10, 0, 10)), to: target)
+        let cameraEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: cameraEntity)
+        
+        let camera = ThirdPersonFollowCamera(
+            entity: cameraEntity,
+            target: target,
+            yaw: 0.0,
+            focusPosition: SIMD3<Float>(10, 0, 10)
+        )
+        
+        #expect(camera.isFollowingTarget == true)
+        
+        // Pan delta: right +5, forward +8 at yaw 0
+        // When yaw is 0: camRight is +X (1,0,0), camForward is -Z (0,0,-1)
+        camera.pan(deltaRight: 5.0, deltaForward: 8.0)
+        
+        #expect(camera.isFollowingTarget == false)
+        #expect(camera.isInterpolatingToTarget == false)
+        #expect(abs(camera.focusPosition.x - 15.0) < 1e-4)
+        #expect(abs(camera.focusPosition.z - 2.0) < 1e-4) // 10 + 8 * (-1) = 2.0
+    }
+    
+    @Test("ThirdPersonFollowCamera pan with deltaWorld shifts focusPosition directly")
+    @MainActor
+    func cameraPanDeltaWorld() {
+        let world = World()
+        let target = world.createEntity()
+        let cameraEntity = world.createEntity()
+        
+        let camera = ThirdPersonFollowCamera(
+            entity: cameraEntity,
+            target: target,
+            focusPosition: SIMD3<Float>(0, 0, 0)
+        )
+        
+        camera.pan(deltaWorld: SIMD3<Float>(-20, 0, 35))
+        #expect(camera.isFollowingTarget == false)
+        #expect(camera.focusPosition == SIMD3<Float>(-20, 0, 35))
+    }
+    
+    @Test("ThirdPersonFollowCamera focusOnTarget with animated false snaps immediately")
+    @MainActor
+    func cameraFocusOnTargetSnap() {
+        let world = World()
+        let target = world.createEntity()
+        world.addComponent(TransformComponent(position: SIMD3<Float>(50, 0, -30)), to: target)
+        let cameraEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: cameraEntity)
+        
+        let camera = ThirdPersonFollowCamera(
+            entity: cameraEntity,
+            target: target,
+            focusPosition: SIMD3<Float>(0, 0, 0)
+        )
+        camera.pan(deltaWorld: SIMD3<Float>(100, 0, 100))
+        #expect(camera.isFollowingTarget == false)
+        
+        camera.focusOnTarget(animated: false)
+        #expect(camera.isFollowingTarget == true)
+        #expect(camera.isInterpolatingToTarget == false)
+        
+        camera.update(world: world)
+        #expect(camera.focusPosition == SIMD3<Float>(50, 0, -30))
+    }
+    
+    @Test("ThirdPersonFollowCamera focusOnTarget with animated true smoothly interpolates")
+    @MainActor
+    func cameraFocusOnTargetAnimated() {
+        let world = World()
+        let target = world.createEntity()
+        world.addComponent(TransformComponent(position: SIMD3<Float>(100, 0, 0)), to: target)
+        let cameraEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: cameraEntity)
+        
+        let camera = ThirdPersonFollowCamera(
+            entity: cameraEntity,
+            target: target,
+            focusPosition: SIMD3<Float>(0, 0, 0)
+        )
+        camera.focusInterpolationRate = 4.0
+        camera.focusOnTarget(animated: true)
+        #expect(camera.isFollowingTarget == true)
+        #expect(camera.isInterpolatingToTarget == true)
+        
+        // Advance 1 frame (0.1s)
+        camera.update(world: world, deltaTime: 0.1)
+        #expect(camera.focusPosition.x > 10.0)
+        #expect(camera.focusPosition.x < 100.0)
+        #expect(camera.isInterpolatingToTarget == true)
+        
+        // Advance many frames to complete transition
+        for _ in 0..<30 {
+            camera.update(world: world, deltaTime: 0.1)
+        }
+        #expect(abs(camera.focusPosition.x - 100.0) < 0.05)
+        #expect(camera.isInterpolatingToTarget == false)
+    }
+    
+    @Test("ThirdPersonFollowCamera ignores followHeading when panned")
+    @MainActor
+    func cameraFollowHeadingIgnoredWhenPanned() {
+        let world = World()
+        let target = world.createEntity()
+        let cameraEntity = world.createEntity()
+        
+        let camera = ThirdPersonFollowCamera(
+            entity: cameraEntity,
+            target: target,
+            yaw: 0.0
+        )
+        
+        camera.pan(deltaRight: 10, deltaForward: 10)
+        #expect(camera.isFollowingTarget == false)
+        
+        // Attempt follow heading while panned
+        camera.followHeading(1.5, deltaTime: 0.5, lerpRate: 5.0)
+        #expect(camera.yaw == 0.0) // Must remain unaffected!
+    }
+
+    @Test("GameHUDView focusButton updates state and triggers callback")
+    @MainActor
+    func gameHUDFocusButtonStateAndCallback() {
+        let hud = GameHUDView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        var focusCallbackCount = 0
+        hud.onFocusPlayer = {
+            focusCallbackCount += 1
+        }
+        
+        // Initial state: following player
+        #expect(hud.isFollowingPlayer == true)
+        #expect(hud.focusButton.title(for: .normal) == "📍 Focused")
+        
+        // Set to detached/panned state
+        hud.setFocusState(isFollowingPlayer: false)
+        #expect(hud.isFollowingPlayer == false)
+        #expect(hud.focusButton.title(for: .normal) == "📍 Focus Player")
+        
+        // Tap focus button
+        hud.focusButton.sendActions(for: .touchUpInside)
+        #expect(focusCallbackCount == 1)
+        
+        // Set back to focused
+        hud.setFocusState(isFollowingPlayer: true)
+        #expect(hud.isFollowingPlayer == true)
+        #expect(hud.focusButton.title(for: .normal) == "📍 Focused")
+    }
+
+    @Test("Camera panning momentum velocity decelerates smoothly to zero")
+    @MainActor
+    func cameraPanningMomentumDeceleration() {
+        let world = World()
+        let target = world.createEntity()
+        let cameraEntity = world.createEntity()
+        let camera = ThirdPersonFollowCamera(
+            entity: cameraEntity,
+            target: target,
+            yaw: 0.0,
+            focusPosition: .zero
+        )
+        
+        var velocity = SIMD2<Float>(50.0, -30.0)
+        let friction: Float = 4.5
+        let dt = 0.016
+        
+        var totalDistanceTraveled: Float = 0
+        while simd_length(velocity) >= 0.1 {
+            let step = velocity * Float(dt)
+            totalDistanceTraveled += simd_length(step)
+            camera.pan(deltaRight: step.x, deltaForward: step.y)
+            let decay = exp(-friction * Float(dt))
+            velocity *= decay
+        }
+        
+        #expect(simd_length(velocity) < 0.1)
+        #expect(totalDistanceTraveled > 10.0)
+        #expect(camera.isFollowingTarget == false)
+    }
 }

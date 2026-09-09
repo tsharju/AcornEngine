@@ -8,7 +8,7 @@ import AcornMath
 /// Manages the AcornEngine instance, Metal rendering pipeline, real-time Mapbox 3D vector tile
 /// streaming via `MapTileSystem` and `MapboxTileService`, 3D player character locomotion,
 /// third-person follow camera, and interactive on-screen HUD controls.
-class GameViewController: UIViewController, MTKViewDelegate {
+class GameViewController: UIViewController, MTKViewDelegate, UIGestureRecognizerDelegate {
     // MARK: - Engine & Rendering
     
     private var engine: Engine!
@@ -37,8 +37,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
     private var keyMovementInput: SIMD2<Float> = .zero
     
     // Camera gesture state
-    private var lastPanTranslation: CGPoint = .zero
+    private var lastMapPanTranslation: CGPoint = .zero
+    private var lastOrbitTranslation: CGPoint = .zero
     private var isCameraPanning: Bool = false
+    private var panMomentumVelocity: SIMD2<Float> = .zero
     
     // GPS tracking state
     private var isFirstLocationUpdate: Bool = true
@@ -220,9 +222,18 @@ class GameViewController: UIViewController, MTKViewDelegate {
             self.teleport(to: cityGPS)
         }
         
+        hud.onFocusPlayer = { [weak self] in
+            guard let self = self else { return }
+            self.panMomentumVelocity = .zero
+            self.followCamera.focusOnTarget(animated: true)
+        }
+        
         hud.onRecenterCamera = { [weak self] in
             guard let self = self else { return }
+            self.panMomentumVelocity = .zero
+            self.followCamera.focusOnTarget(animated: false)
             self.followCamera.resetBehind(heading: self.playerCharacter.heading)
+            self.hudView.setFocusState(isFollowingPlayer: true)
         }
         
         hud.onPostApocalypticToggled = { [weak self] isEnabled in
@@ -241,14 +252,27 @@ class GameViewController: UIViewController, MTKViewDelegate {
     }
     
     private func setupGestureRecognizers() {
-        // Pan gesture for camera orbit
-        let panRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handleCameraPan(_:)))
-        panRecognizer.maximumNumberOfTouches = 1
-        view.addGestureRecognizer(panRecognizer)
+        // 1-finger pan gesture for panning the map
+        let mapPanRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handleMapPan(_:)))
+        mapPanRecognizer.minimumNumberOfTouches = 1
+        mapPanRecognizer.maximumNumberOfTouches = 1
+        view.addGestureRecognizer(mapPanRecognizer)
+        
+        // 2-finger pan gesture for camera orbit and tilt
+        let orbitPanRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handleOrbitPan(_:)))
+        orbitPanRecognizer.minimumNumberOfTouches = 2
+        orbitPanRecognizer.maximumNumberOfTouches = 2
+        view.addGestureRecognizer(orbitPanRecognizer)
         
         // Pinch gesture for camera zoom
         let pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handleCameraPinch(_:)))
+        pinchRecognizer.delegate = self
         view.addGestureRecognizer(pinchRecognizer)
+        
+        // 2-finger rotation gesture for camera yaw
+        let rotationRecognizer = UIRotationGestureRecognizer(target: self, action: #selector(handleCameraRotation(_:)))
+        rotationRecognizer.delegate = self
+        view.addGestureRecognizer(rotationRecognizer)
     }
     
     private func setupLocationTracking() {
@@ -275,14 +299,18 @@ class GameViewController: UIViewController, MTKViewDelegate {
     // MARK: - Teleportation & Coordinate Conversion
     
     private func teleport(to targetGPS: GPSCoordinate) {
+        panMomentumVelocity = .zero
         mapTileSystem.recenterOrigin(to: targetGPS, world: engine.world)
         playerCharacter.setGPSCoordinate(
             targetGPS,
             referenceGPS: mapTileSystem.referenceCoordinate,
             world: engine.world
         )
+        followCamera.focusPosition = playerCharacter.worldPosition
+        followCamera.focusOnTarget(animated: false)
         followCamera.resetBehind(heading: playerCharacter.heading)
         followCamera.update(world: engine.world)
+        hudView.setFocusState(isFollowingPlayer: true)
     }
     
     private func distanceInMeters(from c1: GPSCoordinate, to c2: GPSCoordinate) -> Double {
@@ -299,26 +327,85 @@ class GameViewController: UIViewController, MTKViewDelegate {
     
     // MARK: - Gesture Handling
     
-    @objc private func handleCameraPan(_ recognizer: UIPanGestureRecognizer) {
+    @objc private func handleMapPan(_ recognizer: UIPanGestureRecognizer) {
         let translation = recognizer.translation(in: view)
         
         switch recognizer.state {
         case .began:
             isCameraPanning = true
-            lastPanTranslation = translation
+            panMomentumVelocity = .zero
+            lastMapPanTranslation = translation
+            hudView.setFocusState(isFollowingPlayer: false)
         case .changed:
             isCameraPanning = true
-            let dx = Float(translation.x - lastPanTranslation.x)
-            let dy = Float(translation.y - lastPanTranslation.y)
-            lastPanTranslation = translation
+            let dx = Float(translation.x - lastMapPanTranslation.x)
+            let dy = Float(translation.y - lastMapPanTranslation.y)
+            lastMapPanTranslation = translation
+            
+            // Dynamic sensitivity: scale with camera distance so panning tracks 1:1 on ground
+            let viewHeight = Float(max(view.bounds.height, 300.0))
+            let sensitivity = (followCamera.distance / viewHeight) * 1.25
+            
+            // Drag right (+dx) moves map right -> camera focus moves left (-dx)
+            // Drag down (+dy) moves map down (South) -> camera focus moves forward/North (+dy)
+            followCamera.pan(
+                deltaRight: -dx * sensitivity,
+                deltaForward: dy * sensitivity
+            )
+            hudView.setFocusState(isFollowingPlayer: false)
+        case .ended:
+            isCameraPanning = false
+            lastMapPanTranslation = .zero
+            
+            // Calculate flick / inertia velocity in ground space
+            let touchVelocity = recognizer.velocity(in: view)
+            let viewHeight = Float(max(view.bounds.height, 300.0))
+            let sensitivity = (followCamera.distance / viewHeight) * 1.25
+            
+            let vRight = Float(-touchVelocity.x) * sensitivity
+            let vForward = Float(touchVelocity.y) * sensitivity
+            let speed = hypot(vRight, vForward)
+            let maxSpeed: Float = 450.0
+            if speed > maxSpeed {
+                panMomentumVelocity = SIMD2<Float>(vRight * (maxSpeed / speed), vForward * (maxSpeed / speed))
+            } else {
+                panMomentumVelocity = SIMD2<Float>(vRight, vForward)
+            }
+        case .cancelled:
+            isCameraPanning = false
+            lastMapPanTranslation = .zero
+            panMomentumVelocity = .zero
+        default:
+            break
+        }
+    }
+    
+    @objc private func handleOrbitPan(_ recognizer: UIPanGestureRecognizer) {
+        let translation = recognizer.translation(in: view)
+        
+        switch recognizer.state {
+        case .began:
+            lastOrbitTranslation = translation
+        case .changed:
+            let dx = Float(translation.x - lastOrbitTranslation.x)
+            let dy = Float(translation.y - lastOrbitTranslation.y)
+            lastOrbitTranslation = translation
             
             let sensitivity: Float = 0.006
             followCamera.orbit(deltaYaw: -dx * sensitivity, deltaPitch: -dy * sensitivity)
         case .ended, .cancelled:
-            isCameraPanning = false
-            lastPanTranslation = .zero
+            lastOrbitTranslation = .zero
         default:
             break
+        }
+    }
+    
+    @objc private func handleCameraRotation(_ recognizer: UIRotationGestureRecognizer) {
+        if recognizer.state == .changed {
+            // Reversing delta sign so two-finger rotate turns the world synchronously with fingers
+            let deltaYaw = Float(recognizer.rotation)
+            followCamera.orbit(deltaYaw: deltaYaw, deltaPitch: 0)
+            recognizer.rotation = 0
         }
     }
     
@@ -328,6 +415,20 @@ class GameViewController: UIViewController, MTKViewDelegate {
             followCamera.zoom(scale: scale)
             recognizer.scale = 1.0
         }
+    }
+    
+    // MARK: - UIGestureRecognizerDelegate
+    
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        // Allow pinch and 2-finger rotation gestures to execute simultaneously
+        if (gestureRecognizer is UIPinchGestureRecognizer && otherGestureRecognizer is UIRotationGestureRecognizer) ||
+           (gestureRecognizer is UIRotationGestureRecognizer && otherGestureRecognizer is UIPinchGestureRecognizer) {
+            return true
+        }
+        return false
     }
     
     // MARK: - Keyboard Controls (Simulator & Mac)
@@ -346,6 +447,9 @@ class GameViewController: UIViewController, MTKViewDelegate {
                 keyMovementInput.x = -1.0
             case .keyboardD, .keyboardRightArrow:
                 keyMovementInput.x = 1.0
+            case .keyboardF, .keyboardC:
+                panMomentumVelocity = .zero
+                followCamera.focusOnTarget(animated: true)
             default:
                 break
             }
@@ -416,14 +520,43 @@ class GameViewController: UIViewController, MTKViewDelegate {
         )
         playerCharacter.updateWorld(world: engine.world)
         
+        // 2b. Apply inertial panning momentum deceleration after finger lift
+        if !isCameraPanning && (abs(panMomentumVelocity.x) > 0.05 || abs(panMomentumVelocity.y) > 0.05) {
+            followCamera.pan(
+                deltaRight: panMomentumVelocity.x * Float(deltaTime),
+                deltaForward: panMomentumVelocity.y * Float(deltaTime)
+            )
+            let decay = exp(-4.5 * Float(deltaTime))
+            panMomentumVelocity *= decay
+            if simd_length(panMomentumVelocity) < 0.1 {
+                panMomentumVelocity = .zero
+            }
+        }
+        
         // 3. Update third-person follow camera (smoothly follow movement direction with lerp)
         if !isCameraPanning && (abs(activeInput.x) > 0.05 || abs(activeInput.y) > 0.05) {
             followCamera.followHeading(playerCharacter.heading, deltaTime: deltaTime, lerpRate: 2.2)
         }
-        followCamera.update(world: engine.world)
+        followCamera.update(world: engine.world, deltaTime: deltaTime)
         
-        // 4. Update MapTileSystem with player's GPS position
-        mapTileSystem.cameraCoordinate = playerCharacter.currentGPS
+        // Update HUD focus button state if camera has finished gliding back to target
+        if followCamera.isFollowingTarget && !followCamera.isInterpolatingToTarget && !hudView.isFollowingPlayer {
+            hudView.setFocusState(isFollowingPlayer: true)
+        }
+        
+        // 4. Update MapTileSystem with camera focus GPS position
+        let focusPos = followCamera.focusPosition
+        let refGPS = mapTileSystem.referenceCoordinate
+        let latRad = refGPS.latitude * .pi / 180.0
+        let cosLat = max(0.0001, cos(latRad))
+        let deltaLon = Double(focusPos.x) / (TileCoordinate.earthEquatorialRadius * cosLat) * 180.0 / .pi
+        let deltaLat = Double(-focusPos.z) / TileCoordinate.earthEquatorialRadius * 180.0 / .pi
+        let focusGPS = GPSCoordinate(
+            latitude: refGPS.latitude + deltaLat,
+            longitude: refGPS.longitude + deltaLon,
+            altitude: refGPS.altitude + Double(focusPos.y)
+        )
+        mapTileSystem.cameraCoordinate = focusGPS
         
         let distFromRef = distanceInMeters(from: mapTileSystem.referenceCoordinate, to: playerCharacter.currentGPS)
         if distFromRef > 2000.0 {
@@ -436,7 +569,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         engine.tick(deltaTime: deltaTime)
         
         // 6. Update HUD metrics
-        let currentTile = TileCoordinate(coordinate: playerCharacter.currentGPS, zoom: mapTileSystem.zoomLevel)
+        let currentTile = TileCoordinate(coordinate: focusGPS, zoom: mapTileSystem.zoomLevel)
         hudView.updateGPS(playerCharacter.currentGPS)
         hudView.updateTile(coordinate: currentTile, loadedCount: mapTileSystem.activeTileEntities.count)
         

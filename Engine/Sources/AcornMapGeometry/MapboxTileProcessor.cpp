@@ -350,7 +350,8 @@ void clipAndProcessPolygon(
     TileMeshResult& outResult,
     bool isSurface,
     const std::array<float, 4>& wallColor,
-    const std::array<float, 4>& roofColor
+    const std::array<float, 4>& roofColor,
+    const PolygonRing* customClipPolygon = nullptr
 ) {
     if (outer.empty()) return;
 
@@ -362,6 +363,87 @@ void clipAndProcessPolygon(
         maxX = std::max(maxX, pt.x);
         minY = std::min(minY, pt.y);
         maxY = std::max(maxY, pt.y);
+    }
+
+    if (customClipPolygon && customClipPolygon->size() >= 3) {
+        double cMinX = customClipPolygon->getPoint(0).x, cMaxX = cMinX;
+        double cMinY = customClipPolygon->getPoint(0).y, cMaxY = cMinY;
+        for (size_t i = 1; i < customClipPolygon->size(); ++i) {
+            auto pt = customClipPolygon->getPoint(i);
+            cMinX = std::min(cMinX, pt.x);
+            cMaxX = std::max(cMaxX, pt.x);
+            cMinY = std::min(cMinY, pt.y);
+            cMaxY = std::max(cMaxY, pt.y);
+        }
+        if (maxX < cMinX || minX > cMaxX || maxY < cMinY || minY > cMaxY) {
+            return;
+        }
+
+        Clipper2Lib::Clipper64 clipper;
+        Clipper2Lib::Paths64 subjects;
+        Clipper2Lib::Path64 outerPath;
+        outerPath.reserve(outer.size());
+        for (const auto& pt : outer) {
+            outerPath.emplace_back(static_cast<int64_t>(std::round(pt.x)), static_cast<int64_t>(std::round(pt.y)));
+        }
+        subjects.push_back(std::move(outerPath));
+
+        for (const auto& hole : holes) {
+            Clipper2Lib::Path64 holePath;
+            holePath.reserve(hole.size());
+            for (const auto& pt : hole) {
+                holePath.emplace_back(static_cast<int64_t>(std::round(pt.x)), static_cast<int64_t>(std::round(pt.y)));
+            }
+            subjects.push_back(std::move(holePath));
+        }
+        clipper.AddSubject(subjects);
+
+        Clipper2Lib::Path64 clipPath;
+        clipPath.reserve(customClipPolygon->size());
+        for (size_t i = 0; i < customClipPolygon->size(); ++i) {
+            auto pt = customClipPolygon->getPoint(i);
+            clipPath.emplace_back(static_cast<int64_t>(std::round(pt.x)), static_cast<int64_t>(std::round(pt.y)));
+        }
+        clipper.AddClip(Clipper2Lib::Paths64{ clipPath });
+
+        Clipper2Lib::PolyTree64 polyTree;
+        clipper.Execute(Clipper2Lib::ClipType::Intersection, Clipper2Lib::FillRule::EvenOdd, polyTree);
+
+        auto extractPolyTree = [&](auto& self, const Clipper2Lib::PolyPath64* node) -> void {
+            for (size_t i = 0; i < node->Count(); ++i) {
+                const auto* child = node->Child(i);
+                if (!child->Polygon().empty()) {
+                    std::vector<Point2D> clippedOuter;
+                    clippedOuter.reserve(child->Polygon().size());
+                    for (const auto& pt : child->Polygon()) {
+                        clippedOuter.push_back({static_cast<double>(pt.x), static_cast<double>(pt.y)});
+                    }
+
+                    std::vector<std::vector<Point2D>> clippedHoles;
+                    for (size_t j = 0; j < child->Count(); ++j) {
+                        const auto* holeChild = child->Child(j);
+                        if (!holeChild->Polygon().empty()) {
+                            std::vector<Point2D> clippedHole;
+                            clippedHole.reserve(holeChild->Polygon().size());
+                            for (const auto& pt : holeChild->Polygon()) {
+                                clippedHole.push_back({static_cast<double>(pt.x), static_cast<double>(pt.y)});
+                            }
+                            clippedHoles.push_back(std::move(clippedHole));
+                            self(self, holeChild);
+                        }
+                    }
+
+                    triangulateAndExtrudePolygon(
+                        clippedOuter, clippedHoles, height, minHeight, extent,
+                        tileGroundWidth, tileGroundHeight, outResult,
+                        isSurface, wallColor, roofColor
+                    );
+                }
+            }
+        };
+
+        extractPolyTree(extractPolyTree, &polyTree);
+        return;
     }
 
     // Fully outside tile bounds: discard
@@ -827,6 +909,205 @@ void MapboxTileProcessor::processPolygon(
     );
 }
 
+void MapboxTileProcessor::processPolygon(
+    const TestPolygonInput& input,
+    double height,
+    double minHeight,
+    int extent,
+    float tileGroundWidth,
+    float tileGroundHeight,
+    TileMeshResult& outResult,
+    bool isWater,
+    const PolygonRing& clipPolygon
+) {
+    if (input.rings.empty()) return;
+
+    std::vector<Point2D> outer;
+    outer.reserve(input.rings[0].points.size());
+    for (const auto& pt : input.rings[0].points) {
+        outer.push_back({pt.x, pt.y});
+    }
+
+    std::vector<std::vector<Point2D>> holes;
+    for (size_t i = 1; i < input.rings.size(); ++i) {
+        std::vector<Point2D> hole;
+        hole.reserve(input.rings[i].points.size());
+        for (const auto& pt : input.rings[i].points) {
+            hole.push_back({pt.x, pt.y});
+        }
+        holes.push_back(std::move(hole));
+    }
+
+    std::array<float, 4> wallColor = {0.85f, 0.85f, 0.88f, 1.0f};
+    std::array<float, 4> roofColor = isWater ? std::array<float, 4>{0.18f, 0.45f, 0.72f, 1.0f} : std::array<float, 4>{0.75f, 0.75f, 0.78f, 1.0f};
+
+    clipAndProcessPolygon(
+        outer, holes, height, minHeight, extent,
+        tileGroundWidth, tileGroundHeight, outResult,
+        isWater, wallColor, roofColor,
+        clipPolygon.size() >= 3 ? &clipPolygon : nullptr
+    );
+}
+
+static void clipMeshTriangles(
+    const std::vector<MapVertex>& inVertices,
+    const std::vector<uint32_t>& inIndices,
+    const PolygonRing& clipPolygon,
+    std::vector<MapVertex>& outVertices,
+    std::vector<uint32_t>& outIndices
+) {
+    if (inIndices.empty() || clipPolygon.size() < 3) return;
+
+    std::vector<PolygonPoint> poly;
+    poly.reserve(clipPolygon.size());
+    for (size_t i = 0; i < clipPolygon.size(); ++i) {
+        poly.push_back(clipPolygon.getPoint(i));
+    }
+
+    // Strip duplicate closing point if explicitly closed
+    while (poly.size() >= 4) {
+        auto first = poly.front();
+        auto last = poly.back();
+        if (std::abs(first.x - last.x) < 1e-5 && std::abs(first.y - last.y) < 1e-5) {
+            poly.pop_back();
+        } else {
+            break;
+        }
+    }
+    if (poly.size() < 3) return;
+
+    // Ensure CCW winding
+    double area = 0.0;
+    for (size_t i = 0; i < poly.size(); ++i) {
+        auto p1 = poly[i];
+        auto p2 = poly[(i + 1) % poly.size()];
+        area += (p1.x * p2.y - p2.x * p1.y);
+    }
+    if (area < 0.0) {
+        std::reverse(poly.begin(), poly.end());
+    }
+
+    // Compute polygon AABB for fast triangle rejection
+    double polyMinX = poly[0].x, polyMaxX = poly[0].x;
+    double polyMinY = poly[0].y, polyMaxY = poly[0].y;
+    for (const auto& pt : poly) {
+        polyMinX = std::min(polyMinX, pt.x);
+        polyMaxX = std::max(polyMaxX, pt.x);
+        polyMinY = std::min(polyMinY, pt.y);
+        polyMaxY = std::max(polyMaxY, pt.y);
+    }
+
+    auto lerpVert = [](const MapVertex& a, const MapVertex& b, float t) -> MapVertex {
+        MapVertex out;
+        out.x = a.x + (b.x - a.x) * t;
+        out.y = a.y + (b.y - a.y) * t;
+        out.z = a.z + (b.z - a.z) * t;
+        out.nx = a.nx + (b.nx - a.nx) * t;
+        out.ny = a.ny + (b.ny - a.ny) * t;
+        out.nz = a.nz + (b.nz - a.nz) * t;
+        float len = std::sqrt(out.nx * out.nx + out.ny * out.ny + out.nz * out.nz);
+        if (len > 1e-6f) {
+            out.nx /= len; out.ny /= len; out.nz /= len;
+        }
+        out.r = a.r + (b.r - a.r) * t;
+        out.g = a.g + (b.g - a.g) * t;
+        out.b = a.b + (b.b - a.b) * t;
+        out.a = a.a + (b.a - a.a) * t;
+        out.u = a.u + (b.u - a.u) * t;
+        out.v = a.v + (b.v - a.v) * t;
+        return out;
+    };
+
+    std::vector<MapVertex> current;
+    std::vector<MapVertex> next;
+    current.reserve(8);
+    next.reserve(8);
+
+    for (size_t i = 0; i + 2 < inIndices.size(); i += 3) {
+        uint32_t i0 = inIndices[i];
+        uint32_t i1 = inIndices[i + 1];
+        uint32_t i2 = inIndices[i + 2];
+        if (i0 >= inVertices.size() || i1 >= inVertices.size() || i2 >= inVertices.size()) continue;
+
+        const auto& v0 = inVertices[i0];
+        const auto& v1 = inVertices[i1];
+        const auto& v2 = inVertices[i2];
+
+        // Fast triangle AABB rejection against polygon AABB
+        float tMinX = std::min({v0.x, v1.x, v2.x});
+        float tMaxX = std::max({v0.x, v1.x, v2.x});
+        float tMinZ = std::min({v0.z, v1.z, v2.z});
+        float tMaxZ = std::max({v0.z, v1.z, v2.z});
+        if (tMaxX < polyMinX || tMinX > polyMaxX || tMaxZ < polyMinY || tMinZ > polyMaxY) {
+            continue;
+        }
+
+        current.clear();
+        current.push_back(v0);
+        current.push_back(v1);
+        current.push_back(v2);
+
+        for (size_t edgeIdx = 0; edgeIdx < poly.size(); ++edgeIdx) {
+            auto e1 = poly[edgeIdx];
+            auto e2 = poly[(edgeIdx + 1) % poly.size()];
+            double dx = e2.x - e1.x;
+            double dy = e2.y - e1.y;
+
+            auto dist = [&](const MapVertex& pt) -> double {
+                return dx * (pt.z - e1.y) - dy * (pt.x - e1.x);
+            };
+
+            next.clear();
+            if (current.empty()) break;
+            MapVertex prev = current.back();
+            double prevDist = dist(prev);
+            bool prevInside = prevDist >= -1e-5;
+
+            for (const auto& curr : current) {
+                double currDist = dist(curr);
+                bool currInside = currDist >= -1e-5;
+
+                if (prevInside && currInside) {
+                    next.push_back(curr);
+                } else if (prevInside && !currInside) {
+                    float t = static_cast<float>(std::max(0.0, std::min(1.0, prevDist / (prevDist - currDist))));
+                    next.push_back(lerpVert(prev, curr, t));
+                } else if (!prevInside && currInside) {
+                    float t = static_cast<float>(std::max(0.0, std::min(1.0, prevDist / (prevDist - currDist))));
+                    next.push_back(lerpVert(prev, curr, t));
+                    next.push_back(curr);
+                }
+                prev = curr;
+                prevDist = currDist;
+                prevInside = currInside;
+            }
+            current = std::move(next);
+            if (current.size() < 3) break;
+        }
+
+        if (current.size() >= 3) {
+            uint32_t baseIdx = static_cast<uint32_t>(outVertices.size());
+            outVertices.insert(outVertices.end(), current.begin(), current.end());
+            for (size_t k = 1; k + 1 < current.size(); ++k) {
+                outIndices.push_back(baseIdx);
+                outIndices.push_back(baseIdx + static_cast<uint32_t>(k));
+                outIndices.push_back(baseIdx + static_cast<uint32_t>(k + 1));
+            }
+        }
+    }
+}
+
+TileMeshResult MapboxTileProcessor::clipTileMesh(
+    const TileMeshResult& inMesh,
+    const PolygonRing& clipPolygon
+) {
+    if (clipPolygon.size() < 3) return inMesh;
+    TileMeshResult outMesh;
+    clipMeshTriangles(inMesh.vertices, inMesh.indices, clipPolygon, outMesh.vertices, outMesh.indices);
+    clipMeshTriangles(inMesh.roadVertices, inMesh.roadIndices, clipPolygon, outMesh.roadVertices, outMesh.roadIndices);
+    return outMesh;
+}
+
 TileMeshResult MapboxTileProcessor::processTile(
     const uint8_t* data,
     size_t length,
@@ -970,7 +1251,8 @@ TileMeshResult MapboxTileProcessor::processTile(
                     clipAndProcessPolygon(
                         outer, holes, featureHeight, featureMinHeight, extent,
                         tileGroundWidth, tileGroundHeight, result,
-                        isSurface, wallColor, roofColor
+                        isSurface, wallColor, roofColor,
+                        options.clipPolygon.size() >= 3 ? &options.clipPolygon : nullptr
                     );
                 }
             }

@@ -10,6 +10,8 @@ xcuserdata/
 build_output/
 build_output_3d/
 build_output_device/
+build_output_sim/
+build_device/
 imgui.ini
 *.log
 build_matchacorn/

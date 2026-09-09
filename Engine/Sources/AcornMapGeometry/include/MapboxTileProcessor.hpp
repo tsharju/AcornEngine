@@ -110,29 +110,6 @@ struct RoadConfiguration {
     static RoadConfiguration allRoads();
 };
 
-struct TileProcessorOptions {
-    bool processBuildings = true;
-    bool processWater = true;
-    bool processLanduse = true;
-    bool processRoads = true;
-    bool generateRoadJunctionCaps = true;
-    double defaultBuildingHeight = 10.0;
-    double defaultBuildingMinHeight = 0.0;
-    RoadConfiguration roadConfig = RoadConfiguration::carOnly();
-};
-
-struct DecompressionResult {
-    std::vector<uint8_t> data;
-    bool success = false;
-
-    size_t size() const { return data.size(); }
-    void copyTo(uint8_t* dest) const {
-        if (dest && !data.empty()) {
-            std::memcpy(dest, data.data(), data.size());
-        }
-    }
-};
-
 struct PolygonPoint {
     double x = 0.0;
     double y = 0.0;
@@ -158,6 +135,30 @@ struct TestPolygonInput {
 
     size_t size() const { return rings.size(); }
     PolygonRing getRing(size_t i) const { return rings[i]; }
+};
+
+struct TileProcessorOptions {
+    bool processBuildings = true;
+    bool processWater = true;
+    bool processLanduse = true;
+    bool processRoads = true;
+    bool generateRoadJunctionCaps = true;
+    double defaultBuildingHeight = 10.0;
+    double defaultBuildingMinHeight = 0.0;
+    RoadConfiguration roadConfig = RoadConfiguration::carOnly();
+    PolygonRing clipPolygon;
+};
+
+struct DecompressionResult {
+    std::vector<uint8_t> data;
+    bool success = false;
+
+    size_t size() const { return data.size(); }
+    void copyTo(uint8_t* dest) const {
+        if (dest && !data.empty()) {
+            std::memcpy(dest, data.data(), data.size());
+        }
+    }
 };
 
 class MapboxTileProcessor {
@@ -192,6 +193,25 @@ public:
         float tileGroundHeight,
         TileMeshResult& outResult,
         bool isWater
+    );
+
+    /// Directly processes a polygon with optional holes, clipping against an arbitrary 2D polygon (e.g. H3 hexagon).
+    static void processPolygon(
+        const TestPolygonInput& input,
+        double height,
+        double minHeight,
+        int extent,
+        float tileGroundWidth,
+        float tileGroundHeight,
+        TileMeshResult& outResult,
+        bool isWater,
+        const PolygonRing& clipPolygon
+    );
+
+    /// Directly clips an existing TileMeshResult against a 2D convex polygon.
+    static TileMeshResult clipTileMesh(
+        const TileMeshResult& inMesh,
+        const PolygonRing& clipPolygon
     );
 
     /// Helper to create an in-memory MVT vector tile protobuf containing a test polygon building.

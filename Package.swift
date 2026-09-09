@@ -23,7 +23,7 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "AcornMath",
-            path: "Sources/AcornMath"
+            path: "Engine/Sources/AcornMath"
         ),
         .target(
             name: "AcornEngine",
@@ -33,6 +33,7 @@ let package = Package(
                 "AcornMath",
                 "AcornMapGeometry"
             ],
+            path: "Engine/Sources/AcornEngine",
             resources: [
                 .process("Renderer/Shaders.metal")
             ],
@@ -40,7 +41,8 @@ let package = Package(
         ),
         .testTarget(
             name: "AcornMathTests",
-            dependencies: ["AcornMath"]
+            dependencies: ["AcornMath"],
+            path: "Engine/Tests/AcornMathTests"
         ),
         .testTarget(
             name: "AcornEngineTests",
@@ -48,21 +50,23 @@ let package = Package(
                 "AcornEngine",
                 "AcornMapGeometry"
             ],
+            path: "Engine/Tests/AcornEngineTests",
             swiftSettings: [.interoperabilityMode(.Cxx)]
         ),
         .target(
             name: "box2d",
+            path: "Engine/Sources/box2d",
             publicHeadersPath: "include"
         ),
         .target(
             name: "simdjson",
-            path: "Dependencies/simdjson",
+            path: "Engine/Dependencies/simdjson",
             publicHeadersPath: "."
         ),
         .target(
             name: "fastgltf",
             dependencies: ["simdjson"],
-            path: "Dependencies/fastgltf",
+            path: "Engine/Dependencies/fastgltf",
             exclude: [
                 "CMakeLists.txt", "README.md", "LICENSE.md", "docs", "examples", "cmake", "tests", ".github", ".gitignore", ".readthedocs.yaml", ".gitmodules", "src/fastgltf.ixx"
             ],
@@ -72,7 +76,7 @@ let package = Package(
         .target(
             name: "AcornMetal",
             dependencies: ["fastgltf"],
-            path: "Sources/AcornMetal",
+            path: "Engine/Sources/AcornMetal",
             publicHeadersPath: "include",
             cxxSettings: [
                 .headerSearchPath("../../Dependencies/metal-cpp"),
@@ -81,14 +85,14 @@ let package = Package(
         ),
         .target(
             name: "Clipper2",
-            path: "Dependencies/clipper2/CPP/Clipper2Lib",
+            path: "Engine/Dependencies/clipper2/CPP/Clipper2Lib",
             sources: ["src"],
             publicHeadersPath: "include"
         ),
         .target(
             name: "AcornMapGeometry",
             dependencies: ["Clipper2"],
-            path: "Sources/AcornMapGeometry",
+            path: "Engine/Sources/AcornMapGeometry",
             publicHeadersPath: "include",
             cxxSettings: [
                 .headerSearchPath("../../Dependencies/earcut/include"),

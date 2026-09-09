@@ -1,6 +1,6 @@
 import Foundation
 import Compression
-import AcornMapGeometry
+internal import AcornMapGeometry
 
 /// Container holding processed meshes for a tile, separating 3D surfaces (buildings, water, landuse) from 2D road networks.
 public struct TileMeshData: Sendable {

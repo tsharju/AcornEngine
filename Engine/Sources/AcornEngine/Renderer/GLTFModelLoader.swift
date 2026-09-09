@@ -2,7 +2,7 @@ import Foundation
 
 #if canImport(Metal)
 import Metal
-import AcornMetal
+internal import AcornMetal
 #endif
 
 /// Represents a node within a loaded glTF scene.

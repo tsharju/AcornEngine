@@ -1,7 +1,7 @@
 #if canImport(Metal)
 import Foundation
 import Metal
-import AcornMetal
+internal import AcornMetal
 
 /// A Metal-specific render context.
 public final class MetalRenderContext: RenderContext, @unchecked Sendable {

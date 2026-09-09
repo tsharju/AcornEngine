@@ -1,6 +1,6 @@
 import Foundation
 import simd
-import AcornMapGeometry
+internal import AcornMapGeometry
 
 /// Visual and geometric style defining how a specific road class is rendered.
 public struct RoadLayerStyle: Sendable, Equatable {
@@ -228,7 +228,7 @@ public struct RoadConfiguration: Sendable, Equatable {
 
 extension RoadLayerStyle {
     /// Converts this Swift style to C++ `AcornMap.RoadLayerStyle`.
-    public func toCxx() -> AcornMap.RoadLayerStyle {
+    package func toCxx() -> AcornMap.RoadLayerStyle {
         var cxx = AcornMap.RoadLayerStyle()
         cxx.widthMeters = width
         cxx.outlineRatio = outlineRatio
@@ -245,7 +245,7 @@ extension RoadLayerStyle {
     }
     
     /// Initializes a Swift `RoadLayerStyle` from C++ `AcornMap.RoadLayerStyle`.
-    public init(cxx: AcornMap.RoadLayerStyle) {
+    package init(cxx: AcornMap.RoadLayerStyle) {
         self.init(
             width: cxx.widthMeters,
             outlineRatio: cxx.outlineRatio,
@@ -258,7 +258,7 @@ extension RoadLayerStyle {
 
 extension RoadConfiguration {
     /// Converts this Swift configuration to C++ `AcornMap.RoadConfiguration`.
-    public func toCxx() -> AcornMap.RoadConfiguration {
+    package func toCxx() -> AcornMap.RoadConfiguration {
         var cxx = AcornMap.RoadConfiguration()
         cxx.filterNonCarRoads = filterNonCarRoads
         cxx.renderOnlyConfiguredClasses = renderOnlyConfiguredClasses

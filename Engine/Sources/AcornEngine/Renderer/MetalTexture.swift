@@ -1,12 +1,12 @@
 #if canImport(Metal)
 import Foundation
 import Metal
-import AcornMetal
+internal import AcornMetal
 
 /// A Metal-specific implementation of the `Texture` protocol.
 public final class MetalTexture: Texture, @unchecked Sendable {
     /// The underlying C++ texture object.
-    public let cxxTexture: UnsafeMutablePointer<Acorn.AcornMetalTexture>
+    package let cxxTexture: UnsafeMutablePointer<Acorn.AcornMetalTexture>
     
     /// The width of the texture in pixels.
     public var width: Int {

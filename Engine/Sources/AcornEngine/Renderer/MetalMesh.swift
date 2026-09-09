@@ -1,12 +1,12 @@
 #if canImport(Metal)
 import Foundation
 import Metal
-import AcornMetal
+internal import AcornMetal
 
 /// A Metal implementation of a 3D mesh consisting of vertices, backed by a Metal buffer.
 public final class MetalMesh: Mesh, @unchecked Sendable {
     /// The underlying C++ mesh object.
-    public let cxxMesh: UnsafeMutablePointer<Acorn.AcornMetalMesh>
+    package let cxxMesh: UnsafeMutablePointer<Acorn.AcornMetalMesh>
     
     /// The number of vertices in the mesh.
     public var vertexCount: Int {
@@ -50,7 +50,7 @@ public final class MetalMesh: Mesh, @unchecked Sendable {
     #endif
     
     /// Initializes from an existing C++ mesh pointer. Takes ownership.
-    public init(cxxMesh: UnsafeMutablePointer<Acorn.AcornMetalMesh>) {
+    package init(cxxMesh: UnsafeMutablePointer<Acorn.AcornMetalMesh>) {
         self.cxxMesh = cxxMesh
     }
 

@@ -1,6 +1,17 @@
 import Foundation
 import simd
 
+/// Unique composite key for caching a clipped geometry part for a specific H3 cell and source tile coordinate.
+public struct H3ClippedTileKey: Hashable, Sendable {
+    public let h3Index: H3Index
+    public let sourceTile: TileCoordinate
+
+    public init(h3Index: H3Index, sourceTile: TileCoordinate) {
+        self.h3Index = h3Index
+        self.sourceTile = sourceTile
+    }
+}
+
 /// ECS System that manages streaming, clipping, metric positioning, and assembly of hexagonal H3 map tiles
 /// from square slippy vector map tiles.
 ///
@@ -46,11 +57,17 @@ public class H3MapTileSystem: System {
     /// Cache of processed source `TileMeshData` keyed by `TileCoordinate`.
     public private(set) var sourceTileCache: [TileCoordinate: TileMeshData] = [:]
 
+    /// Cache of clipped `TileMeshData` keyed by `(H3Index, TileCoordinate)`.
+    public private(set) var clippedPartCache: [H3ClippedTileKey: TileMeshData] = [:]
+
     /// Coordinates of source tiles that failed to load (to prevent unbounded retry task loops).
     public private(set) var failedSourceCoordinates: Set<TileCoordinate> = []
 
     /// Maximum number of source tiles to hold in cache before evicting unneeded entries (default 64).
     public var maxSourceTileCacheSize: Int = 64
+
+    /// Maximum number of clipped geometry parts to hold in cache before evicting unneeded entries (default 384).
+    public var maxClippedPartCacheSize: Int = 384
 
     /// Whether to generate and display hexagonal boundary outline meshes for H3 cells (default: true).
     public var showsCellBoundaries: Bool
@@ -139,6 +156,7 @@ public class H3MapTileSystem: System {
         pendingSourceCoordinates.removeAll()
         failedSourceCoordinates.removeAll()
         sourceTileCache.removeAll()
+        clippedPartCache.removeAll()
 
         // Destroy all existing active H3 entities and their child geometry parts
         for (_, entity) in activeH3Entities {
@@ -317,13 +335,20 @@ public class H3MapTileSystem: System {
             h3Comp.geometryPartEntities.removeValue(forKey: sourceTile)
         }
 
-        // 1. Clip source tile mesh data against the target H3 cell
-        let clippedPart = H3GeometryClipper.clipTileToH3(
-            tileMeshData: tileMeshData,
-            sourceTile: sourceTile,
-            targetH3: h3Comp.h3Index,
-            referenceCoordinate: referenceCoordinate
-        )
+        // 1. Clip source tile mesh data against the target H3 cell (or retrieve from cache)
+        let key = H3ClippedTileKey(h3Index: h3Comp.h3Index, sourceTile: sourceTile)
+        let clippedPart: TileMeshData
+        if let cached = clippedPartCache[key] {
+            clippedPart = cached
+        } else {
+            clippedPart = H3GeometryClipper.clipTileToH3(
+                tileMeshData: tileMeshData,
+                sourceTile: sourceTile,
+                targetH3: h3Comp.h3Index,
+                referenceCoordinate: referenceCoordinate
+            )
+            clippedPartCache[key] = clippedPart
+        }
 
         let hasSurface = !clippedPart.surfaceMesh.vertices.isEmpty
         let hasRoad = !clippedPart.roadMesh.vertices.isEmpty
@@ -525,6 +550,7 @@ public class H3MapTileSystem: System {
 
         pendingSourceCoordinates.insert(coord)
         let refLat = referenceCoordinate.latitude
+        let refCoord = referenceCoordinate
         let loader = tileLoader
 
         let task = Task { @MainActor [weak self] in
@@ -534,6 +560,7 @@ public class H3MapTileSystem: System {
                     self.finishLoadingSourceTile(
                         coord: coord,
                         tileMeshData: nil,
+                        preClippedParts: [:],
                         error: "Data provider returned nil for tile \(coord)",
                         world: world
                     )
@@ -558,11 +585,54 @@ public class H3MapTileSystem: System {
                     return
                 }
 
-                self.finishLoadingSourceTile(coord: coord, tileMeshData: tileMeshData, error: nil, world: world)
+                // Identify active H3 cells needing this source tile
+                var targetH3s: [H3Index] = []
+                for (h3Index, h3Entity) in self.activeH3Entities {
+                    if let comp = world.component(ofType: H3TileComponent.self, for: h3Entity),
+                       comp.requiredSourceTiles.contains(coord),
+                       !comp.loadedSourceTiles.contains(coord) {
+                        targetH3s.append(h3Index)
+                    }
+                }
+
+                // Pre-clip concurrently off @MainActor in a background task
+                let preClipped: [H3Index: TileMeshData]
+                if !targetH3s.isEmpty {
+                    preClipped = await Task.detached(priority: .userInitiated) {
+                        var clipped = [H3Index: TileMeshData]()
+                        clipped.reserveCapacity(targetH3s.count)
+                        for h3 in targetH3s {
+                            clipped[h3] = H3GeometryClipper.clipTileToH3(
+                                tileMeshData: tileMeshData,
+                                sourceTile: coord,
+                                targetH3: h3,
+                                referenceCoordinate: refCoord
+                            )
+                        }
+                        return clipped
+                    }.value
+                } else {
+                    preClipped = [:]
+                }
+
+                if Task.isCancelled {
+                    self.pendingSourceCoordinates.remove(coord)
+                    self.sourceLoadingTasks.removeValue(forKey: coord)
+                    return
+                }
+
+                self.finishLoadingSourceTile(
+                    coord: coord,
+                    tileMeshData: tileMeshData,
+                    preClippedParts: preClipped,
+                    error: nil,
+                    world: world
+                )
             } catch {
                 self?.finishLoadingSourceTile(
                     coord: coord,
                     tileMeshData: nil,
+                    preClippedParts: [:],
                     error: error.localizedDescription,
                     world: world
                 )
@@ -575,6 +645,7 @@ public class H3MapTileSystem: System {
     private func finishLoadingSourceTile(
         coord: TileCoordinate,
         tileMeshData: TileMeshData?,
+        preClippedParts: [H3Index: TileMeshData] = [:],
         error: String?,
         world: World
     ) {
@@ -609,6 +680,13 @@ public class H3MapTileSystem: System {
 
         guard let tileMeshData = tileMeshData else { return }
         sourceTileCache[coord] = tileMeshData
+
+        // Populate pre-clipped geometry parts into cache
+        for (h3Index, clippedData) in preClippedParts {
+            let key = H3ClippedTileKey(h3Index: h3Index, sourceTile: coord)
+            clippedPartCache[key] = clippedData
+        }
+
         pruneSourceTileCacheIfNeeded(world: world)
 
         // Find all active H3 tile entities that need this source tile
@@ -628,20 +706,26 @@ public class H3MapTileSystem: System {
     }
 
     private func pruneSourceTileCacheIfNeeded(world: World) {
-        guard sourceTileCache.count > maxSourceTileCacheSize else { return }
-        var needed = Set<TileCoordinate>()
-        for (_, entity) in activeH3Entities {
-            if let h3Comp = world.component(ofType: H3TileComponent.self, for: entity) {
-                needed.formUnion(h3Comp.requiredSourceTiles)
-            }
-        }
-        for coord in sourceTileCache.keys {
-            if !needed.contains(coord) {
-                sourceTileCache.removeValue(forKey: coord)
-                if sourceTileCache.count <= maxSourceTileCacheSize {
-                    break
+        if sourceTileCache.count > maxSourceTileCacheSize {
+            var needed = Set<TileCoordinate>()
+            for (_, entity) in activeH3Entities {
+                if let h3Comp = world.component(ofType: H3TileComponent.self, for: entity) {
+                    needed.formUnion(h3Comp.requiredSourceTiles)
                 }
             }
+            for coord in sourceTileCache.keys {
+                if !needed.contains(coord) {
+                    sourceTileCache.removeValue(forKey: coord)
+                    clippedPartCache = clippedPartCache.filter { $0.key.sourceTile != coord }
+                    if sourceTileCache.count <= maxSourceTileCacheSize {
+                        break
+                    }
+                }
+            }
+        }
+        if clippedPartCache.count > maxClippedPartCacheSize {
+            let activeH3Set = Set(activeH3Entities.keys)
+            clippedPartCache = clippedPartCache.filter { activeH3Set.contains($0.key.h3Index) }
         }
     }
 

@@ -479,4 +479,54 @@ struct H3MapTileSystemTests {
         #expect(system.showsCellBoundaries)
         #expect(world.component(ofType: MeshComponent.self, for: entity) != nil)
     }
+
+    @Test("Clipped part cache hits on subsequent attachments and clears on origin recenter")
+    func clippedPartCacheHitAndPurge() {
+        let world = World()
+        let helsinki = GPSCoordinate(latitude: 60.1699, longitude: 24.9384)
+        let system = H3MapTileSystem(initialReference: helsinki, h3Resolution: 9, sourceZoomLevel: 15)
+
+        let h3 = H3Index(coordinate: helsinki, resolution: 9)
+        let tile = TileCoordinate(coordinate: helsinki, zoom: 15)
+
+        let h3World = h3.worldPosition(relativeTo: helsinki)
+        let tileWorldPos = tile.worldPosition(relativeTo: helsinki)
+        let cX = h3World.x - tileWorldPos.x
+        let cZ = h3World.z - tileWorldPos.z
+
+        let surfaceMesh = CPUMeshData(
+            vertices: [
+                Vertex(position: SIMD3<Float>(cX - 5, 0, cZ - 5), color: .one),
+                Vertex(position: SIMD3<Float>(cX + 5, 0, cZ - 5), color: .one),
+                Vertex(position: SIMD3<Float>(cX, 0, cZ + 5), color: .one),
+            ],
+            indices: [0, 1, 2]
+        )
+        let meshData = TileMeshData(surfaceMesh: surfaceMesh, roadMesh: CPUMeshData())
+
+        #expect(system.clippedPartCache.isEmpty)
+
+        // 1. Initial spawn & attach
+        let entity1 = system.spawnH3Tile(h3Index: h3, sourceTiles: [(tile, meshData)], world: world)
+        #expect(system.clippedPartCache.count == 1)
+        let key = H3ClippedTileKey(h3Index: h3, sourceTile: tile)
+        #expect(system.clippedPartCache[key] != nil)
+
+        // 2. Destroy and re-spawn: attach should hit clippedPartCache
+        system.destroyH3Tile(entity: entity1, world: world)
+        let entity2 = system.spawnH3Tile(h3Index: h3, world: world)
+        let partEntity = system.attachGeometryPart(
+            sourceTile: tile,
+            tileMeshData: meshData,
+            toH3Entity: entity2,
+            world: world
+        )
+        #expect(partEntity != nil)
+        #expect(system.clippedPartCache.count == 1) // Still 1 entry (hit cache)
+
+        // 3. Recentering should clear clippedPartCache
+        let newOrigin = GPSCoordinate(latitude: 60.2000, longitude: 24.9500)
+        system.recenterOrigin(to: newOrigin, world: world)
+        #expect(system.clippedPartCache.isEmpty)
+    }
 }

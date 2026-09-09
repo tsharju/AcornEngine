@@ -223,19 +223,95 @@ struct H3GeometryClipperTests {
         #expect(clipped.indices.count == 3)
     }
 
-    @Test("TileMeshData clipping slices both surface and road meshes")
-    func tileMeshDataBothMeshesClipped() {
-        let tri = CPUMeshData(
+    @Test("TileMeshData clipping slices surface mesh but preserves road ribbon triangles intact to prevent width pinching")
+    func tileMeshDataRoadPreservation() {
+        // Road segment crossing boundary from X=0 (inside hex) to X=20 (outside hex)
+        let roadVertices = [
+            Vertex(position: SIMD3<Float>(0, 0, -2), color: .one, texCoord: SIMD2<Float>(-1.0, 0.0), normal: SIMD3<Float>(0, 0, -1)),
+            Vertex(position: SIMD3<Float>(0, 0, 2), color: .one, texCoord: SIMD2<Float>(1.0, 0.0), normal: SIMD3<Float>(0, 0, 1)),
+            Vertex(position: SIMD3<Float>(20, 0, -2), color: .one, texCoord: SIMD2<Float>(-1.0, 0.0), normal: SIMD3<Float>(0, 0, -1)),
+            Vertex(position: SIMD3<Float>(20, 0, 2), color: .one, texCoord: SIMD2<Float>(1.0, 0.0), normal: SIMD3<Float>(0, 0, 1)),
+        ]
+        let roadQuad = CPUMeshData(
+            vertices: roadVertices,
+            indices: [0, 1, 2, 1, 3, 2]
+        )
+        // Same geometry for surface mesh
+        let surfaceQuad = roadQuad
+        let tmd = TileMeshData(surfaceMesh: surfaceQuad, roadMesh: roadQuad)
+
+        let clipped = H3GeometryClipper.clip(tileMeshData: tmd, toPolygon: testHexagon)
+
+        // 1. Surface mesh must be strictly sliced within hexagon boundary (X <= 10.01)
+        #expect(!clipped.surfaceMesh.vertices.isEmpty)
+        for v in clipped.surfaceMesh.vertices {
+            #expect(v.position.x <= 10.01)
+        }
+
+        // 2. Road mesh must keep intersecting triangles intact to avoid pinching ribbon width
+        #expect(!clipped.roadMesh.vertices.isEmpty)
+        for v in clipped.roadMesh.vertices {
+            // Road ribbon width is controlled by texCoord.x in road_vertex shader (-1.0 or +1.0)
+            // It should NEVER be interpolated toward 0.0 (which pinches the road width to zero)
+            #expect(abs(v.texCoord.x) == 1.0)
+        }
+    }
+
+
+    @Test("Direct vertex offset translation applied to output vertices")
+    func clipWithVertexOffset() {
+        let insideTriangle = CPUMeshData(
             vertices: [
-                Vertex(position: SIMD3<Float>(0, 0, 0), color: .one),
-                Vertex(position: SIMD3<Float>(1, 0, 0), color: .one),
-                Vertex(position: SIMD3<Float>(0, 0, 1), color: .one),
+                Vertex(position: SIMD3<Float>(0, 5, 0), color: .one),
+                Vertex(position: SIMD3<Float>(2, 5, 0), color: .one),
+                Vertex(position: SIMD3<Float>(0, 5, 2), color: .one),
             ],
             indices: [0, 1, 2]
         )
-        let tmd = TileMeshData(surfaceMesh: tri, roadMesh: tri)
-        let clipped = H3GeometryClipper.clip(tileMeshData: tmd, toPolygon: testHexagon)
-        #expect(!clipped.surfaceMesh.vertices.isEmpty)
-        #expect(!clipped.roadMesh.vertices.isEmpty)
+
+        let offset = SIMD3<Float>(100, 20, -50)
+        let clipped = H3GeometryClipper.clip(meshData: insideTriangle, toPolygon: testHexagon, vertexOffset: offset)
+        #expect(clipped.vertices.count == 3)
+        #expect(clipped.vertices[0].position.x == 100)
+        #expect(clipped.vertices[0].position.y == 25)
+        #expect(clipped.vertices[0].position.z == -50)
+    }
+
+    @Test("Fast triangle AABB rejection and early-out properly filters mesh")
+    func multiTriangleRejectionAndEarlyOut() {
+        var vertices = [Vertex]()
+        var indices = [UInt32]()
+
+        // 1. Inside triangle (at center)
+        let base0 = UInt32(vertices.count)
+        vertices.append(Vertex(position: SIMD3<Float>(-1, 0, -1), color: .one))
+        vertices.append(Vertex(position: SIMD3<Float>(1, 0, -1), color: .one))
+        vertices.append(Vertex(position: SIMD3<Float>(0, 0, 1), color: .one))
+        indices.append(contentsOf: [base0, base0 + 1, base0 + 2])
+
+        // 2. Far outside triangle (+X > 50)
+        let base1 = UInt32(vertices.count)
+        vertices.append(Vertex(position: SIMD3<Float>(50, 0, 0), color: .one))
+        vertices.append(Vertex(position: SIMD3<Float>(55, 0, 0), color: .one))
+        vertices.append(Vertex(position: SIMD3<Float>(50, 0, 5), color: .one))
+        indices.append(contentsOf: [base1, base1 + 1, base1 + 2])
+
+        // 3. Triangle outside bounding box (-Z < -50)
+        let base2 = UInt32(vertices.count)
+        vertices.append(Vertex(position: SIMD3<Float>(0, 0, -60), color: .one))
+        vertices.append(Vertex(position: SIMD3<Float>(5, 0, -60), color: .one))
+        vertices.append(Vertex(position: SIMD3<Float>(0, 0, -55), color: .one))
+        indices.append(contentsOf: [base2, base2 + 1, base2 + 2])
+
+        let mesh = CPUMeshData(vertices: vertices, indices: indices)
+        let clipped = H3GeometryClipper.clip(meshData: mesh, toPolygon: testHexagon)
+
+        // Only triangle 1 should survive (3 vertices, 3 indices)
+        #expect(clipped.vertices.count == 3)
+        #expect(clipped.indices.count == 3)
+        for v in clipped.vertices {
+            #expect(abs(v.position.x) <= 1.5)
+            #expect(abs(v.position.z) <= 1.5)
+        }
     }
 }

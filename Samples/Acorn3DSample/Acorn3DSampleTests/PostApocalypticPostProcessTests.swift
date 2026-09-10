@@ -127,6 +127,11 @@ struct PostApocalypticPostProcessTests {
         #expect(postProcess.sceneDepthTexture?.height == 800)
         #expect(postProcess.sceneDepthTexture?.pixelFormat == .depth32Float)
         #expect(postProcess.sceneColorTexture?.pixelFormat == .bgra8Unorm_srgb)
+        #if os(macOS)
+        #expect(postProcess.sceneColorTexture?.storageMode == .managed)
+        #else
+        #expect(postProcess.sceneColorTexture?.storageMode == .private, "Offscreen color texture must use private storage on iOS for GPU energy efficiency")
+        #endif
     }
 
     @Test("PostApocalypticPostProcess pipeline state creation")

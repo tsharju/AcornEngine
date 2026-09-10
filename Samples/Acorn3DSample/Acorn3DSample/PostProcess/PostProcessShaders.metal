@@ -47,17 +47,36 @@ vertex VertexOutPostProcess postprocess_vertex(uint vertexID [[vertex_id]]) {
 // MARK: - High-Precision Integer Hash Perlin Gradient Noise & fBm
 
 namespace {
-    // 32-bit integer bitwise hash avoiding trigonometric floating-point precision limits
-    float2 hashGradient(int2 p) {
+    // 16 precomputed normalized 2D gradients around unit circle
+    // Eliminates all trigonometric (cos/sin) operations in Perlin noise
+    constant float2 kGradients[16] = {
+        float2( 1.0,          0.0),
+        float2( 0.92387953,   0.38268343),
+        float2( 0.70710678,   0.70710678),
+        float2( 0.38268343,   0.92387953),
+        float2( 0.0,          1.0),
+        float2(-0.38268343,   0.92387953),
+        float2(-0.70710678,   0.70710678),
+        float2(-0.92387953,   0.38268343),
+        float2(-1.0,          0.0),
+        float2(-0.92387953,  -0.38268343),
+        float2(-0.70710678,  -0.70710678),
+        float2(-0.38268343,  -0.92387953),
+        float2( 0.0,         -1.0),
+        float2( 0.38268343,  -0.92387953),
+        float2( 0.70710678,  -0.70710678),
+        float2( 0.92387953,  -0.38268343)
+    };
+
+    inline float2 hashGradient(int2 p) {
         uint2 u = as_type<uint2>(p);
         uint h = u.x * 374761393u + u.y * 668265263u;
         h = (h ^ (h >> 13u)) * 1274126177u;
         h = h ^ (h >> 16u);
-        float angle = float(h & 255u) * (6.28318530718 / 256.0);
-        return float2(cos(angle), sin(angle));
+        return kGradients[h & 15u];
     }
 
-    float perlinNoise(float2 p) {
+    inline float perlinNoise(float2 p) {
         int2 i = int2(floor(p));
         float2 f = fract(p);
         // Quintic Hermite interpolant for C2 continuity
@@ -71,7 +90,7 @@ namespace {
         return mix(mix(n00, n10, u.x), mix(n01, n11, u.x), u.y);
     }
 
-    float fbm(float2 p, int octaves) {
+    inline float fbm(float2 p, int octaves) {
         float value = 0.0;
         float amplitude = 0.5;
         float2x2 rot = float2x2(0.87758, 0.47942, -0.47942, 0.87758);
@@ -82,6 +101,18 @@ namespace {
         }
         return value * 0.5 + 0.5; // Normalized to [0, 1]
     }
+
+    // Precomputed Vogel disk sample offsets for 8 SSAO samples
+    constant float2 kSSAODisk[8] = {
+        float2( 0.2500,  0.0000),
+        float2(-0.3193,  0.2925),
+        float2( 0.0489, -0.5569),
+        float2( 0.4024,  0.5250),
+        float2(-0.7389, -0.1288),
+        float2( 0.6930, -0.4552),
+        float2(-0.2333,  0.8707),
+        float2(-0.4747, -0.8439)
+    };
 
     // MARK: - Screen Space Ambient Occlusion (SSAO)
     float evaluateSSAO(
@@ -97,7 +128,8 @@ namespace {
         }
 
         float camDist = length(worldPos - u.cameraPosition.xyz);
-        if (camDist > 350.0) {
+        // Early distance culling: AO is imperceptible beyond 300m and completely faded by 350m
+        if (camDist > 300.0) {
             return 1.0;
         }
 
@@ -108,18 +140,18 @@ namespace {
         // Pseudo-random per-pixel rotation angle to break regular concentric pattern
         float hash = fract(sin(dot(screenUV * 1000.0, float2(12.9898, 78.233))) * 43758.5453);
         float phi = hash * 6.2831853;
+        float cosPhi = cos(phi);
+        float sinPhi = sin(phi);
+        float2 rotCol0 = float2(cosPhi, sinPhi);
+        float2 rotCol1 = float2(-sinPhi, cosPhi);
 
         float totalOcclusion = 0.0;
-        const int SAMPLE_COUNT = 16;
-        const float GOLDEN_ANGLE = 2.39996323;
+        const int SAMPLE_COUNT = 8;
 
         for (int i = 0; i < SAMPLE_COUNT; ++i) {
-            float fi = float(i);
-            float theta = fi * GOLDEN_ANGLE + phi;
-            // Vogel disk quadratic radial distribution
-            float r = sqrt((fi + 0.5) / float(SAMPLE_COUNT));
-            float2 offsetUV = float2(cos(theta), sin(theta)) * (r * screenRadius);
-            float2 sampleUV = screenUV + offsetUV;
+            float2 diskOffset = kSSAODisk[i];
+            float2 rotatedOffset = diskOffset.x * rotCol0 + diskOffset.y * rotCol1;
+            float2 sampleUV = screenUV + rotatedOffset * screenRadius;
 
             if (sampleUV.x < 0.0 || sampleUV.x > 1.0 || sampleUV.y < 0.0 || sampleUV.y > 1.0) {
                 continue;
@@ -159,7 +191,7 @@ namespace {
         float aoFactor = clamp(1.0 - rawAO * u.ssaoIntensity * 2.2, 0.0, 1.0);
 
         // Smooth distance fade out towards 350m
-        float distFade = clamp(1.0 - (camDist - 150.0) / 200.0, 0.0, 1.0);
+        float distFade = clamp(1.0 - (camDist - 150.0) / 150.0, 0.0, 1.0);
         return mix(1.0, aoFactor, distFade);
     }
 }
@@ -186,7 +218,7 @@ fragment float4 postprocess_fragment(
     // Sky rendering: depth buffer clear depth is 1.0
     if (depth >= 0.9999) {
         float skyGradient = clamp(in.texCoord.y * 1.6, 0.0, 1.0);
-        float skyClouds = fbm(in.texCoord * 4.0 + float2(uniforms.time * 0.015, 0.0), 3);
+        float skyClouds = fbm(in.texCoord * 4.0 + float2(uniforms.time * 0.015, 0.0), 2);
         float3 skyHorizon = uniforms.skyFogColor.rgb * 1.15;
         float3 skyZenith = uniforms.skyFogColor.rgb * 0.42;
         float3 skyColor = mix(skyZenith, skyHorizon, skyGradient);
@@ -219,8 +251,8 @@ fragment float4 postprocess_fragment(
 
     // 4. Multi-Octave Procedural Perlin Noise Moss Evaluation
     // Macro patch noise (large organic clumps) & micro detail noise (leafy clusters)
-    float nMacro = fbm(worldPos.xz * uniforms.mossScale, 4);
-    float nMicro = fbm(worldPos.xz * uniforms.mossScale * 3.8, 3);
+    float nMacro = fbm(worldPos.xz * uniforms.mossScale, 3);
+    float nMicro = fbm(worldPos.xz * uniforms.mossScale * 3.8, 2);
     float clump = nMacro * 0.65 + nMicro * 0.35;
 
     // Crack-following moss growth along concrete seams and asphalt fissures
@@ -239,77 +271,85 @@ fragment float4 postprocess_fragment(
     // Only apply wall effects to vertical and steeply angled surfaces (normal.y near 0)
     float isWall = smoothstep(0.70, 0.25, abs(normal.y));
 
-    // Multi-faceted wall coordinate combining both horizontal facade dimensions
-    float wallCoordX = worldPos.x * abs(normal.z) + worldPos.z * abs(normal.x);
-    float2 wallUV = float2(wallCoordX, worldPos.y);
+    if (isWall > 0.01) {
+        // Multi-faceted wall coordinate combining both horizontal facade dimensions
+        float wallCoordX = worldPos.x * abs(normal.z) + worldPos.z * abs(normal.x);
+        float2 wallUV = float2(wallCoordX, worldPos.y);
 
-    // A. Foundation & Mid-Wall Creep: climbing up to 14.0 meters from ground level
-    float wallBaseCreep = clamp(1.0 - worldPos.y / 14.0, 0.0, 1.0);
-    float creepNoise = fbm(wallUV * float2(0.28, 0.35), 4);
-    float wallCreep = wallBaseCreep * smoothstep(0.35, 0.62, creepNoise);
+        // A. Foundation & Mid-Wall Creep: climbing up to 14.0 meters from ground level
+        float wallBaseCreep = clamp(1.0 - worldPos.y / 14.0, 0.0, 1.0);
+        float wallCreep = 0.0;
+        if (wallBaseCreep > 0.01) {
+            float creepNoise = fbm(wallUV * float2(0.28, 0.35), 3);
+            wallCreep = wallBaseCreep * smoothstep(0.35, 0.62, creepNoise);
+        }
 
-    // B. Vertical Climbing Ivy & Vine Tendrils reaching up to 35+ meters
-    float vineNoise = abs(perlinNoise(wallUV * float2(0.55, 0.14)));
-    float vineCluster = fbm(wallUV * float2(0.16, 0.07), 3);
-    float vines = (1.0 - smoothstep(0.015, 0.085, vineNoise)) * smoothstep(0.32, 0.62, vineCluster);
+        // B. Vertical Climbing Ivy & Vine Tendrils reaching up to 35+ meters
+        float vineNoise = abs(perlinNoise(wallUV * float2(0.55, 0.14)));
+        float vineCluster = fbm(wallUV * float2(0.16, 0.07), 2);
+        float vines = (1.0 - smoothstep(0.015, 0.085, vineNoise)) * smoothstep(0.32, 0.62, vineCluster);
 
-    // C. Vertical drainage runoff streaks from building rooftops and ledges
-    float streakNoise = fbm(wallUV * float2(0.32, 0.04), 3);
-    float streaks = smoothstep(0.48, 0.72, streakNoise) * 0.85;
+        // C. Vertical drainage runoff streaks from building rooftops and ledges
+        float streakNoise = fbm(wallUV * float2(0.32, 0.04), 2);
+        float streaks = smoothstep(0.48, 0.72, streakNoise) * 0.85;
 
-    // D. Window ledges, decorative moldings, and architectural crevices
-    float ledgeMoss = smoothstep(0.15, 0.50, normal.y) * smoothstep(0.85, 0.55, normal.y) * smoothstep(0.35, 0.65, nMicro);
+        // D. Window ledges, decorative moldings, and architectural crevices
+        float ledgeMoss = smoothstep(0.15, 0.50, normal.y) * smoothstep(0.85, 0.55, normal.y) * smoothstep(0.35, 0.65, nMicro);
 
-    // Total wall moss coverage
-    float totalWallMoss = (wallCreep * 1.35 + vines * 1.10 + streaks * 0.85 + ledgeMoss * 0.70) * uniforms.mossDensity * isWall;
-    totalWallMoss = clamp(totalWallMoss, 0.0, 1.0);
-    mossMask = max(mossMask, totalWallMoss);
-
-    // 6. Multi-Palette Botanical Shading with High Color Variation
-    // Botanical color definitions
-    float3 colDeepVelvet = float3(0.06, 0.16, 0.04);   // Dark, moist sheltered moss
-    float3 colLushEmerald = float3(0.24, 0.52, 0.13);  // Vibrant active spring moss
-    float3 colBuddingTip  = float3(0.58, 0.74, 0.16);  // Chartreuse youthful sporing highlights
-    float3 colGoldLichen  = float3(0.84, 0.68, 0.16);  // Warm xanthoria / golden sun lichen
-    float3 colSageLichen  = float3(0.38, 0.55, 0.44);  // Pale crustose mint/sage lichen
-    float3 colDryPeat     = float3(0.34, 0.22, 0.10);  // Decayed brownish-ochre dry vegetation
-    float3 colIvyGreen    = float3(0.11, 0.28, 0.10);  // Darker waxy ivy leaves on building facades
-
-    // Independent chromatic noise field (uncorrelated with mask boundaries)
-    float nColorMacro = fbm(worldPos.xz * uniforms.mossScale * 1.6 + float2(13.7, 47.1), 3);
-    float nColorMicro = perlinNoise(worldPos.xz * uniforms.mossScale * 6.8 + float2(89.3, 12.9));
-    float nLichenSpots = fbm(worldPos.xz * uniforms.mossScale * 3.4 + float2(51.2, 73.6), 3);
-
-    // Base vegetative gradient between deep velvet and vibrant emerald
-    float3 baseMoss = mix(colDeepVelvet, colLushEmerald, smoothstep(0.25, 0.70, nMicro));
-
-    // Blend in dry ochre/peat patches in exposed areas
-    baseMoss = mix(baseMoss, colDryPeat, smoothstep(0.18, 0.35, nColorMacro) * (1.0 - smoothstep(0.35, 0.52, nColorMacro)) * 0.85);
-
-    // Blend in golden xanthoria lichen colonies
-    baseMoss = mix(baseMoss, colGoldLichen, smoothstep(0.62, 0.78, nLichenSpots));
-
-    // Blend in pale sage/mint crustose lichen patches
-    baseMoss = mix(baseMoss, colSageLichen, smoothstep(0.68, 0.84, nColorMacro));
-
-    // Bright chartreuse budding tips / sporing highlights on micro crests
-    baseMoss = mix(baseMoss, colBuddingTip, smoothstep(0.35, 0.75, nColorMicro) * 0.65);
-
-    // For vertical building facades, blend towards deeper waxy ivy foliage
-    float3 mossColor = mix(baseMoss, colIvyGreen, isWall * 0.45);
+        // Total wall moss coverage
+        float totalWallMoss = (wallCreep * 1.35 + vines * 1.10 + streaks * 0.85 + ledgeMoss * 0.70) * uniforms.mossDensity * isWall;
+        totalWallMoss = clamp(totalWallMoss, 0.0, 1.0);
+        mossMask = max(mossMask, totalWallMoss);
+    }
 
     // Damp dark decay halo along borders of moss patches
     float edgeDecay = smoothstep(threshold - 0.12, threshold - 0.02, clump) * (1.0 - mossMask);
     float3 decayedScene = mix(sceneColor.rgb, sceneColor.rgb * 0.40, edgeDecay * 0.75 * uniforms.weatheringAmount);
 
     // 7. Weathering, Grime & Desaturation for Post-Apocalyptic Mood
-    float grimeNoise = fbm(worldPos.xz * 0.14 + worldPos.y * 0.08, 3);
+    float grimeNoise = fbm(worldPos.xz * 0.14 + worldPos.y * 0.08, 2);
     float luma = dot(decayedScene, float3(0.299, 0.587, 0.114));
     float3 weathered = mix(decayedScene, float3(luma * 0.90), uniforms.weatheringAmount * 0.35);
     weathered *= (1.0 - grimeNoise * 0.18 * uniforms.weatheringAmount);
 
-    // Combine moss with weathered base scene
-    float3 sceneWithMoss = mix(weathered, mossColor, mossMask);
+    // 6. Multi-Palette Botanical Shading with High Color Variation
+    // Evaluated only when moss is present, saving noise evaluation on clear surfaces
+    float3 sceneWithMoss = weathered;
+    if (mossMask > 0.001) {
+        // Botanical color definitions
+        float3 colDeepVelvet = float3(0.06, 0.16, 0.04);   // Dark, moist sheltered moss
+        float3 colLushEmerald = float3(0.24, 0.52, 0.13);  // Vibrant active spring moss
+        float3 colBuddingTip  = float3(0.58, 0.74, 0.16);  // Chartreuse youthful sporing highlights
+        float3 colGoldLichen  = float3(0.84, 0.68, 0.16);  // Warm xanthoria / golden sun lichen
+        float3 colSageLichen  = float3(0.38, 0.55, 0.44);  // Pale crustose mint/sage lichen
+        float3 colDryPeat     = float3(0.34, 0.22, 0.10);  // Decayed brownish-ochre dry vegetation
+        float3 colIvyGreen    = float3(0.11, 0.28, 0.10);  // Darker waxy ivy leaves on building facades
+
+        // Independent chromatic noise field (uncorrelated with mask boundaries)
+        float nColorMacro = fbm(worldPos.xz * uniforms.mossScale * 1.6 + float2(13.7, 47.1), 2);
+        float nColorMicro = perlinNoise(worldPos.xz * uniforms.mossScale * 6.8 + float2(89.3, 12.9));
+        float nLichenSpots = fbm(worldPos.xz * uniforms.mossScale * 3.4 + float2(51.2, 73.6), 2);
+
+        // Base vegetative gradient between deep velvet and vibrant emerald
+        float3 baseMoss = mix(colDeepVelvet, colLushEmerald, smoothstep(0.25, 0.70, nMicro));
+
+        // Blend in dry ochre/peat patches in exposed areas
+        baseMoss = mix(baseMoss, colDryPeat, smoothstep(0.18, 0.35, nColorMacro) * (1.0 - smoothstep(0.35, 0.52, nColorMacro)) * 0.85);
+
+        // Blend in golden xanthoria lichen colonies
+        baseMoss = mix(baseMoss, colGoldLichen, smoothstep(0.62, 0.78, nLichenSpots));
+
+        // Blend in pale sage/mint crustose lichen patches
+        baseMoss = mix(baseMoss, colSageLichen, smoothstep(0.68, 0.84, nColorMacro));
+
+        // Bright chartreuse budding tips / sporing highlights on micro crests
+        baseMoss = mix(baseMoss, colBuddingTip, smoothstep(0.35, 0.75, nColorMicro) * 0.65);
+
+        // For vertical building facades, blend towards deeper waxy ivy foliage
+        float3 mossColor = mix(baseMoss, colIvyGreen, isWall * 0.45);
+
+        sceneWithMoss = mix(weathered, mossColor, mossMask);
+    }
 
     // 8. Screen Space Ambient Occlusion (SSAO)
     // Darkens building base seams, inner corners, alleyways, and architectural crevices

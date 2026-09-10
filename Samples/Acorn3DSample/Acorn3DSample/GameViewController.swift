@@ -646,7 +646,7 @@ class GameViewController: UIViewController, MTKViewDelegate, UIGestureRecognizer
         let projMatrix = camera.projectionMatrix()
         let viewProj = projMatrix * viewMatrix
 
-        if let pp = postProcess, let sceneContext = pp.beginScenePass(commandBuffer: commandBuffer) {
+        if let pp = postProcess, pp.uniforms.isEnabled > 0.0, let sceneContext = pp.beginScenePass(commandBuffer: commandBuffer) {
             _ = sceneContext.getOrCreateEncoder()
             engine.render(context: sceneContext)
             sceneContext.endEncoding()

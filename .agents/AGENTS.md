@@ -22,6 +22,9 @@ As the codebase grows, organize modules and sources using the following standard
 
 ## 3. Style & Coding Guidelines
 
+### AcornEngine Architecture & APIs
+* Refer to the local [acorn-engine](file://.agents/skills/acorn-engine/SKILL.md) skill for architecture, ECS patterns, EventBus, 2D flipbook animation, 3D rendering, Box2D physics, spatial audio, unified input, and implementation recipes.
+
 ### Swift API Design
 * Follow the Swift API Design Guidelines strictly. Refer to the local [swift-api-design-guidelines-skill](file://.agents/skills/swift-api-design-guidelines-skill/SKILL.md) for details on naming, parameter labeling, and fluency.
 * Write concise documentation comments for every public/internal type and function.

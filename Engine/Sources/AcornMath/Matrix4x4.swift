@@ -168,6 +168,23 @@ public struct Matrix4x4: Sendable, Equatable, Hashable {
         self = rotZ * rotY * rotX
     }
 
+    /// Creates a 4x4 rotation matrix from a normalized quaternion (x, y, z, w).
+    /// - Parameter q: The quaternion representing orientation.
+    public init(quaternion q: SIMD4<Float>) {
+        let x = q.x, y = q.y, z = q.z, w = q.w
+        let x2 = x + x, y2 = y + y, z2 = z + z
+        let xx = x * x2, xy = x * y2, xz = x * z2
+        let yy = y * y2, yz = y * z2, zz = z * z2
+        let wx = w * x2, wy = w * y2, wz = w * z2
+
+        self.init(
+            SIMD4<Float>(1.0 - (yy + zz), xy + wz, xz - wy, 0.0),
+            SIMD4<Float>(xy - wz, 1.0 - (xx + zz), yz + wx, 0.0),
+            SIMD4<Float>(xz + wy, yz - wx, 1.0 - (xx + yy), 0.0),
+            SIMD4<Float>(0.0, 0.0, 0.0, 1.0)
+        )
+    }
+
     /// Creates a 4x4 model matrix from translation, rotation, and scale components.
     /// - Parameters:
     ///   - position: The translation vector.

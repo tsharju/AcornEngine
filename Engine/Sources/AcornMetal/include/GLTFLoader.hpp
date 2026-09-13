@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <stdint.h>
 #include "Mesh.hpp"
 
 namespace Acorn {
@@ -13,6 +14,41 @@ namespace Acorn {
         float scale[3];
     };
 
+    enum class GLTFAnimationPath : uint8_t {
+        Translation = 1,
+        Rotation = 2,
+        Scale = 3,
+        Weights = 4
+    };
+
+    enum class GLTFInterpolation : uint8_t {
+        Linear = 0,
+        Step = 1,
+        CubicSpline = 2
+    };
+
+    struct GLTFChannelData {
+        int nodeIndex; // Index into outNodes
+        uint8_t path;  // 1: Translation, 2: Rotation, 3: Scale, 4: Weights
+        uint8_t interpolation; // 0: Linear, 1: Step, 2: CubicSpline
+        int keyframeCount;
+        const float* timestamps;
+        const float* values;
+        int valuesPerKeyframe;
+    };
+
+    struct GLTFAnimationData {
+        char name[64];
+        float duration;
+        int channelCount;
+        GLTFChannelData* channels;
+    };
+
+    struct GLTFAnimationContainer {
+        int animationCount;
+        GLTFAnimationData* animations;
+    };
+
     class GLTFLoader {
     public:
         static std::vector<AcornMetalMesh*> load(
@@ -20,7 +56,8 @@ namespace Acorn {
             void* devicePtr, 
             std::vector<GLTFNodeData>& outNodes,
             const void** outTextureData = nullptr, 
-            int* outTextureSize = nullptr
+            int* outTextureSize = nullptr,
+            GLTFAnimationContainer* outAnimations = nullptr
         );
         
         static int loadRaw(
@@ -32,7 +69,10 @@ namespace Acorn {
             int maxNodes, 
             int* outNodeCount,
             const void** outTextureData, 
-            int* outTextureSize
+            int* outTextureSize,
+            GLTFAnimationContainer* outAnimations = nullptr
         );
+
+        static void freeAnimationContainer(GLTFAnimationContainer* container);
     };
 }

@@ -51,6 +51,9 @@ let package = Package(
                 "AcornMapGeometry"
             ],
             path: "Engine/Tests/AcornEngineTests",
+            resources: [
+                .copy("Resources")
+            ],
             swiftSettings: [.interoperabilityMode(.Cxx)]
         ),
         .target(

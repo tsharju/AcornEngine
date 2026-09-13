@@ -21,6 +21,9 @@ public class Engine {
     /// The system responsible for 2D sprite flipbook animation.
     public let spriteAnimationSystem: SpriteAnimationSystem
     
+    /// The system responsible for 3D model skeletal and hierarchical animation.
+    public let modelAnimationSystem: ModelAnimationSystem
+    
     /// The maximum allowable delta time per tick, preventing large spikes upon app resume.
     public var maxDeltaTime: Double = 0.1
     
@@ -36,11 +39,13 @@ public class Engine {
     ///   - inputSystem: The input system (defaults to standard InputSystem).
     ///   - audioSystem: The audio system (defaults to standard AudioSystem).
     ///   - spriteAnimationSystem: The sprite animation system (defaults to standard SpriteAnimationSystem).
+    ///   - modelAnimationSystem: The model animation system (defaults to standard ModelAnimationSystem).
     public init(
         renderer: any Renderer,
         inputSystem: InputSystem = InputSystem(),
         audioSystem: AudioSystem = AudioSystem(),
-        spriteAnimationSystem: SpriteAnimationSystem = SpriteAnimationSystem()
+        spriteAnimationSystem: SpriteAnimationSystem = SpriteAnimationSystem(),
+        modelAnimationSystem: ModelAnimationSystem = ModelAnimationSystem()
     ) {
         self.world = World()
         self.renderer = renderer
@@ -48,9 +53,11 @@ public class Engine {
         self.renderSystem = RenderSystem(renderer: self.renderer)
         self.audioSystem = audioSystem
         self.spriteAnimationSystem = spriteAnimationSystem
+        self.modelAnimationSystem = modelAnimationSystem
         
         self.world.registerSystem(self.inputSystem)
         self.world.registerSystem(self.spriteAnimationSystem)
+        self.world.registerSystem(self.modelAnimationSystem)
         self.world.registerSystem(self.audioSystem)
     }
     

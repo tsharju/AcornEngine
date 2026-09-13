@@ -26,6 +26,13 @@ This document tracks completed milestones, upcoming features, architectural impr
   - [x] Texture atlas and sprite sheet support (`SpriteSheet`) with trimmed and rotated frame decoding.
   - [x] Scalable Signed Distance Field (SDF) text rendering with outline and anti-aliasing shaders.
   - [x] Base 2D particle emitter entity pipeline (`ParticleEmitterComponent`, `ParticleSystem`).
+- [x] **3D glTF Model Animation & Cross-Fade Blending**
+  - [x] C++ `fastgltf` animation parser extracting TRS channels, keyframes, and interpolation modes.
+  - [x] `ModelAnimationComponent` and `ModelAnimationSystem` with multi-clip playback, looping modes, and ping-pong playback.
+  - [x] Real-time smooth cross-fade blending with quaternion SLERP and translation/scale LERP.
+  - [x] Animation lifecycle event publishing via `EventBus` (`Started`, `Looped`, `Completed`, `TransitionStarted`, `TransitionCompleted`).
+  - [x] `GLTFModel.instantiate(in:color:texture:)` automated ECS hierarchy builder with rest transforms.
+  - [x] Orientation quaternion support on `TransformComponent` avoiding gimbal lock.
 
 ---
 

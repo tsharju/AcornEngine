@@ -24,6 +24,8 @@ graph TD
     RenderSystem --> Renderer
     SpriteAnimationSystem[Sprite Animation System] --> World
     SpriteAnimationSystem --> EventBus
+    ModelAnimationSystem[Model Animation System] --> World
+    ModelAnimationSystem --> EventBus
     PhysicsSystem[Physics System] --> World
     PhysicsSystem --> Box2D[Box2D v3]
     PhysicsSystem --> EventBus
@@ -40,19 +42,21 @@ graph TD
     subgraph Hardware & Engine Subsystems
         Renderer
         SpriteAnimationSystem
+        ModelAnimationSystem
         Box2D
         AudioSystem
         InputSystem
     end
 ```
 
-The engine is built upon six foundational pillars:
+The engine is built upon seven foundational pillars:
 1. **ECS (Entity Component System)**: High-performance data separation where entities are lightweight IDs, components are pure data structs, and systems contain the logic.
 2. **Decoupled EventBus**: Type-safe event streaming and frame-buffered message queues enabling systems to communicate without tight coupling.
 3. **2D Sprite Flipbook Animation**: Dynamic frame-by-frame animation system with multi-mode playback, frame triggers, and automatic sprite sheet clip extraction.
-4. **Metal Rendering Backend & GPU Instancing**: Hardware-accelerated graphics pipeline supporting instanced 3D meshes, batched 2D sprites, tilemaps, and scalable Signed Distance Field (SDF) text.
-5. **Unified Input & Audio Subsystems**: Multi-device hardware abstraction (Keyboard, Mouse, Touch, Game Controllers) and 3D spatial sound processing via `AVAudioEngine`.
-6. **Native 2D Physics Engine**: Box2D v3 rigid body simulation, contact callbacks, and sensor trigger volumes.
+4. **3D glTF Model Animation**: Keyframed skeletal and hierarchical TRS animation channels with looping modes, cross-fade blending (SLERP/LERP), and lifecycle event publishing.
+5. **Metal Rendering Backend & GPU Instancing**: Hardware-accelerated graphics pipeline supporting instanced 3D meshes, batched 2D sprites, tilemaps, and scalable Signed Distance Field (SDF) text.
+6. **Unified Input & Audio Subsystems**: Multi-device hardware abstraction (Keyboard, Mouse, Touch, Game Controllers) and 3D spatial sound processing via `AVAudioEngine`.
+7. **Native 2D Physics Engine**: Box2D v3 rigid body simulation, contact callbacks, and sensor trigger volumes.
 
 ---
 
@@ -180,10 +184,13 @@ The concrete implementation of the renderer using Apple's Metal API.
 * **`MetalTexture`**: Wraps a Metal `MTLTexture`.
 * **`TextureLoader`**: Decodes images asynchronously from `URL` or `Data` using `MTKTextureLoader`, or uploads raw `[UInt8]` pixel arrays (supporting single-channel `.r8Unorm` for fonts or 4-channel `.rgba8Unorm` formats).
 
-### `GLTFModelLoader`
+### `GLTFModelLoader` & `GLTFModel`
 Responsible for parsing and loading glTF models (`.glb` / `.gltf`) from disk.
-* **Implementation**: Wraps a C++ backend (`AcornMetal` parser) built on top of `fastgltf` and `simdjson`.
-* **Output**: Extracts arrays of `MetalMesh` buffers, `GLTFNode` structural configurations (translation, rotation, scale, parents), and embedded texture image binary payloads.
+* **Implementation**: Wraps a high-performance C++ backend (`AcornMetal` parser) built on top of `fastgltf` and `simdjson`.
+* **Output**: Extracts arrays of `MetalMesh` buffers, `GLTFNode` structural configurations (translation, rotation quaternion, scale, parents), embedded texture image binary payloads, and skeletal/hierarchical animation clips (`ModelAnimationClip`).
+* **Structured Model Representation (`GLTFModel`)**:
+  * Bundles loaded meshes, nodes, texture payloads, and animation clips into a unified struct.
+  * Provides `instantiate(in:color:texture:) -> Entity` to automatically create ECS node hierarchies with `TransformComponent`, `MeshComponent`, and `ModelAnimationComponent` in a single call.
 
 ### Mesh & Geometry Basics
 * **`Vertex`**: A 16-byte aligned struct containing:
@@ -388,17 +395,59 @@ world.eventBus.subscribe(SpriteAnimationTriggerEvent.self) { event in
 
 ---
 
-## 5. Components
+## 5. 3D glTF Model Animation System
+
+Located under `Sources/AcornEngine/Animation`:
+
+AcornEngine includes a complete 3D keyframed skeletal and hierarchical animation system that operates on glTF nodes, supporting multi-clip playback, looping modes, and smooth real-time cross-fade blending.
+
+```mermaid
+graph TD
+    GLTF[GLTFModel / Loader] -->|Extracts| Clips[ModelAnimationClip Array]
+    GLTF -->|Instantiates Hierarchy| Nodes[Entity Node Hierarchy]
+    GLTF -->|Creates| AnimComp[ModelAnimationComponent]
+    AnimComp -->|Manages Clips & Transitions| AnimSys[ModelAnimationSystem]
+    AnimSys -->|Interpolates Channels LERP/SLERP| Transforms[TransformComponent]
+    AnimSys -->|Dispatches Lifecycle Events| EventBus[EventBus]
+
+    subgraph 3D Animation Events
+        EventBus --> StartEvt[ModelAnimationStartedEvent]
+        EventBus --> LoopEvt[ModelAnimationLoopedEvent]
+        EventBus --> DoneEvt[ModelAnimationCompletedEvent]
+        EventBus --> TransStartEvt[ModelAnimationTransitionStartedEvent]
+        EventBus --> TransDoneEvt[ModelAnimationTransitionCompletedEvent]
+    end
+```
+
+### Core 3D Animation Types
+
+1. **`ModelAnimationPath`**: Target TRS property for keyframing (`.translation`, `.rotation`, `.scale`).
+2. **`ModelAnimationInterpolation`**: Channel interpolation method (`.linear`, `.step`, `.cubicSpline`).
+3. **`ModelAnimationChannel`**: Binds a node index/name to keyframe timestamps and values, providing high-performance interpolation (SLERP for quaternions, LERP for translation/scale).
+4. **`ModelAnimationClip`**: Represents a named animation sequence containing multiple animation channels and a total duration.
+5. **`ModelAnimationPlaybackMode`**: Playback progression (`.loop`, `.once`, `.pingPong`, `.reverseOnce`, `.reverseLoop`).
+6. **`ModelAnimationComponent`**: ECS component managing model clips, playback timers, active speeds, node entity arrays, rest transforms (`NodeRestTransform`), and active cross-fade transitions (`ModelAnimationTransition`).
+   * **Control Methods**:
+     * `play(mode:restartIfAlreadyPlaying:)`: Plays current/default clip.
+     * `play(clipNamed:mode:restartIfAlreadyPlaying:)`: Switches directly to a named clip.
+     * `transition(to:duration:mode:)`: Cross-fades smoothly between clips over duration (SLERP quaternion blend + LERP translation/scale).
+     * `pause()`, `resume()`, `stop()`.
+7. **`ModelAnimationSystem`**: Updates timers every tick, evaluates keyframe poses, calculates cross-fade weights, and writes updated positions, scales, and orientation quaternions to `TransformComponent`.
+
+---
+
+## 6. Components
 
 Located under `Sources/AcornEngine/Core/Components`, `Sources/AcornEngine/Animation`, `Sources/AcornEngine/Physics`, and `Sources/AcornEngine/Audio`:
 
 ### `TransformComponent`
-Stores the physical placement of an entity in the virtual world.
+Stores the physical placement and orientation of an entity in the virtual world.
 * **Properties**:
   * `position: SIMD3<Float>`: Coordinates in 3D space.
   * `rotation: SIMD3<Float>`: Euler rotation angles in radians.
   * `scale: SIMD3<Float>`: Scaling factor (default is `[1.0, 1.0, 1.0]`).
-  * `matrix: simd_float4x4`: Derived 4x4 model matrix computed via Translation * Rotation * Scale.
+  * `orientation: SIMD4<Float>?`: Optional unit quaternion `(x, y, z, w)`. When set, `matrix` calculates rotation directly from the quaternion, avoiding gimbal lock.
+  * `matrix: Matrix4x4`: Derived 4x4 model matrix computed via Translation * Rotation * Scale.
 
 ### `ParentComponent`
 Establishes a hierarchical relationship between entities, forming a scene tree hierarchy.
@@ -433,6 +482,25 @@ Drives frame-by-frame 2D sprite flipbook animation for an entity with `SpriteCom
   * `currentFrameIndex: Int`: Current active frame index.
   * `normalizedProgress: Double`: Animation progress in range $[0.0, 1.0]$.
   * `totalDuration: Double`: Total duration of the active clip in seconds.
+
+### `ModelAnimationComponent`
+Manages 3D skeletal/hierarchical animation playback, looping modes, and cross-fade blending for glTF models.
+* **Properties**:
+  * `clips: [String: ModelAnimationClip]`: Loaded animation clips keyed by name.
+  * `currentClipName: String?`: Name of the active animation clip.
+  * `playbackTimer: Double`: Elapsed playback time in seconds within the active clip.
+  * `speed: Double`: Playback speed multiplier.
+  * `playbackModeOverride: ModelAnimationPlaybackMode?`: Optional playback mode override.
+  * `isPlaying: Bool` / `isPaused: Bool`: Current playback state.
+  * `pingPongDirection: Int`: Direction multiplier (+1 forward, -1 backward).
+  * `nodeEntities: [Entity]`: Hierarchy of ECS entities corresponding to model nodes.
+  * `nodeRestTransforms: [NodeRestTransform]`: Bind/rest transforms for each node.
+  * `transition: ModelAnimationTransition?`: Active cross-fade transition state when blending between clips.
+  * `normalizedProgress: Double`: Current clip progress in $[0.0, 1.0]$.
+* **Key Methods**:
+  * `mutating func play(clipNamed:mode:restartIfAlreadyPlaying:)`: Plays an animation clip immediately.
+  * `mutating func transition(to:duration:mode:)`: Cross-fades smoothly to another clip with SLERP quaternion and LERP translation/scale interpolation.
+  * `mutating func pause()`, `resume()`, `stop()`.
 
 ### `TileMapComponent`
 Draws a large grid of static sprite tiles.
@@ -588,6 +656,16 @@ Advances frame timers for `SpriteAnimationComponent` entities, handles looping/p
   * Advances elapsed time, tracks frame transitions, dispatches `SpriteAnimationFrameEvent` and `SpriteAnimationTriggerEvent`.
   * Triggers `SpriteAnimationCompletedEvent` upon completing `.once` or `.reverseOnce` clips.
   * Sets `spriteComponent.frameName` to the current animation frame and sets `spriteComponent.isDirty = true`.
+
+### `ModelAnimationSystem`
+Drives 3D model skeletal/hierarchical animation playback, channel sampling, cross-fade blending, and transform updates.
+* **Operation**:
+  * Iterates across entities with `ModelAnimationComponent`.
+  * Advances playback timers according to playback speed and direction.
+  * Handles looping (`.loop`, `.reverseLoop`), completion (`.once`, `.reverseOnce`), and ping-pong bounds (`.pingPong`).
+  * Calculates real-time cross-fade transitions (`ModelAnimationTransition`) smoothly interpolating translation (LERP), scale (LERP), and rotation quaternions (SLERP) across duration.
+  * Evaluates channel keyframe poses for translation, rotation, and scale and writes updated local transforms and orientation quaternions directly to child entities in `nodeEntities`.
+  * Dispatches animation events (`ModelAnimationStartedEvent`, `ModelAnimationLoopedEvent`, `ModelAnimationCompletedEvent`, `ModelAnimationTransitionStartedEvent`, `ModelAnimationTransitionCompletedEvent`) via `EventBus`.
 
 ### `InputSystem`
 Consolidates cross-platform input state and hardware controller polling.

@@ -37,36 +37,94 @@ world.addComponent(
 
 ---
 
-## 2. Loading glTF / GLB Models
+## 2. Loading glTF / GLB Models & Animation
 
-AcornEngine includes a high-performance glTF parser powered by `fastgltf` and `simdjson`:
+AcornEngine includes a high-performance glTF parser powered by `fastgltf` and `simdjson`.
+
+### One-Line Instantiation with `GLTFModel.instantiate`
+The easiest way to load and instantiate a glTF model hierarchy with mesh nodes and animations:
 
 ```swift
-guard let modelURL = Bundle.main.url(forResource: "character", withExtension: "glb") else {
-    fatalError("Model not found")
+let loader = GLTFModelLoader(renderer: renderer)
+let model = try loader.loadModel(from: modelURL)
+
+// Automatically creates root entity, child node entities with ParentComponent,
+// binds rest transforms, attaches MeshComponents, and sets up ModelAnimationComponent
+let modelRoot = model.instantiate(in: world)
+world.mutateComponent(ofType: TransformComponent.self, for: modelRoot) { t in
+    t.position = [0, 0, 0]
+    t.scale = [1, 1, 1]
 }
+```
 
-// Load mesh, materials, and hierarchy
-let model = try GLTFModelLoader.load(from: modelURL, renderer: renderer)
+### Manual Node Extraction
+Alternatively, inspect or build entities manually:
 
-// Spawn model root entity
-let modelEntity = world.createEntity()
-world.addComponent(TransformComponent(position: [0, 0, 0], scale: [1, 1, 1]), to: modelEntity)
+```swift
+let result = try loader.load(from: modelURL)
 
-for node in model.nodes {
+let rootEntity = world.createEntity()
+world.addComponent(TransformComponent(), to: rootEntity)
+
+for node in result.nodes {
     let nodeEntity = world.createEntity()
-    world.addComponent(node.transform, to: nodeEntity)
-    world.addComponent(ParentComponent(parent: modelEntity), to: nodeEntity)
+    world.addComponent(TransformComponent(
+        position: node.translation,
+        rotation: quaternionToEuler(node.rotation),
+        scale: node.scale,
+        orientation: node.rotation
+    ), to: nodeEntity)
+    world.addComponent(ParentComponent(parent: rootEntity), to: nodeEntity)
     
-    if let mesh = node.mesh {
-        world.addComponent(MeshComponent(mesh: mesh, texture: node.texture), to: nodeEntity)
+    if let meshIdx = node.meshIndex {
+        world.addComponent(MeshComponent(mesh: result.meshes[meshIdx]), to: nodeEntity)
     }
 }
 ```
 
 ---
 
-## 3. Automatic GPU Instanced Rendering
+## 3. 3D Model Animation & Cross-Fade Blending
+
+Model skeletal and hierarchical node animation is managed by `ModelAnimationComponent` and driven by `ModelAnimationSystem` (automatically registered in `Engine`).
+
+### Playback Modes & Controls
+```swift
+guard var anim = world.component(ofType: ModelAnimationComponent.self, for: modelRoot) else { return }
+
+// 1. Play immediate clip
+anim.play(clipNamed: "Run", mode: .loop)
+
+// 2. Smooth Cross-Fade Transition (SLERP quaternion blend + LERP translation/scale)
+anim.transition(to: "Walk", duration: 0.3, mode: .loop)
+
+// 3. Playback Controls
+anim.speed = 1.5 // 1.5x speed
+anim.pause()
+anim.resume()
+anim.stop()
+
+world.addComponent(anim, to: modelRoot)
+```
+
+### Listening to Animation Events via `EventBus`
+```swift
+world.eventBus.subscribe(ModelAnimationStartedEvent.self) { event in
+    print("Animation \(event.clipName) started on entity \(event.entity)")
+}
+
+world.eventBus.subscribe(ModelAnimationLoopedEvent.self) { event in
+    print("Animation \(event.clipName) looped")
+}
+
+world.eventBus.subscribe(ModelAnimationTransitionCompletedEvent.self) { event in
+    print("Cross-fade transition completed to \(event.clipName)")
+}
+```
+
+---
+
+## 4. Automatic GPU Instanced Rendering
 
 When multiple entities share the same `(mesh, texture)` pair:
 - `RenderSystem` automatically aggregates them into instance batches every frame.
@@ -76,7 +134,7 @@ When multiple entities share the same `(mesh, texture)` pair:
 
 ---
 
-## 4. Lighting (`LightComponent`)
+## 5. Lighting (`LightComponent`)
 
 The renderer supports ambient, directional (sun), and point lights:
 
@@ -121,7 +179,7 @@ world.addComponent(
 
 ---
 
-## 5. Cameras & Controllers
+## 6. Cameras & Controllers
 
 AcornEngine includes three camera components driven by `CameraSystem`:
 

@@ -21,10 +21,17 @@ AcornEngine is a modern, high-performance 2D/3D game engine targeting Apple plat
   - Configurable playback modes (`.once`, `.loop`, `.pingPong`, `.reverseOnce`, `.reverseLoop`), custom playback speeds, and per-frame durations.
   - **Decoupled Animation Events**: Dispatches frame change events (`SpriteAnimationFrameEvent`), completion events (`SpriteAnimationCompletedEvent`), and custom trigger string tags (`SpriteAnimationTriggerEvent`) for syncing footstep audio, attack hitboxes, and particle spawns.
   - **Automated Clip Generation**: Automated factory helpers on `SpriteSheet` that extract animation clips directly from naming conventions (e.g. `walk_01`, `walk_02`) and Aseprite JSON `frameTags` metadata.
+* **3D glTF Model Animation & Cross-Fade Blending**:
+  - Keyframed skeletal and hierarchical TRS (Translation, Rotation quaternion, Scale) animation channels powered by `ModelAnimationComponent` and `ModelAnimationSystem`.
+  - Seamless multi-clip playback, direction control, and playback modes (`.loop`, `.once`, `.pingPong`, `.reverseOnce`, `.reverseLoop`).
+  - **Smooth Cross-Fade Transitions**: Real-time spherical linear interpolation (SLERP) for rotation quaternions and linear interpolation (LERP) for translations and scales over customizable cross-fade durations.
+  - **Lifecycle Events**: Publishes `ModelAnimationStartedEvent`, `ModelAnimationLoopedEvent`, `ModelAnimationCompletedEvent`, `ModelAnimationTransitionStartedEvent`, and `ModelAnimationTransitionCompletedEvent` to `EventBus`.
+  - **One-Line Entity Instantiation**: `GLTFModel.instantiate(in:color:texture:)` automatically creates node entity hierarchies, binds rest transforms, sets parent-child relationships, and initializes `ModelAnimationComponent`.
 * **Metal Rendering Backend & GPU Instancing**:
   - Low-overhead hardware-accelerated graphics API supporting textured 3D meshes with lighting (ambient, directional, and point light sources).
   - **GPU Instanced Rendering & Draw Call Batching**: Batches repeated 3D meshes (`renderInstanced`) and 2D sprite entities (`renderSpritesInstanced`) into single hardware draw calls using dynamic instance buffers.
   - High-performance **glTF (.gltf / .glb) model loading** with texture maps and parent-child node structures.
+  - Quaternion-based orientations on `TransformComponent` avoiding gimbal lock.
   - Trimmed, rotated, and tinted 2D sprites backed by packed sprite sheets with automatic Z-sorting.
   - High-quality, scalable **Signed Distance Field (SDF) Text Rendering** supporting runtime font generation, outlines, and anti-aliasing.
 * **Unified Input Subsystem & Game Controllers**:

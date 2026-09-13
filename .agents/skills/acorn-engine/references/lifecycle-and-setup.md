@@ -6,7 +6,7 @@ This guide details how to configure the engine lifecycle, set up an `MTKView`, h
 
 ## 1. Engine Initialization
 
-`Engine` is the core coordinator holding the `World`, `Renderer`, `InputSystem`, `RenderSystem`, `AudioSystem`, and `SpriteAnimationSystem`. All engine types operate under `@MainActor`.
+`Engine` is the core coordinator holding the `World`, `Renderer`, `InputSystem`, `RenderSystem`, `AudioSystem`, `SpriteAnimationSystem`, and `ModelAnimationSystem`. All engine types operate under `@MainActor`.
 
 ```swift
 import UIKit

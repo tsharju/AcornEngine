@@ -127,15 +127,28 @@ public final class PlayerControllerSystem: System {
 
 ---
 
-## Recipe 2: Complete 3D Scene Setup
+## Recipe 2: Complete 3D Animated Scene Setup
 
-Combines camera, directional sunlight, horizon ground plane, and smooth target tracking.
+Combines camera, directional sunlight, ground plane, 3D glTF model loading, and smooth animation cross-fades.
 
 ```swift
 @MainActor
 public struct Scene3DSetup {
-    public static func setup(in world: World, renderer: any Renderer, targetEntity: Entity) {
-        // 1. Perspective Camera
+    public static func setup(in world: World, renderer: any Renderer) throws -> Entity {
+        // 1. Load and instantiate animated glTF model
+        guard let modelURL = Bundle.main.url(forResource: "character", withExtension: "glb") else {
+            fatalError("Model not found")
+        }
+        let loader = GLTFModelLoader(renderer: renderer)
+        let model = try loader.loadModel(from: modelURL)
+        let character = model.instantiate(in: world)
+        
+        // Start playing idle animation
+        world.mutateComponent(ofType: ModelAnimationComponent.self, for: character) { anim in
+            anim.play(clipNamed: "Idle", mode: .loop)
+        }
+
+        // 2. Perspective Follow Camera
         let cameraEntity = world.createEntity()
         world.addComponent(TransformComponent(position: [0, 6, -14]), to: cameraEntity)
         world.addComponent(
@@ -148,13 +161,12 @@ public struct Scene3DSetup {
             ),
             to: cameraEntity
         )
-        // Follow target smoothly
         world.addComponent(
-            CameraTrackingComponent(target: targetEntity, offset: [0, 5, -12], smoothing: 0.08),
+            CameraTrackingComponent(target: character, offset: [0, 5, -12], smoothing: 0.08),
             to: cameraEntity
         )
 
-        // 2. Sunlight (Directional Light)
+        // 3. Sunlight (Directional Light)
         let sun = world.createEntity()
         var sunTransform = TransformComponent()
         sunTransform.rotation = SIMD3<Float>(-.pi / 4.0, -.pi / 3.0, 0.0)
@@ -164,14 +176,14 @@ public struct Scene3DSetup {
             to: sun
         )
 
-        // 3. Ambient Lighting
+        // 4. Ambient Lighting
         let ambient = world.createEntity()
         world.addComponent(
             LightComponent(type: .ambient, color: [0.25, 0.28, 0.35], intensity: 0.8),
             to: ambient
         )
 
-        // 4. Ground Plane
+        // 5. Ground Plane
         let ground = world.createEntity()
         let planeVertices = BasicShapeGenerator.generatePlane(width: 500.0, length: 500.0)
         if let mesh = renderer.createMesh(vertices: planeVertices) {
@@ -181,6 +193,8 @@ public struct Scene3DSetup {
             )
             world.addComponent(TransformComponent(position: [0, -0.1, 0]), to: ground)
         }
+        
+        return character
     }
 }
 ```

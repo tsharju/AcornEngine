@@ -110,6 +110,11 @@ At the end of each `world.update()`, `world.eventBus.clear()` is called automati
 | `SpriteAnimationFrameEvent` | Animation | Fired when an animated sprite advances to a new frame. |
 | `SpriteAnimationCompletedEvent` | Animation | Fired when a `.once` or `.reverseOnce` clip finishes. |
 | `SpriteAnimationTriggerEvent` | Animation | Fired on frames declaring custom string tags (e.g. footsteps). |
+| `ModelAnimationStartedEvent` | 3D Animation | Fired when a 3D model animation begins playback. |
+| `ModelAnimationLoopedEvent` | 3D Animation | Fired when a 3D model animation wraps and loops. |
+| `ModelAnimationCompletedEvent` | 3D Animation | Fired when a `.once` or `.reverseOnce` 3D model clip completes. |
+| `ModelAnimationTransitionStartedEvent` | 3D Animation | Fired when a cross-fade transition starts between two 3D clips. |
+| `ModelAnimationTransitionCompletedEvent` | 3D Animation | Fired when a cross-fade transition completes. |
 | `PlaySoundEvent` | Audio | Requests immediate one-shot playback of an `AudioClip`. |
 | `StopAllSoundsEvent` | Audio | Silences all active audio voices. |
 | `KeyDownEvent` / `KeyUpEvent` | Input | Dispatched on hardware keyboard key events. |

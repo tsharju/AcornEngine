@@ -26,7 +26,7 @@ What are you implementing?
  │    └── See [EventBus Guide](references/event-bus.md)
  ├── 4. 2D Sprites, Atlases, Flipbook Animations, or Tilemaps
  │    └── See [2D Sprites & Animation](references/2d-sprites-and-animation.md)
- ├── 5. 3D Models (glTF), Meshes, Lights, or Cameras
+ ├── 5. 3D Models (glTF), Meshes, Animation, Lights, or Cameras
  │    └── See [3D Rendering & Lighting](references/3d-rendering-and-lighting.md)
  ├── 6. Rigid Bodies, Collisions, or Triggers (Box2D)
  │    └── See [Physics & Collisions](references/physics-and-collisions.md)
@@ -55,6 +55,7 @@ graph TD
     Engine --> InputSystem[Input System]
     Engine --> AudioSystem[Audio System]
     Engine --> SpriteAnimationSystem[Sprite Animation System]
+    Engine --> ModelAnimationSystem[Model Animation System]
     Engine --> RenderSystem[Render System]
 
     World --> EntityRegistry[Entity Generational Registry]
@@ -66,19 +67,22 @@ graph TD
     RenderSystem --> Renderer
     SpriteAnimationSystem --> World
     SpriteAnimationSystem --> EventBus
+    ModelAnimationSystem --> World
+    ModelAnimationSystem --> EventBus
     AudioSystem --> World
     AudioSystem --> EventBus
     InputSystem --> World
     InputSystem --> EventBus
 ```
 
-### The Six Architectural Pillars
+### The Seven Architectural Pillars
 1. **ECS (Entity Component System)**: Lightweight generational entities, pure `Sendable` `Component` structs, and `@MainActor` `System` classes.
 2. **Decoupled EventBus**: Type-safe immediate closures (`subscribe`) and per-frame buffered queues (`events(ofType:)`).
 3. **2D Sprite Flipbook Animation**: Multi-mode playback (`.once`, `.loop`, `.pingPong`), trigger events (footsteps, hitboxes), and automatic clip extraction from sprite sheets or Aseprite tags.
-4. **Metal Rendering & Automatic GPU Instancing**: Hardware-accelerated 3D meshes, 2D sprites, SDF text, and automated batching (`renderInstanced` / `renderSpritesInstanced`).
-5. **Unified Input & Spatial Audio**: Multi-device hardware polling (Keyboard, Mouse, Multi-touch, Game Controllers) and 3D spatial sound via `AVAudioEngine` & `AVAudioEnvironmentNode`.
-6. **Native 2D Physics**: Box2D v3 integration with rigid body dynamics, contact manifold events (`CollisionEnter/Stay/Exit`), and trigger volumes (`SensorEnter/Stay/Exit`).
+4. **3D glTF Model Animation**: Keyframed TRS skeletal/node animation channels, multi-clip playback, looping modes, smooth cross-fades (SLERP/LERP), and animation lifecycle events.
+5. **Metal Rendering & Automatic GPU Instancing**: Hardware-accelerated 3D meshes, 2D sprites, SDF text, and automated batching (`renderInstanced` / `renderSpritesInstanced`).
+6. **Unified Input & Spatial Audio**: Multi-device hardware polling (Keyboard, Mouse, Multi-touch, Game Controllers) and 3D spatial sound via `AVAudioEngine` & `AVAudioEnvironmentNode`.
+7. **Native 2D Physics**: Box2D v3 integration with rigid body dynamics, contact manifold events (`CollisionEnter/Stay/Exit`), and trigger volumes (`SensorEnter/Stay/Exit`).
 
 ---
 
@@ -90,12 +94,12 @@ graph TD
 | **ECS Architecture** | [ecs-architecture.md](references/ecs-architecture.md) | `Entity`, `Component`, `System`, zero-allocation queries (`forEach`, `mutateComponent`), and hierarchy (`ParentComponent`). |
 | **EventBus** | [event-bus.md](references/event-bus.md) | Defining events, publishing, subscriptions, frame-buffered queries, and built-in events. |
 | **2D Sprites & Animation** | [2d-sprites-and-animation.md](references/2d-sprites-and-animation.md) | `SpriteComponent`, `SpriteSheet`, flipbook playback, triggers, and `TileMapComponent`. |
-| **3D Rendering & Lighting** | [3d-rendering-and-lighting.md](references/3d-rendering-and-lighting.md) | `MeshComponent`, glTF loading, GPU instancing, `LightComponent`, and camera tracking/orbit. |
+| **3D Rendering & Lighting** | [3d-rendering-and-lighting.md](references/3d-rendering-and-lighting.md) | `MeshComponent`, glTF loading, 3D model animation & cross-fades, GPU instancing, `LightComponent`, and cameras. |
 | **Physics & Collisions** | [physics-and-collisions.md](references/physics-and-collisions.md) | Box2D v3 bodies, box/circle colliders, sensor triggers, contact manifolds, and event handling. |
 | **Unified Input** | [input-handling.md](references/input-handling.md) | Keyboard, mouse, touch, and Apple GameController polling and events. |
 | **Spatial Audio** | [spatial-audio.md](references/spatial-audio.md) | `AudioListenerComponent`, `AudioSourceComponent` (HRTF / spherical), and one-shot `PlaySoundEvent`. |
 | **Text & Particles** | [text-and-particles.md](references/text-and-particles.md) | Scalable SDF text generation (`TextComponent`) and entity-based particle systems. |
-| **Recipes & Patterns** | [recipes-and-patterns.md](references/recipes-and-patterns.md) | End-to-end recipes: 2D platformer character, 3D glTF scene, and scene cleanup. |
+| **Recipes & Patterns** | [recipes-and-patterns.md](references/recipes-and-patterns.md) | End-to-end recipes: 2D platformer character, 3D animated glTF scene, and scene cleanup. |
 | **Best Practices** | [best-practices.md](references/best-practices.md) | Concurrency safety, zero-allocation ECS patterns, draw call minimization, and physics rules. |
 
 ---

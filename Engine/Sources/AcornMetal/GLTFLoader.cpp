@@ -16,7 +16,8 @@ namespace Acorn {
         void* devicePtr, 
         std::vector<GLTFNodeData>& outNodes,
         const void** outTextureData, 
-        int* outTextureSize
+        int* outTextureSize,
+        GLTFAnimationContainer* outAnimations
     ) {
         MTL::Device* device = (MTL::Device*)devicePtr;
         std::vector<AcornMetalMesh*> meshes;
@@ -284,6 +285,140 @@ namespace Acorn {
             }
         }
 
+        // Extract animations if requested
+        if (outAnimations) {
+            outAnimations->animationCount = 0;
+            outAnimations->animations = nullptr;
+            
+            if (!asset->animations.empty()) {
+                size_t numAnims = asset->animations.size();
+                outAnimations->animations = new GLTFAnimationData[numAnims]();
+                outAnimations->animationCount = static_cast<int>(numAnims);
+                
+                for (size_t a = 0; a < numAnims; ++a) {
+                    auto& gltfAnim = asset->animations[a];
+                    auto& animData = outAnimations->animations[a];
+                    
+                    if (!gltfAnim.name.empty()) {
+                        strncpy(animData.name, gltfAnim.name.c_str(), sizeof(animData.name) - 1);
+                        animData.name[sizeof(animData.name) - 1] = '\0';
+                    } else {
+                        snprintf(animData.name, sizeof(animData.name), "animation_%zu", a);
+                    }
+                    
+                    animData.duration = 0.0f;
+                    
+                    std::vector<GLTFChannelData> validChannels;
+                    validChannels.reserve(gltfAnim.channels.size());
+                    
+                    for (size_t c = 0; c < gltfAnim.channels.size(); ++c) {
+                        auto& gltfChannel = gltfAnim.channels[c];
+                        if (gltfChannel.samplerIndex >= gltfAnim.samplers.size()) continue;
+                        
+                        int targetNode = -1;
+                        if (gltfChannel.nodeIndex.has_value()) {
+                            size_t nodeIdx = gltfChannel.nodeIndex.value();
+                            if (nodeIdx < gltfNodeToReturnedIndex.size()) {
+                                targetNode = gltfNodeToReturnedIndex[nodeIdx];
+                            }
+                        }
+                        if (targetNode < 0) continue;
+                        
+                        auto& sampler = gltfAnim.samplers[gltfChannel.samplerIndex];
+                        if (sampler.inputAccessor >= asset->accessors.size() ||
+                            sampler.outputAccessor >= asset->accessors.size()) {
+                            continue;
+                        }
+                        
+                        auto& inputAccessor = asset->accessors[sampler.inputAccessor];
+                        auto& outputAccessor = asset->accessors[sampler.outputAccessor];
+                        
+                        // Extract timestamps
+                        std::vector<float> timestamps;
+                        timestamps.reserve(inputAccessor.count);
+                        fastgltf::iterateAccessor<float>(asset.get(), inputAccessor, [&](float t) {
+                            timestamps.push_back(t);
+                            if (t > animData.duration) {
+                                animData.duration = t;
+                            }
+                        });
+                        
+                        if (timestamps.empty()) continue;
+                        
+                        uint8_t interp = 0;
+                        if (sampler.interpolation == fastgltf::AnimationInterpolation::Step) {
+                            interp = 1;
+                        } else if (sampler.interpolation == fastgltf::AnimationInterpolation::CubicSpline) {
+                            interp = 2;
+                        }
+                        
+                        uint8_t pathType = 0;
+                        std::vector<float> values;
+                        
+                        if (gltfChannel.path == fastgltf::AnimationPath::Translation) {
+                            pathType = 1;
+                            values.reserve(outputAccessor.count * 3);
+                            fastgltf::iterateAccessor<fastgltf::math::fvec3>(asset.get(), outputAccessor, [&](fastgltf::math::fvec3 v) {
+                                values.push_back(v.x());
+                                values.push_back(v.y());
+                                values.push_back(v.z());
+                            });
+                        } else if (gltfChannel.path == fastgltf::AnimationPath::Rotation) {
+                            pathType = 2;
+                            values.reserve(outputAccessor.count * 4);
+                            fastgltf::iterateAccessor<fastgltf::math::fquat>(asset.get(), outputAccessor, [&](fastgltf::math::fquat q) {
+                                values.push_back(q.x());
+                                values.push_back(q.y());
+                                values.push_back(q.z());
+                                values.push_back(q.w());
+                            });
+                        } else if (gltfChannel.path == fastgltf::AnimationPath::Scale) {
+                            pathType = 3;
+                            values.reserve(outputAccessor.count * 3);
+                            fastgltf::iterateAccessor<fastgltf::math::fvec3>(asset.get(), outputAccessor, [&](fastgltf::math::fvec3 v) {
+                                values.push_back(v.x());
+                                values.push_back(v.y());
+                                values.push_back(v.z());
+                            });
+                        } else if (gltfChannel.path == fastgltf::AnimationPath::Weights) {
+                            pathType = 4;
+                            values.reserve(outputAccessor.count);
+                            fastgltf::iterateAccessor<float>(asset.get(), outputAccessor, [&](float w) {
+                                values.push_back(w);
+                            });
+                        }
+                        
+                        if (pathType == 0 || values.empty()) continue;
+                        
+                        GLTFChannelData channelData = {};
+                        channelData.nodeIndex = targetNode;
+                        channelData.path = pathType;
+                        channelData.interpolation = interp;
+                        channelData.keyframeCount = static_cast<int>(timestamps.size());
+                        channelData.valuesPerKeyframe = static_cast<int>(values.size() / timestamps.size());
+                        
+                        float* tsCopy = new float[timestamps.size()];
+                        std::copy(timestamps.begin(), timestamps.end(), tsCopy);
+                        channelData.timestamps = tsCopy;
+                        
+                        float* valCopy = new float[values.size()];
+                        std::copy(values.begin(), values.end(), valCopy);
+                        channelData.values = valCopy;
+                        
+                        validChannels.push_back(channelData);
+                    }
+                    
+                    animData.channelCount = static_cast<int>(validChannels.size());
+                    if (!validChannels.empty()) {
+                        animData.channels = new GLTFChannelData[validChannels.size()];
+                        std::copy(validChannels.begin(), validChannels.end(), animData.channels);
+                    } else {
+                        animData.channels = nullptr;
+                    }
+                }
+            }
+        }
+
         return meshes;
     }
 
@@ -296,10 +431,11 @@ namespace Acorn {
         int maxNodes, 
         int* outNodeCount,
         const void** outTextureData, 
-        int* outTextureSize
+        int* outTextureSize,
+        GLTFAnimationContainer* outAnimations
     ) {
         std::vector<GLTFNodeData> loadedNodes;
-        std::vector<AcornMetalMesh*> loadedMeshes = load(std::string(path), devicePtr, loadedNodes, outTextureData, outTextureSize);
+        std::vector<AcornMetalMesh*> loadedMeshes = load(std::string(path), devicePtr, loadedNodes, outTextureData, outTextureSize, outAnimations);
         
         int meshCount = std::min(static_cast<int>(loadedMeshes.size()), maxMeshes);
         for (int i = 0; i < meshCount; ++i) {
@@ -315,5 +451,23 @@ namespace Acorn {
         }
         
         return meshCount;
+    }
+
+    void GLTFLoader::freeAnimationContainer(GLTFAnimationContainer* container) {
+        if (!container || !container->animations) return;
+        for (int i = 0; i < container->animationCount; ++i) {
+            auto& anim = container->animations[i];
+            if (anim.channels) {
+                for (int j = 0; j < anim.channelCount; ++j) {
+                    auto& ch = anim.channels[j];
+                    delete[] ch.timestamps;
+                    delete[] ch.values;
+                }
+                delete[] anim.channels;
+            }
+        }
+        delete[] container->animations;
+        container->animations = nullptr;
+        container->animationCount = 0;
     }
 }

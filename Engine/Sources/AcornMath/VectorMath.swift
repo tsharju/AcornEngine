@@ -155,6 +155,48 @@ public func mix(_ x: SIMD4<Float>, _ y: SIMD4<Float>, t: SIMD4<Float>) -> SIMD4<
     x + (y - x) * t
 }
 
+// MARK: - Quaternion Interpolation & Conversion
+
+/// Computes the spherical linear interpolation between two quaternions (x, y, z, w).
+/// - Parameters:
+///   - q1: The starting quaternion.
+///   - q2: The destination quaternion.
+///   - t: The interpolation parameter in `[0, 1]`.
+/// - Returns: The spherically interpolated and normalized quaternion.
+@inlinable
+public func slerp(_ q1: SIMD4<Float>, _ q2: SIMD4<Float>, t: Float) -> SIMD4<Float> {
+    var cosHalfTheta = dot(q1, q2)
+    var target = q2
+    if cosHalfTheta < 0 {
+        target = -q2
+        cosHalfTheta = -cosHalfTheta
+    }
+    
+    if cosHalfTheta > 0.9995 {
+        return normalize(mix(q1, target, t: t))
+    }
+    
+    let halfTheta = acos(clamp(cosHalfTheta, min: -1.0, max: 1.0))
+    let sinHalfTheta = sqrt(max(0.0, 1.0 - cosHalfTheta * cosHalfTheta))
+    if sinHalfTheta < 0.0001 {
+        return normalize(mix(q1, target, t: t))
+    }
+    let ratioA = sin((1.0 - t) * halfTheta) / sinHalfTheta
+    let ratioB = sin(t * halfTheta) / sinHalfTheta
+    return normalize(q1 * ratioA + target * ratioB)
+}
+
+/// Converts a unit quaternion (x, y, z, w) to XYZ Euler angles (pitch, yaw, roll).
+/// - Parameter q: The quaternion.
+/// - Returns: The 3D Euler angles in radians.
+@inlinable
+public func quaternionToEuler(_ q: SIMD4<Float>) -> SIMD3<Float> {
+    let pitch = atan2(2 * (q.w * q.x + q.y * q.z), 1 - 2 * (q.x * q.x + q.y * q.y))
+    let yaw = asin(clamp(2 * (q.w * q.y - q.z * q.x), min: -1.0, max: 1.0))
+    let roll = atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
+    return SIMD3<Float>(pitch, yaw, roll)
+}
+
 // MARK: - Clamp
 
 /// Clamps a scalar value to the range `[minValue, maxValue]`.

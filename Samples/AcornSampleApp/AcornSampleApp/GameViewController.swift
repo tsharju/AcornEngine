@@ -10,16 +10,19 @@ class GameViewController: UIViewController, MTKViewDelegate {
     
     private var animationCycleTask: Task<Void, Never>?
     private var modelRotationTask: Task<Void, Never>?
+    private var modelAnimationCycleTask: Task<Void, Never>?
     
     deinit {
         animationCycleTask?.cancel()
         modelRotationTask?.cancel()
+        modelAnimationCycleTask?.cancel()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         animationCycleTask?.cancel()
         modelRotationTask?.cancel()
+        modelAnimationCycleTask?.cancel()
     }
     
     override func viewDidLoad() {
@@ -181,6 +184,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         setupCharacters()
         setupConfetti()
         setupGLTF()
+        setupAnimatedGLTF()
         setupMapbox3DTile()
     }
     
@@ -462,6 +466,54 @@ class GameViewController: UIViewController, MTKViewDelegate {
                 }
             } catch {
                 print("Failed to load glTF model: \(error)")
+            }
+        }
+    }
+    
+    private func setupAnimatedGLTF() {
+        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let modelUrl = Bundle.main.url(forResource: "AnimatedTestModel", withExtension: "glb") ?? docsDir.appendingPathComponent("AnimatedTestModel.glb")
+        
+        Task {
+            do {
+                let loader = GLTFModelLoader(device: self.renderer.device)
+                let model = try loader.loadModel(from: modelUrl)
+                
+                await MainActor.run {
+                    let rootEntity = model.instantiate(in: self.engine.world, color: SIMD4<Float>(0.1, 0.85, 1.0, 1.0))
+                    self.engine.world.setName("AnimatedModel", for: rootEntity)
+                    print("Instantiated animated glTF model with \(model.animations.count) animations: \(model.animations.map(\.name))")
+                    
+                    // Position model prominently to the left of the Avocado
+                    let transform = TransformComponent(
+                        position: SIMD3<Float>(-1.4, -0.7, 0.3),
+                        rotation: SIMD3<Float>(0, Float.pi / 4.0, 0),
+                        scale: SIMD3<Float>(0.6, 0.6, 0.6)
+                    )
+                    self.engine.world.addComponent(transform, to: rootEntity)
+                    
+                    // Cycle animation clips ("Idle" <-> "Walk") with smooth cross-fade transition
+                    self.modelAnimationCycleTask = Task { @MainActor [weak self] in
+                        var currentClip = "Idle"
+                        while !Task.isCancelled {
+                            do {
+                                try await Task.sleep(nanoseconds: 2_500_000_000) // Switch every 2.5s
+                            } catch {
+                                break
+                            }
+                            guard let self, !Task.isCancelled else { break }
+                            
+                            currentClip = (currentClip == "Idle") ? "Walk" : "Idle"
+                            
+                            if var anim = self.engine.world.component(ofType: ModelAnimationComponent.self, for: rootEntity) {
+                                anim.transition(to: currentClip, duration: 0.8)
+                                self.engine.world.addComponent(anim, to: rootEntity)
+                            }
+                        }
+                    }
+                }
+            } catch {
+                print("Failed to load animated glTF model: \(error)")
             }
         }
     }

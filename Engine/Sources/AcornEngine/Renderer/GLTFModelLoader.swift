@@ -87,7 +87,9 @@ public struct GLTFModel: Sendable {
         
         for node in nodes {
             let entity = world.createEntity()
+            #if DEBUG
             world.setName(node.name, for: entity)
+            #endif
             
             let localTransform = TransformComponent(
                 position: node.translation,

@@ -642,15 +642,27 @@ void processRoadLineString(
     if (line.size() < 2) return;
 
     std::vector<Point2D> pts;
-    pts.reserve(line.size());
+    pts.reserve(line.size() * 2);
     for (const auto& p : line) {
         double mx = p.x / static_cast<double>(extent) * tileGroundWidth;
         double mz = p.y / static_cast<double>(extent) * tileGroundHeight;
         if (!pts.empty()) {
             double dx = mx - pts.back().x;
             double dz = mz - pts.back().y;
-            if (dx * dx + dz * dz < 1e-4) {
+            double distSq = dx * dx + dz * dz;
+            if (distSq < 1e-4) {
                 continue;
+            }
+            // Subdivide long segments longitudinally (max 8.0 meters)
+            constexpr double maxSegmentLen = 8.0;
+            if (distSq > maxSegmentLen * maxSegmentLen) {
+                double dist = std::sqrt(distSq);
+                int steps = static_cast<int>(std::ceil(dist / maxSegmentLen));
+                Point2D prevPt = pts.back();
+                for (int s = 1; s < steps; ++s) {
+                    double t = static_cast<double>(s) / static_cast<double>(steps);
+                    pts.push_back({prevPt.x + t * dx, prevPt.y + t * dz});
+                }
             }
         }
         pts.push_back({mx, mz});

@@ -174,6 +174,19 @@ namespace Acorn {
                 vertexBuffer = device->newBuffer(vertices.data(), vertices.size() * sizeof(DefaultSkinnedVertex), MTL::ResourceStorageModeShared);
                 AcornMetalMesh* resultMesh = new AcornMetalMesh(device, vertexCount, vertexBuffer, indexBuffer, indices.size());
                 resultMesh->setIsSkinned(true);
+
+#ifndef NDEBUG
+                std::vector<float> debugVerts;
+                debugVerts.reserve(vertexCount * 3);
+                for (const auto& v : vertices) {
+                    debugVerts.push_back(v.position[0]);
+                    debugVerts.push_back(v.position[1]);
+                    debugVerts.push_back(v.position[2]);
+                }
+                resultMesh->setDebugVertexData(debugVerts.data(), debugVerts.size());
+                resultMesh->setDebugIndexData(indices.data(), indices.size());
+#endif
+
                 vertexBuffer->release();
                 if (indexBuffer) indexBuffer->release();
                 return resultMesh;

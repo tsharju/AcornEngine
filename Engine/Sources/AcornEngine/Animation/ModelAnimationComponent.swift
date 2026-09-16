@@ -102,6 +102,12 @@ public struct ModelAnimationComponent: Component, Sendable, Equatable {
     /// Active transition/crossfade state between two animations, if in progress.
     public var transition: ModelAnimationTransition?
     
+    /// The skins loaded for this model, containing joint node indices and inverse bind matrices.
+    public var skins: [GLTFSkin]
+    
+    /// The entities in this model that have a `SkinnedMeshComponent`.
+    public var skinnedMeshEntities: [Entity]
+    
     /// Retrieves the currently active animation clip, if one is set.
     public var currentClip: ModelAnimationClip? {
         guard let name = currentClipName else { return nil }
@@ -127,13 +133,17 @@ public struct ModelAnimationComponent: Component, Sendable, Equatable {
     ///   - isPlaying: Whether playback starts immediately (defaults to true).
     ///   - nodeEntities: The ECS entities representing the model's node hierarchy.
     ///   - nodeRestTransforms: The bind/rest transforms for each node.
+    ///   - skins: The skins loaded for this model.
+    ///   - skinnedMeshEntities: The entities with a SkinnedMeshComponent.
     public init(
         clips: [String: ModelAnimationClip] = [:],
         initialClip: String? = nil,
         speed: Double = 1.0,
         isPlaying: Bool = true,
         nodeEntities: [Entity] = [],
-        nodeRestTransforms: [NodeRestTransform] = []
+        nodeRestTransforms: [NodeRestTransform] = [],
+        skins: [GLTFSkin] = [],
+        skinnedMeshEntities: [Entity] = []
     ) {
         self.clips = clips
         let selectedClipName = initialClip ?? clips.keys.sorted().first
@@ -147,6 +157,8 @@ public struct ModelAnimationComponent: Component, Sendable, Equatable {
         self.nodeEntities = nodeEntities
         self.nodeRestTransforms = nodeRestTransforms
         self.transition = nil
+        self.skins = skins
+        self.skinnedMeshEntities = skinnedMeshEntities
     }
     
     /// Initializes a new `ModelAnimationComponent` with an array of clips.
@@ -156,7 +168,9 @@ public struct ModelAnimationComponent: Component, Sendable, Equatable {
         speed: Double = 1.0,
         isPlaying: Bool = true,
         nodeEntities: [Entity] = [],
-        nodeRestTransforms: [NodeRestTransform] = []
+        nodeRestTransforms: [NodeRestTransform] = [],
+        skins: [GLTFSkin] = [],
+        skinnedMeshEntities: [Entity] = []
     ) {
         var dict: [String: ModelAnimationClip] = [:]
         for clip in clips {
@@ -168,7 +182,9 @@ public struct ModelAnimationComponent: Component, Sendable, Equatable {
             speed: speed,
             isPlaying: isPlaying,
             nodeEntities: nodeEntities,
-            nodeRestTransforms: nodeRestTransforms
+            nodeRestTransforms: nodeRestTransforms,
+            skins: skins,
+            skinnedMeshEntities: skinnedMeshEntities
         )
     }
     

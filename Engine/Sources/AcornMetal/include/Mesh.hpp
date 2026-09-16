@@ -19,6 +19,9 @@ namespace Acorn {
         void setVertexDescriptor(void* desc);
         void* getVertexDescriptor() const { return vertexDescriptor; }
 
+        bool getIsSkinned() const { return isSkinned; }
+        void setIsSkinned(bool val) { isSkinned = val; }
+
 #ifndef NDEBUG
         // Editor needs access to raw vertex data for wireframe rendering
         void setDebugVertexData(const float* data, size_t count);
@@ -37,6 +40,7 @@ namespace Acorn {
         void* vertexBuffer;
         void* indexBuffer;
         void* vertexDescriptor;
+        bool isSkinned;
         
 #ifndef NDEBUG
         float* debugVertexData;

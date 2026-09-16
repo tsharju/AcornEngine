@@ -17,7 +17,8 @@ namespace Acorn {
         std::vector<GLTFNodeData>& outNodes,
         const void** outTextureData, 
         int* outTextureSize,
-        GLTFAnimationContainer* outAnimations
+        GLTFAnimationContainer* outAnimations,
+        GLTFSkinContainer* outSkins
     ) {
         MTL::Device* device = (MTL::Device*)devicePtr;
         std::vector<AcornMetalMesh*> meshes;
@@ -63,6 +64,26 @@ namespace Acorn {
         static_assert(offsetof(DefaultVertex, texCoord) == 32, "texCoord must be at offset 32");
         static_assert(offsetof(DefaultVertex, normal) == 48, "normal must be at offset 48");
 
+        struct alignas(16) DefaultSkinnedVertex {
+            float position[3];
+            float _pad1;
+            float color[4];
+            float texCoord[2];
+            float _pad2[2];
+            float normal[3];
+            float _pad3;
+            uint16_t joints[4];
+            float _padJoints[2];
+            float weights[4];
+        };
+
+        static_assert(sizeof(DefaultSkinnedVertex) == 96, "DefaultSkinnedVertex size must be 96 bytes");
+        static_assert(offsetof(DefaultSkinnedVertex, color) == 16, "color must be at offset 16");
+        static_assert(offsetof(DefaultSkinnedVertex, texCoord) == 32, "texCoord must be at offset 32");
+        static_assert(offsetof(DefaultSkinnedVertex, normal) == 48, "normal must be at offset 48");
+        static_assert(offsetof(DefaultSkinnedVertex, joints) == 64, "joints must be at offset 64");
+        static_assert(offsetof(DefaultSkinnedVertex, weights) == 80, "weights must be at offset 80");
+
         // First, load all meshes and primitives in local coordinates (no transform baking)
         std::vector<size_t> meshPrimitiveOffsets(asset->meshes.size());
         std::vector<size_t> meshPrimitiveCounts(asset->meshes.size());
@@ -71,34 +92,10 @@ namespace Acorn {
         auto loadPrimitive = [&](const fastgltf::Primitive& primitive) -> AcornMetalMesh* {
             auto* positionAccessor = asset->accessors.data() + primitive.findAttribute("POSITION")->accessorIndex;
             size_t vertexCount = positionAccessor->count;
-            
-            std::vector<DefaultVertex> vertices(vertexCount);
-            
-            fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(asset.get(), *positionAccessor, [&](fastgltf::math::fvec3 pos, size_t idx) {
-                vertices[idx].position[0] = pos.x();
-                vertices[idx].position[1] = pos.y();
-                vertices[idx].position[2] = pos.z();
-                
-                // Defaults
-                vertices[idx].color[0] = 1.0f; vertices[idx].color[1] = 1.0f; vertices[idx].color[2] = 1.0f; vertices[idx].color[3] = 1.0f;
-                vertices[idx].texCoord[0] = 0.0f; vertices[idx].texCoord[1] = 0.0f;
-                vertices[idx].normal[0] = 0.0f; vertices[idx].normal[1] = 0.0f; vertices[idx].normal[2] = 1.0f;
-            });
-            
-            if (auto normalAttr = primitive.findAttribute("NORMAL"); normalAttr != primitive.attributes.end()) {
-                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(asset.get(), asset->accessors[normalAttr->accessorIndex], [&](fastgltf::math::fvec3 normal, size_t idx) {
-                    vertices[idx].normal[0] = normal.x();
-                    vertices[idx].normal[1] = normal.y();
-                    vertices[idx].normal[2] = normal.z();
-                });
-            }
-            
-            if (auto texCoordAttr = primitive.findAttribute("TEXCOORD_0"); texCoordAttr != primitive.attributes.end()) {
-                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2>(asset.get(), asset->accessors[texCoordAttr->accessorIndex], [&](fastgltf::math::fvec2 texCoord, size_t idx) {
-                    vertices[idx].texCoord[0] = texCoord.x();
-                    vertices[idx].texCoord[1] = texCoord.y();
-                });
-            }
+
+            auto jointsAttr = primitive.findAttribute("JOINTS_0");
+            auto weightsAttr = primitive.findAttribute("WEIGHTS_0");
+            bool isSkinnedPrimitive = (jointsAttr != primitive.attributes.end()) && (weightsAttr != primitive.attributes.end());
             
             // Indices
             std::vector<uint32_t> indices;
@@ -109,32 +106,126 @@ namespace Acorn {
                     indices.push_back(idx);
                 });
             }
-            
-            MTL::Buffer* vertexBuffer = device->newBuffer(vertices.data(), vertices.size() * sizeof(DefaultVertex), MTL::ResourceStorageModeShared);
+
+            MTL::Buffer* vertexBuffer = nullptr;
             MTL::Buffer* indexBuffer = nullptr;
             if (!indices.empty()) {
                 indexBuffer = device->newBuffer(indices.data(), indices.size() * sizeof(uint32_t), MTL::ResourceStorageModeShared);
             }
-            
-            AcornMetalMesh* resultMesh = new AcornMetalMesh(device, vertexCount, vertexBuffer, indexBuffer, indices.size());
-            
+
+            if (isSkinnedPrimitive) {
+                std::vector<DefaultSkinnedVertex> vertices(vertexCount);
+
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(asset.get(), *positionAccessor, [&](fastgltf::math::fvec3 pos, size_t idx) {
+                    vertices[idx].position[0] = pos.x();
+                    vertices[idx].position[1] = pos.y();
+                    vertices[idx].position[2] = pos.z();
+                    vertices[idx]._pad1 = 0.0f;
+                    vertices[idx].color[0] = 1.0f; vertices[idx].color[1] = 1.0f; vertices[idx].color[2] = 1.0f; vertices[idx].color[3] = 1.0f;
+                    vertices[idx].texCoord[0] = 0.0f; vertices[idx].texCoord[1] = 0.0f;
+                    vertices[idx]._pad2[0] = 0.0f; vertices[idx]._pad2[1] = 0.0f;
+                    vertices[idx].normal[0] = 0.0f; vertices[idx].normal[1] = 0.0f; vertices[idx].normal[2] = 1.0f;
+                    vertices[idx]._pad3 = 0.0f;
+                    vertices[idx].joints[0] = 0; vertices[idx].joints[1] = 0; vertices[idx].joints[2] = 0; vertices[idx].joints[3] = 0;
+                    vertices[idx]._padJoints[0] = 0.0f; vertices[idx]._padJoints[1] = 0.0f;
+                    vertices[idx].weights[0] = 0.0f; vertices[idx].weights[1] = 0.0f; vertices[idx].weights[2] = 0.0f; vertices[idx].weights[3] = 0.0f;
+                });
+
+                if (auto normalAttr = primitive.findAttribute("NORMAL"); normalAttr != primitive.attributes.end()) {
+                    fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(asset.get(), asset->accessors[normalAttr->accessorIndex], [&](fastgltf::math::fvec3 normal, size_t idx) {
+                        vertices[idx].normal[0] = normal.x();
+                        vertices[idx].normal[1] = normal.y();
+                        vertices[idx].normal[2] = normal.z();
+                    });
+                }
+
+                if (auto texCoordAttr = primitive.findAttribute("TEXCOORD_0"); texCoordAttr != primitive.attributes.end()) {
+                    fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2>(asset.get(), asset->accessors[texCoordAttr->accessorIndex], [&](fastgltf::math::fvec2 texCoord, size_t idx) {
+                        vertices[idx].texCoord[0] = texCoord.x();
+                        vertices[idx].texCoord[1] = texCoord.y();
+                    });
+                }
+
+                auto& jointsAccessor = asset->accessors[jointsAttr->accessorIndex];
+                if (jointsAccessor.componentType == fastgltf::ComponentType::UnsignedByte) {
+                    fastgltf::iterateAccessorWithIndex<fastgltf::math::u8vec4>(asset.get(), jointsAccessor, [&](fastgltf::math::u8vec4 j, size_t idx) {
+                        vertices[idx].joints[0] = j.x();
+                        vertices[idx].joints[1] = j.y();
+                        vertices[idx].joints[2] = j.z();
+                        vertices[idx].joints[3] = j.w();
+                    });
+                } else if (jointsAccessor.componentType == fastgltf::ComponentType::UnsignedShort) {
+                    fastgltf::iterateAccessorWithIndex<fastgltf::math::u16vec4>(asset.get(), jointsAccessor, [&](fastgltf::math::u16vec4 j, size_t idx) {
+                        vertices[idx].joints[0] = j.x();
+                        vertices[idx].joints[1] = j.y();
+                        vertices[idx].joints[2] = j.z();
+                        vertices[idx].joints[3] = j.w();
+                    });
+                }
+
+                auto& weightsAccessor = asset->accessors[weightsAttr->accessorIndex];
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(asset.get(), weightsAccessor, [&](fastgltf::math::fvec4 w, size_t idx) {
+                    vertices[idx].weights[0] = w.x();
+                    vertices[idx].weights[1] = w.y();
+                    vertices[idx].weights[2] = w.z();
+                    vertices[idx].weights[3] = w.w();
+                });
+
+                vertexBuffer = device->newBuffer(vertices.data(), vertices.size() * sizeof(DefaultSkinnedVertex), MTL::ResourceStorageModeShared);
+                AcornMetalMesh* resultMesh = new AcornMetalMesh(device, vertexCount, vertexBuffer, indexBuffer, indices.size());
+                resultMesh->setIsSkinned(true);
+                vertexBuffer->release();
+                if (indexBuffer) indexBuffer->release();
+                return resultMesh;
+            } else {
+                std::vector<DefaultVertex> vertices(vertexCount);
+                
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(asset.get(), *positionAccessor, [&](fastgltf::math::fvec3 pos, size_t idx) {
+                    vertices[idx].position[0] = pos.x();
+                    vertices[idx].position[1] = pos.y();
+                    vertices[idx].position[2] = pos.z();
+                    
+                    // Defaults
+                    vertices[idx].color[0] = 1.0f; vertices[idx].color[1] = 1.0f; vertices[idx].color[2] = 1.0f; vertices[idx].color[3] = 1.0f;
+                    vertices[idx].texCoord[0] = 0.0f; vertices[idx].texCoord[1] = 0.0f;
+                    vertices[idx].normal[0] = 0.0f; vertices[idx].normal[1] = 0.0f; vertices[idx].normal[2] = 1.0f;
+                });
+                
+                if (auto normalAttr = primitive.findAttribute("NORMAL"); normalAttr != primitive.attributes.end()) {
+                    fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(asset.get(), asset->accessors[normalAttr->accessorIndex], [&](fastgltf::math::fvec3 normal, size_t idx) {
+                        vertices[idx].normal[0] = normal.x();
+                        vertices[idx].normal[1] = normal.y();
+                        vertices[idx].normal[2] = normal.z();
+                    });
+                }
+                
+                if (auto texCoordAttr = primitive.findAttribute("TEXCOORD_0"); texCoordAttr != primitive.attributes.end()) {
+                    fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2>(asset.get(), asset->accessors[texCoordAttr->accessorIndex], [&](fastgltf::math::fvec2 texCoord, size_t idx) {
+                        vertices[idx].texCoord[0] = texCoord.x();
+                        vertices[idx].texCoord[1] = texCoord.y();
+                    });
+                }
+
+                vertexBuffer = device->newBuffer(vertices.data(), vertices.size() * sizeof(DefaultVertex), MTL::ResourceStorageModeShared);
+                AcornMetalMesh* resultMesh = new AcornMetalMesh(device, vertexCount, vertexBuffer, indexBuffer, indices.size());
+                resultMesh->setIsSkinned(false);
+                
 #ifndef NDEBUG
-            // Copy debug data
-            std::vector<float> debugVerts;
-            debugVerts.reserve(vertexCount * 3);
-            for (const auto& v : vertices) {
-                debugVerts.push_back(v.position[0]);
-                debugVerts.push_back(v.position[1]);
-                debugVerts.push_back(v.position[2]);
-            }
-            resultMesh->setDebugVertexData(debugVerts.data(), debugVerts.size());
-            resultMesh->setDebugIndexData(indices.data(), indices.size());
+                std::vector<float> debugVerts;
+                debugVerts.reserve(vertexCount * 3);
+                for (const auto& v : vertices) {
+                    debugVerts.push_back(v.position[0]);
+                    debugVerts.push_back(v.position[1]);
+                    debugVerts.push_back(v.position[2]);
+                }
+                resultMesh->setDebugVertexData(debugVerts.data(), debugVerts.size());
+                resultMesh->setDebugIndexData(indices.data(), indices.size());
 #endif
 
-            vertexBuffer->release();
-            if (indexBuffer) indexBuffer->release();
-            
-            return resultMesh;
+                vertexBuffer->release();
+                if (indexBuffer) indexBuffer->release();
+                return resultMesh;
+            }
         };
 
         for (size_t i = 0; i < asset->meshes.size(); ++i) {
@@ -163,6 +254,7 @@ namespace Acorn {
                 nodeData.name[sizeof(nodeData.name) - 1] = '\0';
                 nodeData.parentIndex = returnedParentIndex;
                 nodeData.meshIndex = -1;
+                nodeData.skinIndex = node.skinIndex.has_value() ? static_cast<int>(node.skinIndex.value()) : -1;
                 
                 fastgltf::math::fvec3 translation(0.0f);
                 fastgltf::math::fquat rotation(0.0f, 0.0f, 0.0f, 1.0f);
@@ -209,6 +301,7 @@ namespace Acorn {
                         snprintf(virtualNode.name, sizeof(virtualNode.name), "%s_primitive_%zu", node.name.c_str(), p);
                         virtualNode.parentIndex = currentReturnedIndex;
                         virtualNode.meshIndex = static_cast<int>(offset + p);
+                        virtualNode.skinIndex = nodeData.skinIndex;
                         
                         virtualNode.translation[0] = 0.0f; virtualNode.translation[1] = 0.0f; virtualNode.translation[2] = 0.0f;
                         virtualNode.rotation[0] = 0.0f; virtualNode.rotation[1] = 0.0f; virtualNode.rotation[2] = 0.0f; virtualNode.rotation[3] = 1.0f;
@@ -237,6 +330,7 @@ namespace Acorn {
                 snprintf(nodeData.name, sizeof(nodeData.name), "mesh_node_%zu", i);
                 nodeData.parentIndex = -1;
                 nodeData.meshIndex = static_cast<int>(i);
+                nodeData.skinIndex = -1;
                 
                 nodeData.translation[0] = 0.0f; nodeData.translation[1] = 0.0f; nodeData.translation[2] = 0.0f;
                 nodeData.rotation[0] = 0.0f; nodeData.rotation[1] = 0.0f; nodeData.rotation[2] = 0.0f; nodeData.rotation[3] = 1.0f;
@@ -419,6 +513,47 @@ namespace Acorn {
             }
         }
 
+        // Extract skins if requested
+        if (outSkins && !asset->skins.empty()) {
+            outSkins->skinCount = static_cast<int>(asset->skins.size());
+            outSkins->skins = new GLTFSkinData[asset->skins.size()];
+            
+            for (size_t s = 0; s < asset->skins.size(); ++s) {
+                auto& skin = asset->skins[s];
+                auto& skinData = outSkins->skins[s];
+                
+                strncpy(skinData.name, skin.name.c_str(), sizeof(skinData.name) - 1);
+                skinData.name[sizeof(skinData.name) - 1] = '\0';
+                
+                skinData.jointCount = static_cast<int>(skin.joints.size());
+                skinData.jointNodeIndices = new int[skin.joints.size()];
+                for (size_t j = 0; j < skin.joints.size(); ++j) {
+                    size_t gltfNodeIdx = skin.joints[j];
+                    skinData.jointNodeIndices[j] = (gltfNodeIdx < gltfNodeToReturnedIndex.size()) 
+                        ? gltfNodeToReturnedIndex[gltfNodeIdx] 
+                        : static_cast<int>(gltfNodeIdx);
+                }
+                
+                skinData.inverseBindMatrices = new float[skin.joints.size() * 16];
+                if (skin.inverseBindMatrices.has_value()) {
+                    auto& ibmAccessor = asset->accessors[skin.inverseBindMatrices.value()];
+                    fastgltf::iterateAccessorWithIndex<fastgltf::math::fmat4x4>(asset.get(), ibmAccessor, [&](fastgltf::math::fmat4x4 mat, size_t idx) {
+                        if (idx < skin.joints.size()) {
+                            float* dst = &skinData.inverseBindMatrices[idx * 16];
+                            const auto* src = mat.data();
+                            std::copy(src, src + 16, dst);
+                        }
+                    });
+                } else {
+                    for (size_t j = 0; j < skin.joints.size(); ++j) {
+                        float* dst = &skinData.inverseBindMatrices[j * 16];
+                        for (int k = 0; k < 16; ++k) dst[k] = 0.0f;
+                        dst[0] = dst[5] = dst[10] = dst[15] = 1.0f;
+                    }
+                }
+            }
+        }
+
         return meshes;
     }
 
@@ -432,10 +567,11 @@ namespace Acorn {
         int* outNodeCount,
         const void** outTextureData, 
         int* outTextureSize,
-        GLTFAnimationContainer* outAnimations
+        GLTFAnimationContainer* outAnimations,
+        GLTFSkinContainer* outSkins
     ) {
         std::vector<GLTFNodeData> loadedNodes;
-        std::vector<AcornMetalMesh*> loadedMeshes = load(std::string(path), devicePtr, loadedNodes, outTextureData, outTextureSize, outAnimations);
+        std::vector<AcornMetalMesh*> loadedMeshes = load(std::string(path), devicePtr, loadedNodes, outTextureData, outTextureSize, outAnimations, outSkins);
         
         int meshCount = std::min(static_cast<int>(loadedMeshes.size()), maxMeshes);
         for (int i = 0; i < meshCount; ++i) {
@@ -469,5 +605,17 @@ namespace Acorn {
         delete[] container->animations;
         container->animations = nullptr;
         container->animationCount = 0;
+    }
+
+    void GLTFLoader::freeSkinContainer(GLTFSkinContainer* container) {
+        if (!container || !container->skins) return;
+        for (int i = 0; i < container->skinCount; ++i) {
+            auto& skin = container->skins[i];
+            delete[] skin.jointNodeIndices;
+            delete[] skin.inverseBindMatrices;
+        }
+        delete[] container->skins;
+        container->skins = nullptr;
+        container->skinCount = 0;
     }
 }

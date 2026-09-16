@@ -18,6 +18,11 @@ public final class MetalMesh: Mesh, @unchecked Sendable {
         return Int(cxxMesh.pointee.getIndexCount())
     }
 
+    /// Whether the mesh has skinning attributes (joint indices and weights).
+    public var isSkinned: Bool {
+        return cxxMesh.pointee.getIsSkinned()
+    }
+
     /// The underlying Metal vertex buffer.
     public var vertexBuffer: any MTLBuffer {
         let rawBuf = cxxMesh.pointee.getVertexBuffer()!

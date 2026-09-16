@@ -12,7 +12,7 @@ namespace Acorn {
     }
 
     AcornMetalMesh::AcornMetalMesh(void* devicePtr, size_t vertexCount, void* vertexBufferPtr, void* indexBufferPtr, size_t indexCount)
-        : device(devicePtr), vertexCount(vertexCount), vertexBuffer(vertexBufferPtr), indexBuffer(indexBufferPtr), indexCount(indexCount), vertexDescriptor(nullptr) {
+        : device(devicePtr), vertexCount(vertexCount), vertexBuffer(vertexBufferPtr), indexBuffer(indexBufferPtr), indexCount(indexCount), vertexDescriptor(nullptr), isSkinned(false) {
 #ifndef NDEBUG
         debugVertexData = nullptr;
         debugVertexCount = 0;

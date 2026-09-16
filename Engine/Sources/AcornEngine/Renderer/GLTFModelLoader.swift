@@ -6,6 +6,23 @@ import Metal
 internal import AcornMetal
 #endif
 
+/// Represents a skeleton skin binding in a glTF model.
+public struct GLTFSkin: Sendable, Equatable {
+    /// The name of the skin.
+    public let name: String
+    /// Indices of nodes that act as skeleton joints.
+    public let jointNodeIndices: [Int]
+    /// Column-major inverse bind matrices, one per joint.
+    public let inverseBindMatrices: [Matrix4x4]
+    
+    /// Initializes a new GLTFSkin representation.
+    public init(name: String = "", jointNodeIndices: [Int] = [], inverseBindMatrices: [Matrix4x4] = []) {
+        self.name = name
+        self.jointNodeIndices = jointNodeIndices
+        self.inverseBindMatrices = inverseBindMatrices
+    }
+}
+
 /// Represents a node within a loaded glTF scene.
 public struct GLTFNode: Sendable {
     /// The name of the node.
@@ -14,12 +31,32 @@ public struct GLTFNode: Sendable {
     public let meshIndex: Int?
     /// The index of the parent node in the returned nodes array, if any.
     public let parentIndex: Int?
+    /// The index of the skin associated with this node, if any.
+    public let skinIndex: Int?
     /// The local translation of the node.
     public let translation: SIMD3<Float>
     /// The local rotation quaternion (x, y, z, w).
     public let rotation: SIMD4<Float>
     /// The local scale of the node.
     public let scale: SIMD3<Float>
+    
+    public init(
+        name: String,
+        meshIndex: Int? = nil,
+        parentIndex: Int? = nil,
+        skinIndex: Int? = nil,
+        translation: SIMD3<Float> = .zero,
+        rotation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
+        scale: SIMD3<Float> = SIMD3<Float>(1, 1, 1)
+    ) {
+        self.name = name
+        self.meshIndex = meshIndex
+        self.parentIndex = parentIndex
+        self.skinIndex = skinIndex
+        self.translation = translation
+        self.rotation = rotation
+        self.scale = scale
+    }
 }
 
 /// Represents a loaded glTF model including meshes, node hierarchy, texture data, and animations.
@@ -41,18 +78,23 @@ public struct GLTFModel: Sendable {
     /// The animation clips loaded from the model.
     public let animations: [ModelAnimationClip]
     
+    /// The skins loaded from the model.
+    public let skins: [GLTFSkin]
+    
     #if canImport(Metal)
     /// Initializes a new glTF model representation.
     public init(
         meshes: [MetalMesh],
         nodes: [GLTFNode],
         textureData: Data? = nil,
-        animations: [ModelAnimationClip] = []
+        animations: [ModelAnimationClip] = [],
+        skins: [GLTFSkin] = []
     ) {
         self.meshes = meshes
         self.nodes = nodes
         self.textureData = textureData
         self.animations = animations
+        self.skins = skins
     }
     #else
     /// Initializes a new glTF model representation.
@@ -60,12 +102,14 @@ public struct GLTFModel: Sendable {
         meshes: [any Mesh],
         nodes: [GLTFNode],
         textureData: Data? = nil,
-        animations: [ModelAnimationClip] = []
+        animations: [ModelAnimationClip] = [],
+        skins: [GLTFSkin] = []
     ) {
         self.meshes = meshes
         self.nodes = nodes
         self.textureData = textureData
         self.animations = animations
+        self.skins = skins
     }
     #endif
     
@@ -85,6 +129,7 @@ public struct GLTFModel: Sendable {
         var restTransforms: [NodeRestTransform] = []
         restTransforms.reserveCapacity(nodes.count)
         
+        var skinnedMeshEntities: [Entity] = []
         for node in nodes {
             let entity = world.createEntity()
             #if DEBUG
@@ -106,8 +151,23 @@ public struct GLTFModel: Sendable {
             ))
             
             if let meshIdx = node.meshIndex, meshIdx < meshes.count {
-                let meshComp = MeshComponent(mesh: meshes[meshIdx], color: color, texture: texture)
-                world.addComponent(meshComp, to: entity)
+                let mesh = meshes[meshIdx]
+                if let skinIdx = node.skinIndex, skinIdx >= 0 && skinIdx < skins.count {
+                    let skin = skins[skinIdx]
+                    let initialMatrices = [Matrix4x4](repeating: .identity, count: skin.jointNodeIndices.count)
+                    let skinnedComp = SkinnedMeshComponent(
+                        mesh: mesh,
+                        color: color,
+                        texture: texture,
+                        skinIndex: skinIdx,
+                        jointMatrices: initialMatrices
+                    )
+                    world.addComponent(skinnedComp, to: entity)
+                    skinnedMeshEntities.append(entity)
+                } else {
+                    let meshComp = MeshComponent(mesh: mesh, color: color, texture: texture)
+                    world.addComponent(meshComp, to: entity)
+                }
             }
             nodeEntities.append(entity)
         }
@@ -133,7 +193,9 @@ public struct GLTFModel: Sendable {
                 speed: 1.0,
                 isPlaying: true,
                 nodeEntities: nodeEntities,
-                nodeRestTransforms: restTransforms
+                nodeRestTransforms: restTransforms,
+                skins: skins,
+                skinnedMeshEntities: skinnedMeshEntities
             )
             world.addComponent(animComp, to: rootEntity)
         }
@@ -171,9 +233,9 @@ public final class GLTFModelLoader: Sendable {
 
     /// Loads a glTF model from a local file URL producing MetalMesh instances.
     /// - Parameter url: The file URL of the model (.glb or .gltf).
-    /// - Returns: A tuple containing the loaded meshes, nodes, raw texture data, and animation clips.
+    /// - Returns: A tuple containing the loaded meshes, nodes, raw texture data, animation clips, and skins.
     /// - Throws: An error if loading fails.
-    public func load(from url: URL) throws -> (meshes: [MetalMesh], nodes: [GLTFNode], textureData: Data?, animations: [ModelAnimationClip]) {
+    public func load(from url: URL) throws -> (meshes: [MetalMesh], nodes: [GLTFNode], textureData: Data?, animations: [ModelAnimationClip], skins: [GLTFSkin]) {
         guard let device = self.device else {
             throw NSError(domain: "GLTFModelLoaderErrorDomain", code: 4, userInfo: [NSLocalizedDescriptionKey: "Metal device required for loading MetalMesh."])
         }
@@ -191,6 +253,7 @@ public final class GLTFModelLoader: Sendable {
         var textureDataPtr: UnsafeRawPointer? = nil
         var textureSize: Int32 = 0
         var animContainer = Acorn.GLTFAnimationContainer()
+        var skinContainer = Acorn.GLTFSkinContainer()
         
         let count = Int(Acorn.GLTFLoader.loadRaw(
             path, 
@@ -202,7 +265,8 @@ public final class GLTFModelLoader: Sendable {
             &nodeCount, 
             &textureDataPtr, 
             &textureSize,
-            &animContainer
+            &animContainer,
+            &skinContainer
         ))
 
         guard count > 0 else {
@@ -237,6 +301,7 @@ public final class GLTFModelLoader: Sendable {
 
             let meshIdx = data.meshIndex >= 0 ? Int(data.meshIndex) : nil
             let parentIdx = data.parentIndex >= 0 ? Int(data.parentIndex) : nil
+            let skinIdx = data.skinIndex >= 0 ? Int(data.skinIndex) : nil
 
             let translation = SIMD3<Float>(data.translation.0, data.translation.1, data.translation.2)
             let rotation = SIMD4<Float>(data.rotation.0, data.rotation.1, data.rotation.2, data.rotation.3)
@@ -246,6 +311,7 @@ public final class GLTFModelLoader: Sendable {
                 name: nodeName,
                 meshIndex: meshIdx,
                 parentIndex: parentIdx,
+                skinIndex: skinIdx,
                 translation: translation,
                 rotation: rotation,
                 scale: scale
@@ -325,7 +391,51 @@ public final class GLTFModelLoader: Sendable {
         }
         Acorn.GLTFLoader.freeAnimationContainer(&animContainer)
 
-        return (meshes: meshes, nodes: nodes, textureData: textureData, animations: animations)
+        // Extract skins
+        var skins: [GLTFSkin] = []
+        if skinContainer.skinCount > 0, let skinsPtr = skinContainer.skins {
+            for s in 0..<Int(skinContainer.skinCount) {
+                let skinData = skinsPtr[s]
+                
+                var nameBytes = [Int8]()
+                withUnsafePointer(to: skinData.name) { ptr in
+                    ptr.withMemoryRebound(to: Int8.self, capacity: 64) { reboundPtr in
+                        nameBytes = Array(UnsafeBufferPointer(start: reboundPtr, count: 64))
+                    }
+                }
+                if let nullIndex = nameBytes.firstIndex(of: 0) {
+                    nameBytes = Array(nameBytes[..<nullIndex])
+                }
+                var skinName = String(decoding: nameBytes.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+                if skinName.isEmpty {
+                    skinName = "skin_\(s)"
+                }
+                
+                var jointIndices: [Int] = []
+                if skinData.jointCount > 0, let jointsPtr = skinData.jointNodeIndices {
+                    for j in 0..<Int(skinData.jointCount) {
+                        jointIndices.append(Int(jointsPtr[j]))
+                    }
+                }
+                
+                var inverseBindMatrices: [Matrix4x4] = []
+                if skinData.jointCount > 0, let ibmPtr = skinData.inverseBindMatrices {
+                    for j in 0..<Int(skinData.jointCount) {
+                        let offset = j * 16
+                        let col0 = SIMD4<Float>(ibmPtr[offset + 0], ibmPtr[offset + 1], ibmPtr[offset + 2], ibmPtr[offset + 3])
+                        let col1 = SIMD4<Float>(ibmPtr[offset + 4], ibmPtr[offset + 5], ibmPtr[offset + 6], ibmPtr[offset + 7])
+                        let col2 = SIMD4<Float>(ibmPtr[offset + 8], ibmPtr[offset + 9], ibmPtr[offset + 10], ibmPtr[offset + 11])
+                        let col3 = SIMD4<Float>(ibmPtr[offset + 12], ibmPtr[offset + 13], ibmPtr[offset + 14], ibmPtr[offset + 15])
+                        inverseBindMatrices.append(Matrix4x4(col0, col1, col2, col3))
+                    }
+                }
+                
+                skins.append(GLTFSkin(name: skinName, jointNodeIndices: jointIndices, inverseBindMatrices: inverseBindMatrices))
+            }
+        }
+        Acorn.GLTFLoader.freeSkinContainer(&skinContainer)
+
+        return (meshes: meshes, nodes: nodes, textureData: textureData, animations: animations, skins: skins)
     }
 
     /// Loads a glTF model returning a structured `GLTFModel` instance.
@@ -338,7 +448,8 @@ public final class GLTFModelLoader: Sendable {
             meshes: result.meshes,
             nodes: result.nodes,
             textureData: result.textureData,
-            animations: result.animations
+            animations: result.animations,
+            skins: result.skins
         )
     }
     #endif
@@ -347,11 +458,11 @@ public final class GLTFModelLoader: Sendable {
     /// - Parameter url: The file URL of the model (.glb or .gltf).
     /// - Returns: A tuple containing the loaded meshes, nodes, raw texture data, and animation clips.
     /// - Throws: An error if loading fails.
-    public func loadMeshes(from url: URL) throws -> (meshes: [any Mesh], nodes: [GLTFNode], textureData: Data?, animations: [ModelAnimationClip]) {
+    public func loadMeshes(from url: URL) throws -> (meshes: [any Mesh], nodes: [GLTFNode], textureData: Data?, animations: [ModelAnimationClip], skins: [GLTFSkin]) {
         #if canImport(Metal)
         if self.device != nil {
             let result = try load(from: url)
-            return (meshes: result.meshes, nodes: result.nodes, textureData: result.textureData, animations: result.animations)
+            return (meshes: result.meshes, nodes: result.nodes, textureData: result.textureData, animations: result.animations, skins: result.skins)
         }
         #endif
         throw NSError(domain: "GLTFModelLoaderErrorDomain", code: 2, userInfo: [NSLocalizedDescriptionKey: "Loading meshes requires a supported rendering device."])

@@ -357,4 +357,77 @@ struct ModelAnimationTests {
         #expect(abs(armTransform!.orientation!.z - expectedZ) < 0.01)
         #endif
     }
+    
+    @Test("Skinned Mesh Component and Joint Matrices Evaluation")
+    func testSkinnedMeshJointMatrices() {
+        #if canImport(Metal)
+        guard let device = MTLCreateSystemDefaultDevice() else { return }
+        guard let mesh = MetalMesh(device: device, vertices: [
+            Vertex(position: SIMD3<Float>(0, 0, 0), color: SIMD4<Float>(1, 1, 1, 1)),
+            Vertex(position: SIMD3<Float>(0, 1, 0), color: SIMD4<Float>(1, 1, 1, 1)),
+            Vertex(position: SIMD3<Float>(1, 0, 0), color: SIMD4<Float>(1, 1, 1, 1))
+        ]) else { return }
+        
+        // Node 0: Root mesh node (skinIndex = 0)
+        // Node 1: Bone 0 (translation 0, 0, 0)
+        // Node 2: Bone 1 (translation 0, 2, 0)
+        let nodes = [
+            GLTFNode(name: "MeshNode", meshIndex: 0, parentIndex: nil, skinIndex: 0),
+            GLTFNode(name: "Bone0", meshIndex: nil, parentIndex: nil, translation: SIMD3<Float>(0, 0, 0)),
+            GLTFNode(name: "Bone1", meshIndex: nil, parentIndex: 1, translation: SIMD3<Float>(0, 2, 0))
+        ]
+        
+        let skin = GLTFSkin(
+            name: "TestSkin",
+            jointNodeIndices: [1, 2],
+            inverseBindMatrices: [Matrix4x4.identity, Matrix4x4(translation: SIMD3<Float>(0, -2, 0))]
+        )
+        
+        let channel = ModelAnimationChannel(
+            targetNodeIndex: 2,
+            path: .translation,
+            interpolation: .linear,
+            keyframeTimes: [0.0, 1.0],
+            keyframeValues: [
+                0.0, 2.0, 0.0,
+                0.0, 4.0, 0.0
+            ],
+            valuesPerKeyframe: 3
+        )
+        let clip = ModelAnimationClip(name: "BoneMove", duration: 1.0, channels: [channel])
+        
+        let model = GLTFModel(
+            meshes: [mesh],
+            nodes: nodes,
+            animations: [clip],
+            skins: [skin]
+        )
+        
+        let world = World()
+        let animSystem = ModelAnimationSystem()
+        world.registerSystem(animSystem)
+        
+        _ = model.instantiate(in: world)
+        
+        // Find mesh entity with SkinnedMeshComponent
+        let skinnedEntities = world.entities(with: SkinnedMeshComponent.self)
+        #expect(skinnedEntities.count == 1)
+        let (meshEntity, skinnedComp) = skinnedEntities.first!
+        #expect(skinnedComp.skinIndex == 0)
+        #expect(skinnedComp.jointMatrices.count == 2)
+        
+        // Before update: matrices are identity
+        #expect(skinnedComp.jointMatrices[0] == Matrix4x4.identity)
+        
+        // Advance animation by 0.5s -> Bone1 moves from y=2 to y=3 in local space
+        world.update(deltaTime: 0.5)
+        
+        let updatedComp = world.component(ofType: SkinnedMeshComponent.self, for: meshEntity)!
+        #expect(updatedComp.jointMatrices.count == 2)
+        // Joint 0: world matrix is identity * IBM(identity) = identity
+        #expect(abs(updatedComp.jointMatrices[0].columns.3.y - 0.0) < 0.01)
+        // Joint 1: world matrix has y=3, IBM has y=-2 -> combined matrix y translation = 1.0
+        #expect(abs(updatedComp.jointMatrices[1].columns.3.y - 1.0) < 0.01)
+        #endif
+    }
 }

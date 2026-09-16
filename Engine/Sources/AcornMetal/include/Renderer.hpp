@@ -18,6 +18,7 @@ namespace Acorn {
         void renderInstanced(AcornMetalMesh* mesh, AcornMetalTexture* texture, const MeshInstanceData* instances, size_t instanceCount, const FrameUniforms& uniforms, void* encoderPtr);
         void renderSpritesInstanced(AcornMetalMesh* mesh, AcornMetalTexture* texture, const SpriteInstanceData* instances, size_t instanceCount, const SpriteFrameUniforms& uniforms, void* encoderPtr);
         void renderRoads(AcornMetalMesh* mesh, const RoadUniforms& uniforms, void* encoderPtr);
+        void renderSkinnedMesh(AcornMetalMesh* mesh, AcornMetalTexture* texture, const GlobalUniforms& uniforms, const void* jointMatricesData, size_t jointCount, void* encoderPtr);
 
     private:
         void* device;
@@ -31,11 +32,13 @@ namespace Acorn {
         void* sdfTextPipelineState;
         void* spritePipelineState;
         void* defaultPipelineState;
+        void* skinnedMeshPipelineState;
         void* instancedMeshPipelineState;
         void* instancedSpritePipelineState;
         void* roadPipelineState;
         
         void* vertexFunction;
+        void* skinnedVertexFunction;
         void* fragmentFunction;
         
         void* getOrCreatePipelineState(void* vertexDescriptor);

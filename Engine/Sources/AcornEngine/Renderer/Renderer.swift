@@ -20,6 +20,9 @@ public protocol Mesh: Sendable {
     /// The number of indices in the mesh, if indexed (defaults to 0 for non-indexed meshes).
     var indexCount: Int { get }
     
+    /// Whether the mesh has skinning attributes (joint indices and weights).
+    var isSkinned: Bool { get }
+    
     #if DEBUG
     /// The CPU-side vertices of the mesh.
     var vertices: [Vertex] { get }
@@ -28,6 +31,7 @@ public protocol Mesh: Sendable {
 
 public extension Mesh {
     var indexCount: Int { 0 }
+    var isSkinned: Bool { false }
 }
 
 /// Platform-agnostic vertex and index buffer representation in host CPU memory.
@@ -438,6 +442,21 @@ public protocol Renderer: Sendable {
         uniforms: RoadUniforms,
         context: any RenderContext
     )
+    
+    /// Renders a skinned mesh using joint matrices and GPU vertex deformation.
+    /// - Parameters:
+    ///   - mesh: The skinned mesh to render.
+    ///   - texture: An optional texture to map onto the mesh.
+    ///   - uniforms: Global uniforms.
+    ///   - jointMatrices: Array of joint transformation matrices for the skeleton.
+    ///   - context: The render context for the current frame.
+    func renderSkinned(
+        mesh: any Mesh,
+        texture: (any Texture)?,
+        uniforms: GlobalUniforms,
+        jointMatrices: [Matrix4x4],
+        context: any RenderContext
+    )
 }
 
 public extension Renderer {
@@ -478,4 +497,14 @@ public extension Renderer {
         uniforms: RoadUniforms,
         context: any RenderContext
     ) {}
+    
+    func renderSkinned(
+        mesh: any Mesh,
+        texture: (any Texture)?,
+        uniforms: GlobalUniforms,
+        jointMatrices: [Matrix4x4],
+        context: any RenderContext
+    ) {
+        render(mesh: mesh, texture: texture, uniforms: uniforms, context: context)
+    }
 }

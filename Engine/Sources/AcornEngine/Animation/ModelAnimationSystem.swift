@@ -84,6 +84,7 @@ public struct ModelAnimationSystem: System {
         }
         
         applyPose(world: world, anim: anim, clip: clip, time: Float(anim.playbackTimer))
+        updateSkinnedMeshes(world: world, anim: anim)
     }
     
     // MARK: - Transition / Crossfade
@@ -127,6 +128,7 @@ public struct ModelAnimationSystem: System {
             toTime: Float(currentTrans.toTimer),
             alpha: alpha
         )
+        updateSkinnedMeshes(world: world, anim: anim)
         
         if currentTrans.progress >= 1.0 {
             anim.transition = nil
@@ -225,6 +227,42 @@ public struct ModelAnimationSystem: System {
                 transform.orientation = blendedRot
                 transform.rotation = quaternionToEuler(blendedRot)
                 transform.scale = blendedScale
+            }
+        }
+    }
+    
+    // MARK: - Skinned Mesh Updates
+    
+    private func updateSkinnedMeshes(world: World, anim: ModelAnimationComponent) {
+        guard !anim.skins.isEmpty, !anim.skinnedMeshEntities.isEmpty else { return }
+        
+        for meshEntity in anim.skinnedMeshEntities {
+            guard let skinnedComp = world.component(ofType: SkinnedMeshComponent.self, for: meshEntity) else {
+                continue
+            }
+            let skinIdx = skinnedComp.skinIndex
+            guard skinIdx >= 0 && skinIdx < anim.skins.count else {
+                continue
+            }
+            let skin = anim.skins[skinIdx]
+            let meshWorldInv = world.worldMatrix(for: meshEntity).inverse
+            
+            var jointMatrices: [Matrix4x4] = []
+            jointMatrices.reserveCapacity(skin.jointNodeIndices.count)
+            
+            for (jointIdx, nodeIdx) in skin.jointNodeIndices.enumerated() {
+                let jointWorld: Matrix4x4
+                if nodeIdx >= 0 && nodeIdx < anim.nodeEntities.count {
+                    jointWorld = world.worldMatrix(for: anim.nodeEntities[nodeIdx])
+                } else {
+                    jointWorld = .identity
+                }
+                let ibm = jointIdx < skin.inverseBindMatrices.count ? skin.inverseBindMatrices[jointIdx] : .identity
+                jointMatrices.append(meshWorldInv * jointWorld * ibm)
+            }
+            
+            world.mutateComponent(ofType: SkinnedMeshComponent.self, for: meshEntity) { comp in
+                comp.jointMatrices = jointMatrices
             }
         }
     }

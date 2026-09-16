@@ -199,6 +199,37 @@ public struct RenderSystem {
             renderMeshBatch(items: items)
         }
         
+        // Stage 4: Render skinned mesh components (characters, creatures)
+        let skinnedEntities = world.entities(with: SkinnedMeshComponent.self)
+        for (entity, skinnedComp) in skinnedEntities {
+            guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
+                continue
+            }
+            let modelMatrix = world.worldMatrix(for: entity)
+            let normalMatrix = modelMatrix.inverse.transpose
+            let mvp = viewProjectionMatrix * modelMatrix
+            
+            let globalUniforms = GlobalUniforms(
+                modelViewProjectionMatrix: mvp,
+                modelMatrix: modelMatrix,
+                normalMatrix: normalMatrix,
+                ambientLightColor: ambientColor,
+                directionalLightColor: directionalColor,
+                directionalLightDirection: directionalDirection,
+                pointLightColor: pointColor,
+                pointLightPosition: pointPosition,
+                meshColor: skinnedComp.color
+            )
+            
+            renderer.renderSkinned(
+                mesh: skinnedComp.mesh,
+                texture: skinnedComp.texture,
+                uniforms: globalUniforms,
+                jointMatrices: skinnedComp.jointMatrices,
+                context: context
+            )
+        }
+        
         // Render tile map components
         let tileMapEntities = world.entities(with: TileMapComponent.self)
         for (entity, tileMapComponent) in tileMapEntities {

@@ -9,6 +9,7 @@ namespace Acorn {
         char name[64];
         int meshIndex;     // -1 if none
         int parentIndex;   // -1 if none
+        int skinIndex;     // -1 if none
         float translation[3];
         float rotation[4]; // x, y, z, w
         float scale[3];
@@ -49,6 +50,18 @@ namespace Acorn {
         GLTFAnimationData* animations;
     };
 
+    struct GLTFSkinData {
+        char name[64];
+        int jointCount;
+        int* jointNodeIndices;
+        float* inverseBindMatrices; // 16 floats per joint
+    };
+
+    struct GLTFSkinContainer {
+        int skinCount;
+        GLTFSkinData* skins;
+    };
+
     class GLTFLoader {
     public:
         static std::vector<AcornMetalMesh*> load(
@@ -57,7 +70,8 @@ namespace Acorn {
             std::vector<GLTFNodeData>& outNodes,
             const void** outTextureData = nullptr, 
             int* outTextureSize = nullptr,
-            GLTFAnimationContainer* outAnimations = nullptr
+            GLTFAnimationContainer* outAnimations = nullptr,
+            GLTFSkinContainer* outSkins = nullptr
         );
         
         static int loadRaw(
@@ -70,9 +84,11 @@ namespace Acorn {
             int* outNodeCount,
             const void** outTextureData, 
             int* outTextureSize,
-            GLTFAnimationContainer* outAnimations = nullptr
+            GLTFAnimationContainer* outAnimations = nullptr,
+            GLTFSkinContainer* outSkins = nullptr
         );
 
         static void freeAnimationContainer(GLTFAnimationContainer* container);
+        static void freeSkinContainer(GLTFSkinContainer* container);
     };
 }

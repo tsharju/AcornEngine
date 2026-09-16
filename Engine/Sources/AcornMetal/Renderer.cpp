@@ -13,6 +13,7 @@ namespace Acorn {
 
     AcornMetalRenderer::AcornMetalRenderer(void* devicePtr, void* libraryPtr, unsigned long pixelFormat)
         : device((MTL::Device*)devicePtr), library((MTL::Library*)libraryPtr), pixelFormat(pixelFormat), defaultPipelineState(nullptr),
+          skinnedMeshPipelineState(nullptr), skinnedVertexFunction(nullptr),
           instancedMeshPipelineState(nullptr), instancedSpritePipelineState(nullptr), roadPipelineState(nullptr), roadDepthStencilState(nullptr) {
         
         if (this->device) ((MTL::Device*)this->device)->retain();
@@ -20,6 +21,7 @@ namespace Acorn {
         
         vertexFunction = ((MTL::Library*)library)->newFunction(NS::String::string("vertex_main", NS::UTF8StringEncoding));
         fragmentFunction = ((MTL::Library*)library)->newFunction(NS::String::string("fragment_main", NS::UTF8StringEncoding));
+        skinnedVertexFunction = ((MTL::Library*)library)->newFunction(NS::String::string("skinned_vertex_main", NS::UTF8StringEncoding));
         
         MTL::RenderPipelineDescriptor* pipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
         pipelineDescriptor->setLabel(NS::String::string("Forward Pipeline", NS::UTF8StringEncoding));
@@ -34,6 +36,21 @@ namespace Acorn {
             std::cerr << "Failed to create default pipeline state: " << error->localizedDescription()->utf8String() << std::endl;
         }
         pipelineDescriptor->release();
+
+        if (skinnedVertexFunction) {
+            MTL::RenderPipelineDescriptor* skinnedDesc = MTL::RenderPipelineDescriptor::alloc()->init();
+            skinnedDesc->setLabel(NS::String::string("Skinned Mesh Pipeline", NS::UTF8StringEncoding));
+            skinnedDesc->setVertexFunction((MTL::Function*)skinnedVertexFunction);
+            skinnedDesc->setFragmentFunction((MTL::Function*)fragmentFunction);
+            skinnedDesc->colorAttachments()->object(0)->setPixelFormat((MTL::PixelFormat)pixelFormat);
+            skinnedDesc->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
+            
+            skinnedMeshPipelineState = ((MTL::Device*)device)->newRenderPipelineState(skinnedDesc, &error);
+            if (error) {
+                std::cerr << "Failed to create skinned mesh pipeline state: " << error->localizedDescription()->utf8String() << std::endl;
+            }
+            skinnedDesc->release();
+        }
         
         MTL::DepthStencilDescriptor* depthStencilDesc = MTL::DepthStencilDescriptor::alloc()->init();
         depthStencilDesc->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
@@ -201,7 +218,9 @@ namespace Acorn {
         if (this->instancedSpritePipelineState) ((MTL::RenderPipelineState*)this->instancedSpritePipelineState)->release();
         if (this->roadPipelineState) ((MTL::RenderPipelineState*)this->roadPipelineState)->release();
         if (this->defaultPipelineState) ((MTL::RenderPipelineState*)this->defaultPipelineState)->release();
+        if (this->skinnedMeshPipelineState) ((MTL::RenderPipelineState*)this->skinnedMeshPipelineState)->release();
         if (this->vertexFunction) ((MTL::Function*)this->vertexFunction)->release();
+        if (this->skinnedVertexFunction) ((MTL::Function*)this->skinnedVertexFunction)->release();
         if (this->fragmentFunction) ((MTL::Function*)this->fragmentFunction)->release();
     }
 
@@ -363,6 +382,53 @@ namespace Acorn {
         encoder->setVertexBuffer((MTL::Buffer*)mesh->getVertexBuffer(), 0, 0);
         encoder->setVertexBytes(&uniforms, sizeof(RoadUniforms), 1);
         encoder->setFragmentBytes(&uniforms, sizeof(RoadUniforms), 0);
+        
+        if (mesh->getIndexBuffer()) {
+            encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, mesh->getIndexCount(), MTL::IndexTypeUInt32, (MTL::Buffer*)mesh->getIndexBuffer(), 0);
+        } else {
+            encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, (NS::UInteger)0, (NS::UInteger)mesh->getVertexCount());
+        }
+    }
+
+    void AcornMetalRenderer::renderSkinnedMesh(
+        AcornMetalMesh* mesh, 
+        AcornMetalTexture* texture, 
+        const GlobalUniforms& uniforms, 
+        const void* jointMatricesData, 
+        size_t jointCount, 
+        void* encoderPtr
+    ) {
+        MTL::RenderCommandEncoder* encoder = (MTL::RenderCommandEncoder*)encoderPtr;
+        if (!mesh || !encoder || !skinnedMeshPipelineState) return;
+        
+        encoder->setRenderPipelineState((MTL::RenderPipelineState*)skinnedMeshPipelineState);
+        encoder->setDepthStencilState((MTL::DepthStencilState*)depthStencilState);
+        
+        encoder->setVertexBuffer((MTL::Buffer*)mesh->getVertexBuffer(), 0, 0);
+        encoder->setVertexBytes(&uniforms, sizeof(GlobalUniforms), 1);
+        if (jointMatricesData && jointCount > 0) {
+            size_t bytes = sizeof(float) * 16 * jointCount;
+            if (bytes <= 4096) {
+                encoder->setVertexBytes(jointMatricesData, bytes, 2);
+            } else {
+                MTL::Buffer* jb = ((MTL::Device*)device)->newBuffer(jointMatricesData, bytes, MTL::ResourceStorageModeShared);
+                encoder->setVertexBuffer(jb, 0, 2);
+                jb->release();
+            }
+        } else {
+            static const float defaultIdentity[16] = {
+                1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f
+            };
+            encoder->setVertexBytes(defaultIdentity, sizeof(defaultIdentity), 2);
+        }
+        encoder->setFragmentBytes(&uniforms, sizeof(GlobalUniforms), 0);
+        
+        if (texture) {
+            encoder->setFragmentTexture((MTL::Texture*)texture->getTexture(), 0);
+        }
         
         if (mesh->getIndexBuffer()) {
             encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, mesh->getIndexCount(), MTL::IndexTypeUInt32, (MTL::Buffer*)mesh->getIndexBuffer(), 0);

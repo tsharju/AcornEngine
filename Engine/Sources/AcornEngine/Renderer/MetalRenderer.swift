@@ -405,6 +405,67 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         
         cxxRenderer.pointee.renderRoads(metalMesh.cxxMesh, cxxUniforms, encoderPtr)
     }
+    
+    /// Renders a skinned mesh using joint matrices and GPU vertex deformation.
+    public func renderSkinned(
+        mesh: any Mesh,
+        texture: (any Texture)?,
+        uniforms: GlobalUniforms,
+        jointMatrices: [Matrix4x4],
+        context: any RenderContext
+    ) {
+        guard let metalContext = context as? MetalRenderContext,
+              let metalMesh = mesh as? MetalMesh else {
+            return
+        }
+        
+        guard let encoder = metalContext.getOrCreateEncoder() else {
+            return
+        }
+        
+        let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
+        
+        var cxxUniforms = Acorn.GlobalUniforms()
+        cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix.asSIMD
+        cxxUniforms.modelMatrix = uniforms.modelMatrix.asSIMD
+        cxxUniforms.normalMatrix = uniforms.normalMatrix.asSIMD
+        cxxUniforms.ambientLightColor = uniforms.ambientLightColor
+        cxxUniforms.directionalLightColor = uniforms.directionalLightColor
+        cxxUniforms.directionalLightDirection = uniforms.directionalLightDirection
+        cxxUniforms.pointLightColor = uniforms.pointLightColor
+        cxxUniforms.pointLightPosition = uniforms.pointLightPosition
+        cxxUniforms.meshColor = uniforms.meshColor
+        
+        let targetTexture = texture ?? defaultWhiteTexture
+        let cxxTexture = (targetTexture as? MetalTexture)?.cxxTexture
+        
+        let simdMatrices = jointMatrices.map { $0.asSIMD }
+        if !simdMatrices.isEmpty {
+            simdMatrices.withUnsafeBufferPointer { bufferPtr in
+                guard let baseAddress = bufferPtr.baseAddress else { return }
+                cxxRenderer.pointee.renderSkinnedMesh(
+                    metalMesh.cxxMesh,
+                    cxxTexture,
+                    cxxUniforms,
+                    baseAddress,
+                    simdMatrices.count,
+                    encoderPtr
+                )
+            }
+        } else {
+            var identity = matrix_identity_float4x4
+            withUnsafePointer(to: &identity) { ptr in
+                cxxRenderer.pointee.renderSkinnedMesh(
+                    metalMesh.cxxMesh,
+                    cxxTexture,
+                    cxxUniforms,
+                    ptr,
+                    1,
+                    encoderPtr
+                )
+            }
+        }
+    }
 }
 #endif
 

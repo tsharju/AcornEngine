@@ -10,16 +10,20 @@ struct VertexIn {
 
 struct SkinnedVertexIn {
     float3 position;
-    float _pad1;
     float4 color;
     float2 texCoord;
-    float2 _pad2;
-    float3 normal;
-    float _pad3;
     ushort4 joints;
-    float2 _padJoints;
+    float3 normal;
     float4 weights;
 };
+
+static_assert(sizeof(SkinnedVertexIn) == 80, "SkinnedVertexIn size mismatch");
+static_assert(__builtin_offsetof(SkinnedVertexIn, position) == 0, "position offset mismatch");
+static_assert(__builtin_offsetof(SkinnedVertexIn, color) == 16, "color offset mismatch");
+static_assert(__builtin_offsetof(SkinnedVertexIn, texCoord) == 32, "texCoord offset mismatch");
+static_assert(__builtin_offsetof(SkinnedVertexIn, joints) == 40, "joints offset mismatch");
+static_assert(__builtin_offsetof(SkinnedVertexIn, normal) == 48, "normal offset mismatch");
+static_assert(__builtin_offsetof(SkinnedVertexIn, weights) == 64, "weights offset mismatch");
 
 struct VertexOut {
     float4 position [[position]];
@@ -59,11 +63,20 @@ vertex VertexOut skinned_vertex_main(uint vertexID [[vertex_id]],
                                     constant GlobalUniforms &uniforms [[buffer(1)]],
                                     constant float4x4 *jointMatrices [[buffer(2)]]) {
     SkinnedVertexIn v = vertices[vertexID];
-    float4x4 skinMatrix =
-        v.weights.x * jointMatrices[v.joints.x] +
-        v.weights.y * jointMatrices[v.joints.y] +
-        v.weights.z * jointMatrices[v.joints.z] +
-        v.weights.w * jointMatrices[v.joints.w];
+    
+    float weightSum = v.weights.x + v.weights.y + v.weights.z + v.weights.w;
+    float4x4 skinMatrix;
+    if (weightSum > 1e-4) {
+        float invWeightSum = 1.0 / weightSum;
+        float4 w = v.weights * invWeightSum;
+        skinMatrix =
+            w.x * jointMatrices[v.joints.x] +
+            w.y * jointMatrices[v.joints.y] +
+            w.z * jointMatrices[v.joints.z] +
+            w.w * jointMatrices[v.joints.w];
+    } else {
+        skinMatrix = float4x4(1.0);
+    }
         
     float4 localPos = skinMatrix * float4(v.position, 1.0);
     float3 localNorm = (skinMatrix * float4(v.normal, 0.0)).xyz;

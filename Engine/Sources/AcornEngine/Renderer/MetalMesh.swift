@@ -104,6 +104,43 @@ public final class MetalMesh: Mesh, @unchecked Sendable {
         self.init(device: device, vertices: vertices, indices: [])
     }
     
+    /// Creates a skinned mesh from raw vertex data and optional indices.
+    /// - Parameters:
+    ///   - device: The Metal device used to create the buffers.
+    ///   - skinnedVertexData: The raw binary data containing skinned vertices.
+    ///   - vertexCount: The number of vertices.
+    ///   - indices: An optional array of 32-bit indices.
+    /// - Returns: A new `MetalMesh`, or `nil` if buffer creation fails.
+    public convenience init?(device: any MTLDevice, skinnedVertexData: Data, vertexCount: Int, indices: [UInt32] = []) {
+        guard let buffer = device.makeBuffer(bytes: (skinnedVertexData as NSData).bytes, length: skinnedVertexData.count, options: .storageModeShared) else {
+            return nil
+        }
+        
+        let iBuffer: (any MTLBuffer)?
+        let iBufferPtr: UnsafeMutableRawPointer?
+        if !indices.isEmpty {
+            let iSize = indices.count * MemoryLayout<UInt32>.stride
+            guard let ib = device.makeBuffer(bytes: indices, length: iSize, options: .storageModeShared) else {
+                return nil
+            }
+            iBuffer = ib
+            iBufferPtr = Unmanaged.passUnretained(ib).toOpaque()
+        } else {
+            iBuffer = nil
+            iBufferPtr = nil
+        }
+        
+        let devicePtr = Unmanaged.passUnretained(device).toOpaque()
+        let bufferPtr = Unmanaged.passUnretained(buffer).toOpaque()
+        
+        guard let mesh = Acorn.AcornMetalMesh.create(devicePtr, vertexCount, bufferPtr, iBufferPtr, indices.count) else {
+            return nil
+        }
+        mesh.pointee.setIsSkinned(true)
+        _ = (buffer, iBuffer)
+        self.init(cxxMesh: mesh)
+    }
+    
     deinit {
         cxxMesh.pointee.destroy()
     }

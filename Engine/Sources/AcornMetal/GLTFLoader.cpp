@@ -66,23 +66,22 @@ namespace Acorn {
 
         struct alignas(16) DefaultSkinnedVertex {
             float position[3];
-            float _pad1;
-            float color[4];
-            float texCoord[2];
-            float _pad2[2];
-            float normal[3];
-            float _pad3;
-            uint16_t joints[4];
-            float _padJoints[2];
-            float weights[4];
+            float _padPosition;     // offset 12 -> 16
+            float color[4];         // offset 16 -> 32
+            float texCoord[2];      // offset 32 -> 40
+            uint16_t joints[4];     // offset 40 -> 48
+            float normal[3];        // offset 48 -> 60
+            float _padNormal;       // offset 60 -> 64
+            float weights[4];       // offset 64 -> 80
         };
 
-        static_assert(sizeof(DefaultSkinnedVertex) == 96, "DefaultSkinnedVertex size must be 96 bytes");
-        static_assert(offsetof(DefaultSkinnedVertex, color) == 16, "color must be at offset 16");
-        static_assert(offsetof(DefaultSkinnedVertex, texCoord) == 32, "texCoord must be at offset 32");
-        static_assert(offsetof(DefaultSkinnedVertex, normal) == 48, "normal must be at offset 48");
-        static_assert(offsetof(DefaultSkinnedVertex, joints) == 64, "joints must be at offset 64");
-        static_assert(offsetof(DefaultSkinnedVertex, weights) == 80, "weights must be at offset 80");
+        static_assert(sizeof(DefaultSkinnedVertex) == 80, "DefaultSkinnedVertex size must be 80 bytes");
+        static_assert(offsetof(DefaultSkinnedVertex, position) == 0, "position at 0");
+        static_assert(offsetof(DefaultSkinnedVertex, color) == 16, "color at 16");
+        static_assert(offsetof(DefaultSkinnedVertex, texCoord) == 32, "texCoord at 32");
+        static_assert(offsetof(DefaultSkinnedVertex, joints) == 40, "joints at 40");
+        static_assert(offsetof(DefaultSkinnedVertex, normal) == 48, "normal at 48");
+        static_assert(offsetof(DefaultSkinnedVertex, weights) == 64, "weights at 64");
 
         // First, load all meshes and primitives in local coordinates (no transform baking)
         std::vector<size_t> meshPrimitiveOffsets(asset->meshes.size());
@@ -120,14 +119,12 @@ namespace Acorn {
                     vertices[idx].position[0] = pos.x();
                     vertices[idx].position[1] = pos.y();
                     vertices[idx].position[2] = pos.z();
-                    vertices[idx]._pad1 = 0.0f;
+                    vertices[idx]._padPosition = 0.0f;
                     vertices[idx].color[0] = 1.0f; vertices[idx].color[1] = 1.0f; vertices[idx].color[2] = 1.0f; vertices[idx].color[3] = 1.0f;
                     vertices[idx].texCoord[0] = 0.0f; vertices[idx].texCoord[1] = 0.0f;
-                    vertices[idx]._pad2[0] = 0.0f; vertices[idx]._pad2[1] = 0.0f;
-                    vertices[idx].normal[0] = 0.0f; vertices[idx].normal[1] = 0.0f; vertices[idx].normal[2] = 1.0f;
-                    vertices[idx]._pad3 = 0.0f;
                     vertices[idx].joints[0] = 0; vertices[idx].joints[1] = 0; vertices[idx].joints[2] = 0; vertices[idx].joints[3] = 0;
-                    vertices[idx]._padJoints[0] = 0.0f; vertices[idx]._padJoints[1] = 0.0f;
+                    vertices[idx].normal[0] = 0.0f; vertices[idx].normal[1] = 0.0f; vertices[idx].normal[2] = 1.0f;
+                    vertices[idx]._padNormal = 0.0f;
                     vertices[idx].weights[0] = 0.0f; vertices[idx].weights[1] = 0.0f; vertices[idx].weights[2] = 0.0f; vertices[idx].weights[3] = 0.0f;
                 });
 

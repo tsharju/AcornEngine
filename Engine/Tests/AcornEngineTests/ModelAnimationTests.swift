@@ -430,4 +430,64 @@ struct ModelAnimationTests {
         #expect(abs(updatedComp.jointMatrices[1].columns.3.y - 1.0) < 0.01)
         #endif
     }
+    
+    #if canImport(Metal)
+    @Test("MetalRenderer Skinned Mesh Execution on GPU")
+    func testMetalRendererSkinnedMeshExecution() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { return }
+        let renderer = try MetalRenderer(device: device)
+        let world = World()
+        let renderSystem = RenderSystem(renderer: renderer)
+        
+        struct RawSkinnedVertex {
+            var pos: (Float, Float, Float)
+            var padPos: Float = 0
+            var col: (Float, Float, Float, Float) = (1, 1, 1, 1)
+            var uv: (Float, Float) = (0, 0)
+            var joints: (UInt16, UInt16, UInt16, UInt16) = (0, 0, 0, 0)
+            var norm: (Float, Float, Float) = (0, 1, 0)
+            var padNorm: Float = 0
+            var weights: (Float, Float, Float, Float) = (1, 0, 0, 0)
+        }
+        #expect(MemoryLayout<RawSkinnedVertex>.size == 80)
+        #expect(MemoryLayout<RawSkinnedVertex>.stride == 80)
+        
+        let verts = [
+            RawSkinnedVertex(pos: (0, 1, 0)),
+            RawSkinnedVertex(pos: (-1, -1, 0)),
+            RawSkinnedVertex(pos: (1, -1, 0))
+        ]
+        
+        let data = verts.withUnsafeBufferPointer { Data(buffer: $0) }
+        let mesh = try #require(MetalMesh(device: device, skinnedVertexData: data, vertexCount: 3))
+        
+        let skinnedEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: skinnedEntity)
+        world.addComponent(
+            SkinnedMeshComponent(
+                mesh: mesh,
+                skinIndex: 0,
+                jointMatrices: [Matrix4x4.identity]
+            ),
+            to: skinnedEntity
+        )
+        
+        let commandQueue = try #require(device.makeCommandQueue())
+        let commandBuffer = try #require(commandQueue.makeCommandBuffer())
+        let rpDescriptor = MTLRenderPassDescriptor()
+        let texDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm_srgb, width: 64, height: 64, mipmapped: false)
+        texDesc.usage = [.renderTarget, .shaderRead]
+        let dummyTarget = try #require(device.makeTexture(descriptor: texDesc))
+        rpDescriptor.colorAttachments[0].texture = dummyTarget
+        
+        let context = MetalRenderContext(renderPassDescriptor: rpDescriptor, commandBuffer: commandBuffer)
+        renderSystem.render(world: world, context: context)
+        context.endEncoding()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        
+        #expect(commandBuffer.status == .completed)
+        #expect(commandBuffer.error == nil)
+    }
+    #endif
 }

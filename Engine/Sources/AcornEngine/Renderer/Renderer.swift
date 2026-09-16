@@ -45,6 +45,78 @@ public struct CPUMeshData: Sendable, Equatable {
         self.vertices = vertices
         self.indices = indices
     }
+
+    /// Partitions surface mesh geometry into flat ground geometry (landuse, water) and upright 3D structures (buildings).
+    ///
+    /// - Parameters:
+    ///   - originalMesh: Optional original un-elevated mesh data to check canonical vertical positions and normals.
+    ///   - threshold: Height threshold in meters separating ground geometry from extruded structures (default: 0.1m).
+    /// - Returns: A tuple `(groundMesh, buildingMesh)` with compacted vertex and index buffers.
+    public func partitionSurface(
+        originalMesh: CPUMeshData? = nil,
+        threshold: Float = 0.1
+    ) -> (groundMesh: CPUMeshData, buildingMesh: CPUMeshData) {
+        guard !vertices.isEmpty, indices.count >= 3 else {
+            return (groundMesh: self, buildingMesh: CPUMeshData())
+        }
+
+        let orig = originalMesh ?? self
+        var groundVertices = [Vertex]()
+        var groundIndices = [UInt32]()
+        var groundIndexMap = [Int: UInt32]()
+
+        var buildingVertices = [Vertex]()
+        var buildingIndices = [UInt32]()
+        var buildingIndexMap = [Int: UInt32]()
+
+        let totalIndices = indices.count
+        var triIdx = 0
+
+        while triIdx + 2 < totalIndices {
+            let i0 = Int(indices[triIdx])
+            let i1 = Int(indices[triIdx + 1])
+            let i2 = Int(indices[triIdx + 2])
+            triIdx += 3
+
+            guard i0 < vertices.count, i1 < vertices.count, i2 < vertices.count else { continue }
+
+            let origV0 = i0 < orig.vertices.count ? orig.vertices[i0] : vertices[i0]
+            let origV1 = i1 < orig.vertices.count ? orig.vertices[i1] : vertices[i1]
+            let origV2 = i2 < orig.vertices.count ? orig.vertices[i2] : vertices[i2]
+
+            let isBuilding = origV0.position.y > threshold || origV1.position.y > threshold || origV2.position.y > threshold ||
+                             origV0.normal.y <= 0.5 || origV1.normal.y <= 0.5 || origV2.normal.y <= 0.5
+
+            if isBuilding {
+                for (origIdx, vert) in [(i0, vertices[i0]), (i1, vertices[i1]), (i2, vertices[i2])] {
+                    if let existing = buildingIndexMap[origIdx] {
+                        buildingIndices.append(existing)
+                    } else {
+                        let newIdx = UInt32(buildingVertices.count)
+                        buildingVertices.append(vert)
+                        buildingIndexMap[origIdx] = newIdx
+                        buildingIndices.append(newIdx)
+                    }
+                }
+            } else {
+                for (origIdx, vert) in [(i0, vertices[i0]), (i1, vertices[i1]), (i2, vertices[i2])] {
+                    if let existing = groundIndexMap[origIdx] {
+                        groundIndices.append(existing)
+                    } else {
+                        let newIdx = UInt32(groundVertices.count)
+                        groundVertices.append(vert)
+                        groundIndexMap[origIdx] = newIdx
+                        groundIndices.append(newIdx)
+                    }
+                }
+            }
+        }
+
+        return (
+            groundMesh: CPUMeshData(vertices: groundVertices, indices: groundIndices),
+            buildingMesh: CPUMeshData(vertices: buildingVertices, indices: buildingIndices)
+        )
+    }
 }
 
 /// Opaque protocol representing the context for the current frame (e.g., command buffer, render target).

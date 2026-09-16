@@ -359,8 +359,14 @@ public class H3MapTileSystem: System {
             world.addComponent(ParentComponent(parent: h3Entity), to: child)
             world.addComponent(TransformComponent(position: .zero), to: child)
 
-            if hasSurface, let mesh = createMesh(from: clippedPart.surfaceMesh) {
-                world.addComponent(MeshComponent(mesh: mesh), to: child)
+            if hasSurface {
+                let (groundMesh, buildingMesh) = clippedPart.surfaceMesh.partitionSurface()
+                if !groundMesh.vertices.isEmpty, let mesh = createMesh(from: groundMesh) {
+                    world.addComponent(GroundMeshComponent(mesh: mesh), to: child)
+                }
+                if !buildingMesh.vertices.isEmpty, let mesh = createMesh(from: buildingMesh) {
+                    world.addComponent(MeshComponent(mesh: mesh), to: child)
+                }
             }
             if hasRoad, let roadMesh = createMesh(from: clippedPart.roadMesh) {
                 world.addComponent(RoadComponent(mesh: roadMesh), to: child)

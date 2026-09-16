@@ -277,9 +277,106 @@ struct MapboxTileProcessorTests {
         #expect(mesh.indices.count == 6)
         
         for v in mesh.vertices {
-            #expect(abs(v.position.y) < 0.001)
+            #expect(abs(v.position.y) <= 0.001)
             #expect(v.normal == SIMD3<Float>(0, 1, 0))
         }
+    }
+
+    @Test("Landuse classification assigns semantic colors and tiered micro-elevations")
+    func testLanduseClassificationAndColors() async {
+        var outerRing = AcornMap.PolygonRing()
+        outerRing.addPoint(1000.0, 1000.0)
+        outerRing.addPoint(2000.0, 1000.0)
+        outerRing.addPoint(2000.0, 2000.0)
+        outerRing.addPoint(1000.0, 2000.0)
+
+        // Forest: deep green (0.18, 0.35, 0.22) at +0.003m
+        let forestRes = AcornMap.MapboxTileProcessor.createTestTileWithClass(
+            std.__1.string("landuse"),
+            outerRing,
+            std.__1.string("forest"),
+            0.0,
+            0.0
+        )
+        #expect(forestRes.success)
+
+        var forestBytes = [UInt8](repeating: 0, count: forestRes.size())
+        forestBytes.withUnsafeMutableBufferPointer { forestRes.copyTo($0.baseAddress) }
+        let loader = MapTileLoader()
+        let coord = TileCoordinate(zoom: 15, x: 100, y: 100)
+        let forestMesh = await loader.processTile(data: Data(forestBytes), coordinate: coord, referenceLatitude: 60.0)
+
+        #expect(forestMesh.vertices.count == 4)
+        for v in forestMesh.vertices {
+            #expect(abs(v.position.y - 0.003) < 0.0005)
+            #expect(abs(v.color.x - 0.18) < 0.02)
+            #expect(abs(v.color.y - 0.35) < 0.02)
+            #expect(abs(v.color.z - 0.22) < 0.02)
+        }
+
+        // Park: vibrant lawn green (0.28, 0.52, 0.28) at +0.005m
+        let parkRes = AcornMap.MapboxTileProcessor.createTestTileWithClass(
+            std.__1.string("landuse"),
+            outerRing,
+            std.__1.string("park"),
+            0.0,
+            0.0
+        )
+        var parkBytes = [UInt8](repeating: 0, count: parkRes.size())
+        parkBytes.withUnsafeMutableBufferPointer { parkRes.copyTo($0.baseAddress) }
+        let parkMesh = await loader.processTile(data: Data(parkBytes), coordinate: coord, referenceLatitude: 60.0)
+
+        #expect(parkMesh.vertices.count == 4)
+        for v in parkMesh.vertices {
+            #expect(abs(v.position.y - 0.005) < 0.0005)
+            #expect(abs(v.color.x - 0.28) < 0.02)
+            #expect(abs(v.color.y - 0.52) < 0.02)
+            #expect(abs(v.color.z - 0.28) < 0.02)
+        }
+
+        // Residential: warm earth (0.56, 0.52, 0.47) at +0.001m
+        let resRes = AcornMap.MapboxTileProcessor.createTestTileWithClass(
+            std.__1.string("landuse"),
+            outerRing,
+            std.__1.string("residential"),
+            0.0,
+            0.0
+        )
+        var resBytes = [UInt8](repeating: 0, count: resRes.size())
+        resBytes.withUnsafeMutableBufferPointer { resRes.copyTo($0.baseAddress) }
+        let resMesh = await loader.processTile(data: Data(resBytes), coordinate: coord, referenceLatitude: 60.0)
+
+        #expect(resMesh.vertices.count == 4)
+        for v in resMesh.vertices {
+            #expect(abs(v.position.y - 0.001) < 0.0005)
+            #expect(abs(v.color.x - 0.56) < 0.02)
+            #expect(abs(v.color.y - 0.52) < 0.02)
+            #expect(abs(v.color.z - 0.47) < 0.02)
+        }
+    }
+
+    @Test("CPUMeshData.partitionSurface separates ground from building structures")
+    func testCPUMeshDataPartitionSurface() {
+        let groundV0 = Vertex(position: SIMD3<Float>(0, 0.003, 0), color: .one, texCoord: .zero, normal: SIMD3<Float>(0, 1, 0))
+        let groundV1 = Vertex(position: SIMD3<Float>(5, 0.003, 0), color: .one, texCoord: .zero, normal: SIMD3<Float>(0, 1, 0))
+        let groundV2 = Vertex(position: SIMD3<Float>(0, 0.003, 5), color: .one, texCoord: .zero, normal: SIMD3<Float>(0, 1, 0))
+
+        let bldgV0 = Vertex(position: SIMD3<Float>(10, 12, 0), color: .one, texCoord: .zero, normal: SIMD3<Float>(0, 1, 0))
+        let bldgV1 = Vertex(position: SIMD3<Float>(20, 12, 0), color: .one, texCoord: .zero, normal: SIMD3<Float>(0, 1, 0))
+        let bldgV2 = Vertex(position: SIMD3<Float>(10, 12, 10), color: .one, texCoord: .zero, normal: SIMD3<Float>(0, 1, 0))
+
+        let combined = CPUMeshData(
+            vertices: [groundV0, groundV1, groundV2, bldgV0, bldgV1, bldgV2],
+            indices: [0, 1, 2, 3, 4, 5]
+        )
+
+        let (ground, building) = combined.partitionSurface()
+        #expect(ground.vertices.count == 3)
+        #expect(ground.indices.count == 3)
+        #expect(building.vertices.count == 3)
+        #expect(building.indices.count == 3)
+        #expect(ground.vertices[0].position.y == 0.003)
+        #expect(building.vertices[0].position.y == 12.0)
     }
     
     @Test("Unknown layers (e.g. admin) are ignored and not extruded as buildings")
@@ -339,10 +436,10 @@ struct MapboxTileProcessorTests {
         #expect(meshData.surfaceMesh.vertices.isEmpty)
         let roadMesh = meshData.roadMesh
         
-        // 3 points on the road path -> 2 vertices per point = 6 vertices
-        #expect(roadMesh.vertices.count == 6)
-        // 2 segments -> 2 quads -> 4 triangles = 12 indices
-        #expect(roadMesh.indices.count == 12)
+        // Subdivided road path: 47 points along path -> 2 vertices per point = 94 vertices
+        #expect(roadMesh.vertices.count == 94)
+        // 46 segments -> 46 quads -> 276 indices
+        #expect(roadMesh.indices.count == 276)
         
         for v in roadMesh.vertices {
             // Road ribbon should be slightly elevated above terrain
@@ -517,10 +614,10 @@ struct MapboxTileProcessorTests {
         let meshData = await loader.processTileData(data: tileData, coordinate: coord, referenceLatitude: 60.0)
         
         let roadMesh = meshData.roadMesh
-        // 3 line points -> 6 ribbon vertices + 2 caps * 9 vertices (1 center + 8 perimeter) = 24 vertices
-        #expect(roadMesh.vertices.count == 24)
-        // 2 segments -> 12 ribbon indices + 2 caps * (8 * 3 = 24) = 60 indices
-        #expect(roadMesh.indices.count == 60)
+        // Subdivided ribbon: 94 vertices + 2 caps * 9 vertices = 112 vertices
+        #expect(roadMesh.vertices.count == 112)
+        // Subdivided ribbon: 276 indices + 2 caps * 24 indices = 324 indices
+        #expect(roadMesh.indices.count == 324)
         
         // Check that we have center vertices with u = 0.0 and perimeter vertices with u = 1.0
         var centerCapCount = 0

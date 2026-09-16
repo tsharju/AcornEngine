@@ -222,6 +222,15 @@ public:
         double minHeight
     );
 
+    /// Helper to create an in-memory MVT vector tile protobuf containing a test polygon with a class property.
+    static DecompressionResult createTestTileWithClass(
+        const std::string& layerName,
+        const PolygonRing& outerRing,
+        const std::string& featureClass,
+        double height = 0.0,
+        double minHeight = 0.0
+    );
+
     /// Helper to create an in-memory MVT vector tile protobuf containing a test road linestring.
     static DecompressionResult createTestRoadTile(
         const std::string& layerName,

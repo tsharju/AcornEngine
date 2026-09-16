@@ -40,6 +40,8 @@ private final class MockRenderer: Renderer, @unchecked Sendable {
     var renderSpriteCallCount = 0
     var renderSpritesInstancedCallCount = 0
     var renderedSpriteBatches: [[SpriteInstanceData]] = []
+    var renderRoadsCallCount = 0
+    var callOrder: [String] = []
     
     var lastFrameUniforms: FrameUniforms?
     var lastSpriteFrameUniforms: SpriteFrameUniforms?
@@ -70,6 +72,12 @@ private final class MockRenderer: Renderer, @unchecked Sendable {
         renderInstancedCallCount += 1
         renderedInstanceBatches.append(instances)
         lastFrameUniforms = uniforms
+        callOrder.append("instancedMesh")
+    }
+    
+    func renderRoads(mesh: any Mesh, uniforms: RoadUniforms, context: any RenderContext) {
+        renderRoadsCallCount += 1
+        callOrder.append("roads")
     }
     
     func renderSpritesInstanced(
@@ -344,5 +352,35 @@ struct InstancedRenderingTests {
         context.endEncoding()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
+    }
+    
+    @Test("3-Stage Rendering: GroundMeshComponent before Roads before MeshComponent")
+    func testThreeStageRenderingPipeline() {
+        let mockRenderer = MockRenderer()
+        let renderSystem = RenderSystem(renderer: mockRenderer)
+        let world = World()
+        
+        let groundMesh = MockMesh(vertexCount: 4)
+        let roadMesh = MockMesh(vertexCount: 6)
+        let buildingMesh = MockMesh(vertexCount: 8)
+        
+        let groundEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: groundEntity)
+        world.addComponent(GroundMeshComponent(mesh: groundMesh), to: groundEntity)
+        
+        let roadEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: roadEntity)
+        world.addComponent(RoadComponent(mesh: roadMesh), to: roadEntity)
+        
+        let buildingEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: buildingEntity)
+        world.addComponent(MeshComponent(mesh: buildingMesh), to: buildingEntity)
+        
+        let context = MockRenderContext()
+        renderSystem.render(world: world, context: context)
+        
+        // Ground is drawn first (stage 1), Roads drawn second (stage 2 casing + fill), Buildings drawn third (stage 3)
+        #expect(mockRenderer.callOrder == ["instancedMesh", "roads", "roads", "instancedMesh"])
+        #expect(mockRenderer.renderedInstanceBatches.count == 2)
     }
 }

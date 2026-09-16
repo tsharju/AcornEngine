@@ -36,7 +36,7 @@ namespace Acorn {
         pipelineDescriptor->release();
         
         MTL::DepthStencilDescriptor* depthStencilDesc = MTL::DepthStencilDescriptor::alloc()->init();
-        depthStencilDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
+        depthStencilDesc->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
         depthStencilDesc->setDepthWriteEnabled(true);
         depthStencilState = ((MTL::Device*)device)->newDepthStencilState(depthStencilDesc);
         depthStencilDesc->release();
@@ -48,7 +48,7 @@ namespace Acorn {
         transparentDepthDesc->release();
         
         MTL::DepthStencilDescriptor* roadDepthDesc = MTL::DepthStencilDescriptor::alloc()->init();
-        roadDepthDesc->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
+        roadDepthDesc->setDepthCompareFunction(MTL::CompareFunctionAlways);
         roadDepthDesc->setDepthWriteEnabled(false);
         roadDepthStencilState = ((MTL::Device*)device)->newDepthStencilState(roadDepthDesc);
         roadDepthDesc->release();

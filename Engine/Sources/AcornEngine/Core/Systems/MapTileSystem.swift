@@ -166,7 +166,11 @@ public class MapTileSystem: System {
         world.addComponent(TransformComponent(position: worldPos), to: entity)
         
         if !tileMeshData.surfaceMesh.vertices.isEmpty {
-            if let mesh = createMesh(from: tileMeshData.surfaceMesh) {
+            let (groundMesh, buildingMesh) = tileMeshData.surfaceMesh.partitionSurface()
+            if !groundMesh.vertices.isEmpty, let mesh = createMesh(from: groundMesh) {
+                world.addComponent(GroundMeshComponent(mesh: mesh), to: entity)
+            }
+            if !buildingMesh.vertices.isEmpty, let mesh = createMesh(from: buildingMesh) {
                 world.addComponent(MeshComponent(mesh: mesh), to: entity)
             }
         }

@@ -73,9 +73,9 @@ public struct RenderSystem {
             pointLightPosition: pointPosition
         )
         
-        // Render mesh components (batched instanced draw calls)
-        let meshEntities = world.entities(with: MeshComponent.self)
-        if !meshEntities.isEmpty {
+        // Helper to batch and draw instanced meshes
+        func renderMeshBatch(items: [(mesh: any Mesh, texture: (any Texture)?, color: SIMD4<Float>, entity: Entity)]) {
+            guard !items.isEmpty else { return }
             struct MeshBatchKey: Hashable {
                 let meshID: ObjectIdentifier
                 let textureID: ObjectIdentifier?
@@ -90,26 +90,26 @@ public struct RenderSystem {
             var batches: [MeshBatchKey: MeshBatch] = [:]
             var batchOrder: [MeshBatchKey] = []
             
-            for (entity, meshComponent) in meshEntities {
-                guard world.component(ofType: TransformComponent.self, for: entity) != nil else {
+            for item in items {
+                guard world.component(ofType: TransformComponent.self, for: item.entity) != nil else {
                     continue
                 }
                 
-                let modelMatrix = world.worldMatrix(for: entity)
+                let modelMatrix = world.worldMatrix(for: item.entity)
                 let normalMatrix = modelMatrix.inverse.transpose
                 let instanceData = MeshInstanceData(
                     modelMatrix: modelMatrix,
                     normalMatrix: normalMatrix,
-                    color: meshComponent.color
+                    color: item.color
                 )
                 
-                let meshKey = ObjectIdentifier(meshComponent.mesh as AnyObject)
-                let textureKey = meshComponent.texture.map { ObjectIdentifier($0 as AnyObject) }
+                let meshKey = ObjectIdentifier(item.mesh as AnyObject)
+                let textureKey = item.texture.map { ObjectIdentifier($0 as AnyObject) }
                 let key = MeshBatchKey(meshID: meshKey, textureID: textureKey)
                 
                 if batches[key] == nil {
                     batchOrder.append(key)
-                    batches[key] = MeshBatch(mesh: meshComponent.mesh, texture: meshComponent.texture, instances: [])
+                    batches[key] = MeshBatch(mesh: item.mesh, texture: item.texture, instances: [])
                 }
                 batches[key]?.instances.append(instanceData)
             }
@@ -127,7 +127,14 @@ public struct RenderSystem {
             }
         }
         
-        // Render road components (rendered after terrain/buildings with depth test LessEqual and depth write disabled)
+        // Stage 1: Render ground mesh components (flat landuse, water, terrain overlays) before roads
+        let groundEntities = world.entities(with: GroundMeshComponent.self)
+        if !groundEntities.isEmpty {
+            let items = groundEntities.map { (mesh: $0.1.mesh, texture: $0.1.texture, color: $0.1.color, entity: $0.0) }
+            renderMeshBatch(items: items)
+        }
+        
+        // Stage 2: Render road components with depth bias (Pass 1 Casing, Pass 2 Fill with depth write disabled)
         // Two-pass rendering: Pass 1 (Casing) draws outer perimeter outlines; Pass 2 (Fill) draws inner road pavement.
         // This ensures crossroads and overlapping roads merge seamlessly into a single unbroken roadbed with a single outline.
         let roadEntities = world.entities(with: RoadComponent.self)
@@ -141,6 +148,13 @@ public struct RenderSystem {
                 let modelMatrix = world.worldMatrix(for: entity)
                 let mvp = viewProjectionMatrix * modelMatrix
                 validRoads.append((roadComponent, mvp))
+            }
+            
+            // Sort roads back-to-front (farther roads first) using clip space depth
+            validRoads.sort { (a, b) in
+                let zA = a.1.columns.3.z / max(0.0001, a.1.columns.3.w)
+                let zB = b.1.columns.3.z / max(0.0001, b.1.columns.3.w)
+                return zA > zB
             }
             
             // Pass 1: Casing (full width with outline color)
@@ -176,6 +190,13 @@ public struct RenderSystem {
                     context: context
                 )
             }
+        }
+        
+        // Stage 3: Render upright structure mesh components (3D buildings, props) on top of roads
+        let meshEntities = world.entities(with: MeshComponent.self)
+        if !meshEntities.isEmpty {
+            let items = meshEntities.map { (mesh: $0.1.mesh, texture: $0.1.texture, color: $0.1.color, entity: $0.0) }
+            renderMeshBatch(items: items)
         }
         
         // Render tile map components

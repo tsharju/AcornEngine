@@ -202,7 +202,7 @@ void triangulateAndExtrudePolygon(
     uint32_t baseVertexIndex = static_cast<uint32_t>(outResult.vertices.size());
     float roofY = static_cast<float>(height);
     float groundY = static_cast<float>(minHeight);
-    float targetY = isSurface ? 0.0f : roofY;
+    float targetY = isSurface ? static_cast<float>(height) : roofY;
 
     for (const auto& ring : earcutInput) {
         for (const auto& pt : ring) {
@@ -780,6 +780,130 @@ void processRoadLineString(
     }
 }
 
+// MARK: - Landuse Classification & Cartographic Styling
+
+struct LanduseStyle {
+    std::array<float, 4> color;
+    float layerElevation; // Micro-elevation in meters above terrain DEM (eliminates Z-fighting)
+    int tier;             // -1 = Water, 0 = Base/Settlement, 1 = Nature/Agri, 2 = Amenity/Sports
+};
+
+static LanduseStyle getLanduseStyle(
+    const std::string& featureClass,
+    const std::string& featureSubclass,
+    const std::string& layerName
+) {
+    std::string key = featureClass;
+    if (key.empty()) key = featureSubclass;
+
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+
+    // 1. Nature / Forest / Woodland
+    if (key == "forest" || key == "wood" || key == "woodland" || 
+        key == "national_park" || key == "nature_reserve" || key == "protected_area") {
+        return {{0.18f, 0.35f, 0.22f, 1.0f}, 0.003f, 1}; // Rich deep forest green
+    }
+
+    // 2. Parks & Gardens
+    if (key == "park" || key == "garden" || key == "recreation_ground" || 
+        key == "playground" || key == "village_green" || key == "common" || key == "dog_park") {
+        return {{0.28f, 0.52f, 0.28f, 1.0f}, 0.005f, 2}; // Vibrant park lawn
+    }
+
+    // 3. Sports & Athletics
+    if (key == "pitch" || key == "stadium" || key == "track" || 
+        key == "sports_centre" || key == "golf_course" || key == "golf") {
+        return {{0.22f, 0.48f, 0.30f, 1.0f}, 0.005f, 2}; // Athletic turf emerald
+    }
+
+    // 4. Cemeteries
+    if (key == "cemetery" || key == "grave_yard") {
+        return {{0.40f, 0.48f, 0.38f, 1.0f}, 0.005f, 2}; // Serene lichen olive
+    }
+
+    // 5. Farmland & Agriculture
+    if (key == "farmland" || key == "farm" || key == "orchard" || 
+        key == "vineyard" || key == "crop" || key == "agriculture" || key == "farmyard") {
+        return {{0.72f, 0.65f, 0.45f, 1.0f}, 0.003f, 1}; // Warm golden harvest wheat / straw
+    }
+
+    // 6. Grasslands, Meadows & Scrub
+    if (key == "grass" || key == "meadow" || key == "scrub" || 
+        key == "heath" || key == "grassland" || key == "greenery" || key == "allotments") {
+        return {{0.36f, 0.56f, 0.32f, 1.0f}, 0.003f, 1}; // Sunlit meadow pasture
+    }
+
+    // 7. Residential & Settlements
+    if (key == "residential" || key == "suburb" || key == "neighbourhood" || 
+        key == "village" || key == "hamlet" || key == "urban" || key == "quarter") {
+        return {{0.56f, 0.52f, 0.47f, 1.0f}, 0.001f, 0}; // Warm subdued terracotta/parchment earth
+    }
+
+    // 8. Commercial & Retail
+    if (key == "commercial" || key == "retail" || key == "services") {
+        return {{0.53f, 0.49f, 0.50f, 1.0f}, 0.001f, 0}; // Muted warm stone / dusty tan
+    }
+
+    // 9. Industrial, Logistics & Rail
+    if (key == "industrial" || key == "railway" || key == "port" || 
+        key == "quarry" || key == "harbour" || key == "works" || key == "construction" || key == "landfill") {
+        return {{0.44f, 0.45f, 0.48f, 1.0f}, 0.001f, 0}; // Weathered iron basalt slate
+    }
+
+    // 10. Education & Civic
+    if (key == "school" || key == "education" || key == "university" || 
+        key == "college" || key == "kindergarten" || key == "civic") {
+        return {{0.68f, 0.62f, 0.52f, 1.0f}, 0.005f, 2}; // Warm scholarly parchment
+    }
+
+    // 11. Hospital & Medical
+    if (key == "hospital" || key == "clinic" || key == "healthcare") {
+        return {{0.62f, 0.64f, 0.66f, 1.0f}, 0.005f, 2}; // Soft calm mist buff
+    }
+
+    // 12. Parking & Transit
+    if (key == "parking" || key == "garages" || key == "aeroway" || 
+        key == "runway" || key == "taxiway" || key == "apron") {
+        return {{0.38f, 0.38f, 0.40f, 1.0f}, 0.005f, 2}; // Dark asphalt gray
+    }
+
+    // 13. Sand, Beaches & Dunes
+    if (key == "sand" || key == "beach" || key == "dune") {
+        return {{0.82f, 0.74f, 0.54f, 1.0f}, 0.003f, 1}; // Warm golden coast sand
+    }
+
+    // 14. Rock & Mountain Scree
+    if (key == "rock" || key == "bare_rock" || key == "scree" || key == "cliff") {
+        return {{0.42f, 0.42f, 0.42f, 1.0f}, 0.003f, 1}; // Rugged mountain basalt
+    }
+
+    // 15. Wetlands & Marshes
+    if (key == "wetland" || key == "marsh" || key == "swamp" || key == "bog" || key == "fen" || key == "reedbed") {
+        return {{0.24f, 0.38f, 0.32f, 1.0f}, 0.003f, 1}; // Misty moss teal
+    }
+
+    // 16. Glaciers & Ice
+    if (key == "glacier" || key == "snow" || key == "ice") {
+        return {{0.80f, 0.88f, 0.94f, 1.0f}, 0.003f, 1}; // Prismatic frost blue-white
+    }
+
+    // 17. Water (if in natural/earth layer)
+    if (key == "water" || key == "ocean" || key == "lake" || key == "river" || key == "canal" || key == "reservoir" || key == "basin") {
+        return {{0.18f, 0.45f, 0.72f, 1.0f}, -0.05f, -1}; // Deep azure spring
+    }
+
+    // Fallback based on layerName
+    if (layerName == "earth") {
+        return {{0.48f, 0.46f, 0.42f, 1.0f}, 0.001f, 0}; // Muted warm earth
+    }
+    if (layerName == "park") {
+        return {{0.28f, 0.52f, 0.28f, 1.0f}, 0.005f, 2}; // Park
+    }
+
+    // General default landuse: harmonious natural sage green
+    return {{0.35f, 0.55f, 0.38f, 1.0f}, 0.001f, 0};
+}
+
 } // anonymous namespace
 
 // MARK: - Road Configuration Implementation
@@ -1138,6 +1262,19 @@ TileMeshResult MapboxTileProcessor::processTile(
     try {
         vtzero::vector_tile tile(reinterpret_cast<const char*>(uncompressed.data()), uncompressed.size());
 
+        struct DecodedSurfacePolygon {
+            std::vector<Point2D> outer;
+            std::vector<std::vector<Point2D>> holes;
+            double height;
+            double minHeight;
+            std::array<float, 4> wallColor;
+            std::array<float, 4> roofColor;
+            int extent;
+            int tier;
+        };
+
+        std::vector<DecodedSurfacePolygon> surfacePolygons;
+
         while (auto layer = tile.next_layer()) {
             std::string layerName(layer.name());
             int extent = static_cast<int>(layer.extent());
@@ -1145,7 +1282,7 @@ TileMeshResult MapboxTileProcessor::processTile(
 
             bool isBuilding = (layerName == "building" || layerName == "building:part" || layerName == "buildings");
             bool isWater = (layerName == "water" || layerName == "waterway" || layerName == "ocean" || layerName == "lake");
-            bool isLanduse = (layerName == "landuse" || layerName == "landcover" || layerName == "earth");
+            bool isLanduse = (layerName == "landuse" || layerName == "landcover" || layerName == "earth" || layerName == "natural" || layerName == "park");
             bool isRoad = (layerName == "road" || layerName == "roads" || layerName == "transportation");
 
             if (isBuilding && !options.processBuildings) continue;
@@ -1197,13 +1334,6 @@ TileMeshResult MapboxTileProcessor::processTile(
             }
 
             std::array<float, 4> wallColor = {0.85f, 0.85f, 0.88f, 1.0f};
-            std::array<float, 4> roofColor = {0.75f, 0.75f, 0.78f, 1.0f};
-
-            if (isWater) {
-                roofColor = {0.18f, 0.45f, 0.72f, 1.0f};
-            } else if (isLanduse) {
-                roofColor = {0.35f, 0.65f, 0.40f, 1.0f};
-            }
 
             while (auto feature = layer.next_feature()) {
                 if (feature.geometry_type() != vtzero::GeomType::POLYGON) {
@@ -1213,6 +1343,9 @@ TileMeshResult MapboxTileProcessor::processTile(
                 double height = options.defaultBuildingHeight;
                 double minHeight = options.defaultBuildingMinHeight;
                 bool extrude = true;
+                std::string featureClass = "";
+                std::string featureType = "";
+                std::string featureSubclass = "";
 
                 while (auto prop = feature.next_property()) {
                     std::string key(prop.key());
@@ -1228,12 +1361,42 @@ TileMeshResult MapboxTileProcessor::processTile(
                         if (minLevel > 0.0) minHeight = minLevel * 3.0;
                     } else if (key == "extrude") {
                         extrude = extractBool(prop.value(), extrude);
+                    } else if (key == "class" && prop.value().type() == vtzero::property_value_type::string_value) {
+                        featureClass = std::string(prop.value().string_value());
+                    } else if (key == "type" && prop.value().type() == vtzero::property_value_type::string_value) {
+                        featureType = std::string(prop.value().string_value());
+                    } else if (key == "subclass" && prop.value().type() == vtzero::property_value_type::string_value) {
+                        featureSubclass = std::string(prop.value().string_value());
+                    } else if ((key == "landuse" || key == "natural" || key == "leisure" || key == "amenity") &&
+                               prop.value().type() == vtzero::property_value_type::string_value) {
+                        if (featureClass.empty()) {
+                            featureClass = std::string(prop.value().string_value());
+                        }
                     }
+                }
+
+                if (featureClass.empty()) {
+                    featureClass = featureType;
                 }
 
                 if (isBuilding && (!extrude || height <= minHeight)) {
                     // Non-extruded building or flat
                     height = minHeight;
+                }
+
+                std::array<float, 4> roofColor = {0.75f, 0.75f, 0.78f, 1.0f};
+                int tier = 0;
+                double surfaceElevation = 0.0;
+
+                if (isWater) {
+                    roofColor = {0.18f, 0.45f, 0.72f, 1.0f};
+                    surfaceElevation = -0.05;
+                    tier = -1;
+                } else if (isLanduse) {
+                    LanduseStyle style = getLanduseStyle(featureClass, featureSubclass, layerName);
+                    roofColor = style.color;
+                    surfaceElevation = style.layerElevation;
+                    tier = style.tier;
                 }
 
                 VtzeroPolygonHandler handler;
@@ -1256,18 +1419,42 @@ TileMeshResult MapboxTileProcessor::processTile(
                         holes.push_back(std::move(hole));
                     }
 
-                    bool isSurface = !isBuilding;
-                    double featureHeight = isBuilding ? height : 0.0;
-                    double featureMinHeight = isBuilding ? minHeight : 0.0;
-
-                    clipAndProcessPolygon(
-                        outer, holes, featureHeight, featureMinHeight, extent,
-                        tileGroundWidth, tileGroundHeight, result,
-                        isSurface, wallColor, roofColor,
-                        options.clipPolygon.size() >= 3 ? &options.clipPolygon : nullptr
-                    );
+                    if (isBuilding) {
+                        clipAndProcessPolygon(
+                            outer, holes, height, minHeight, extent,
+                            tileGroundWidth, tileGroundHeight, result,
+                            false, wallColor, roofColor,
+                            options.clipPolygon.size() >= 3 ? &options.clipPolygon : nullptr
+                        );
+                    } else {
+                        // Defer surface polygons (water, landuse) to sort by tier
+                        surfacePolygons.push_back(DecodedSurfacePolygon{
+                            std::move(outer),
+                            std::move(holes),
+                            surfaceElevation,
+                            0.0,
+                            wallColor,
+                            roofColor,
+                            extent,
+                            tier
+                        });
+                    }
                 }
             }
+        }
+
+        // Process deferred surface polygons sorted by tier (Water -> Base -> Nature -> Amenities)
+        std::stable_sort(surfacePolygons.begin(), surfacePolygons.end(), [](const DecodedSurfacePolygon& a, const DecodedSurfacePolygon& b) {
+            return a.tier < b.tier;
+        });
+
+        for (const auto& sp : surfacePolygons) {
+            clipAndProcessPolygon(
+                sp.outer, sp.holes, sp.height, sp.minHeight, sp.extent,
+                tileGroundWidth, tileGroundHeight, result,
+                true, sp.wallColor, sp.roofColor,
+                options.clipPolygon.size() >= 3 ? &options.clipPolygon : nullptr
+            );
         }
     } catch (const std::exception& e) {
         // Return whatever geometry was decoded before exception
@@ -1303,6 +1490,46 @@ DecompressionResult MapboxTileProcessor::createTestTile(
 
         fbuilder.add_property("height", height);
         fbuilder.add_property("min_height", minHeight);
+        fbuilder.commit();
+
+        std::string serialized = tbuilder.serialize();
+        res.data.assign(serialized.begin(), serialized.end());
+        res.success = true;
+    } catch (...) {
+        res.success = false;
+    }
+
+    return res;
+}
+
+DecompressionResult MapboxTileProcessor::createTestTileWithClass(
+    const std::string& layerName,
+    const PolygonRing& outerRing,
+    const std::string& featureClass,
+    double height,
+    double minHeight
+) {
+    DecompressionResult res;
+    if (outerRing.points.size() < 3) return res;
+
+    try {
+        vtzero::tile_builder tbuilder;
+        vtzero::layer_builder lbuilder{tbuilder, layerName, 2, 4096};
+        vtzero::polygon_feature_builder fbuilder{lbuilder};
+
+        std::vector<vtzero::point> pts;
+        pts.reserve(outerRing.points.size() + 1);
+        for (const auto& pt : outerRing.points) {
+            pts.emplace_back(static_cast<int32_t>(pt.x), static_cast<int32_t>(pt.y));
+        }
+        if (pts.front() != pts.back()) {
+            pts.push_back(pts.front());
+        }
+        fbuilder.add_ring_from_container(pts);
+
+        fbuilder.add_property("class", featureClass);
+        if (height > 0.0) fbuilder.add_property("height", height);
+        if (minHeight > 0.0) fbuilder.add_property("min_height", minHeight);
         fbuilder.commit();
 
         std::string serialized = tbuilder.serialize();

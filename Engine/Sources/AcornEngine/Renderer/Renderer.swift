@@ -435,8 +435,16 @@ public protocol Renderer: Sendable {
     /// Renders roads using the dedicated road shader with line width and outline.
     /// - Parameters:
     ///   - mesh: The road mesh.
+    ///   - texture: An optional texture to map onto the road surface.
     ///   - uniforms: The road rendering uniforms.
     ///   - context: The render context for the current frame.
+    func renderRoads(
+        mesh: any Mesh,
+        texture: (any Texture)?,
+        uniforms: RoadUniforms,
+        context: any RenderContext
+    )
+    
     func renderRoads(
         mesh: any Mesh,
         uniforms: RoadUniforms,
@@ -497,6 +505,15 @@ public extension Renderer {
         uniforms: RoadUniforms,
         context: any RenderContext
     ) {}
+    
+    func renderRoads(
+        mesh: any Mesh,
+        texture: (any Texture)?,
+        uniforms: RoadUniforms,
+        context: any RenderContext
+    ) {
+        renderRoads(mesh: mesh, uniforms: uniforms, context: context)
+    }
     
     func renderSkinned(
         mesh: any Mesh,

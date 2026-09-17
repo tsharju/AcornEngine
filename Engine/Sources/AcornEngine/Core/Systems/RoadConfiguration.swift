@@ -126,8 +126,8 @@ public struct RoadConfiguration: Sendable, Equatable {
             width: 8.5,
             outlineRatio: 0.18,
             elevation: 0.07,
-            color: SIMD4<Float>(0.96, 0.95, 0.88, 1.0),
-            outlineColor: SIMD4<Float>(0.50, 0.50, 0.52, 1.0)
+            color: SIMD4<Float>(0.96, 0.93, 0.86, 1.0),
+            outlineColor: SIMD4<Float>(0.50, 0.46, 0.40, 1.0)
         )
         styles["secondary"] = secondary
         styles["secondary_link"] = secondary
@@ -137,8 +137,8 @@ public struct RoadConfiguration: Sendable, Equatable {
             width: 7.0,
             outlineRatio: 0.18,
             elevation: 0.06,
-            color: SIMD4<Float>(0.93, 0.93, 0.93, 1.0),
-            outlineColor: SIMD4<Float>(0.55, 0.55, 0.58, 1.0)
+            color: SIMD4<Float>(0.94, 0.91, 0.85, 1.0),
+            outlineColor: SIMD4<Float>(0.52, 0.48, 0.42, 1.0)
         )
         styles["tertiary"] = tertiary
         styles["tertiary_link"] = tertiary
@@ -148,8 +148,8 @@ public struct RoadConfiguration: Sendable, Equatable {
             width: 6.0,
             outlineRatio: 0.18,
             elevation: 0.05,
-            color: SIMD4<Float>(0.98, 0.98, 0.98, 1.0),
-            outlineColor: SIMD4<Float>(0.55, 0.55, 0.60, 1.0)
+            color: SIMD4<Float>(0.92, 0.89, 0.82, 1.0),
+            outlineColor: SIMD4<Float>(0.48, 0.44, 0.38, 1.0)
         )
         styles["street"] = street
         styles["residential"] = street
@@ -161,8 +161,8 @@ public struct RoadConfiguration: Sendable, Equatable {
             width: 4.5,
             outlineRatio: 0.20,
             elevation: 0.045,
-            color: SIMD4<Float>(0.88, 0.88, 0.88, 1.0),
-            outlineColor: SIMD4<Float>(0.60, 0.60, 0.62, 1.0)
+            color: SIMD4<Float>(0.88, 0.85, 0.79, 1.0),
+            outlineColor: SIMD4<Float>(0.54, 0.50, 0.44, 1.0)
         )
         styles["service"] = service
         styles["driveway"] = service
@@ -185,8 +185,8 @@ public struct RoadConfiguration: Sendable, Equatable {
             width: 5.5,
             outlineRatio: 0.18,
             elevation: 0.05,
-            color: SIMD4<Float>(0.92, 0.92, 0.92, 1.0),
-            outlineColor: SIMD4<Float>(0.55, 0.55, 0.58, 1.0)
+            color: SIMD4<Float>(0.92, 0.89, 0.82, 1.0),
+            outlineColor: SIMD4<Float>(0.50, 0.46, 0.40, 1.0)
         )
         
         // Non-car layers

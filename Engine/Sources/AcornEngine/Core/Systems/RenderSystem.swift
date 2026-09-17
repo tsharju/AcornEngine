@@ -169,6 +169,7 @@ public struct RenderSystem {
                 )
                 renderer.renderRoads(
                     mesh: roadComponent.mesh,
+                    texture: roadComponent.texture,
                     uniforms: casingUniforms,
                     context: context
                 )
@@ -186,6 +187,7 @@ public struct RenderSystem {
                 )
                 renderer.renderRoads(
                     mesh: roadComponent.mesh,
+                    texture: roadComponent.texture,
                     uniforms: fillUniforms,
                     context: context
                 )

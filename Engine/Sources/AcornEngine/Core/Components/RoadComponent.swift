@@ -5,6 +5,9 @@ public struct RoadComponent: Component, Sendable {
     /// The GPU road mesh containing line segment ribbons.
     public var mesh: any Mesh
     
+    /// An optional texture applied to the road surface.
+    public var texture: (any Texture)?
+    
     /// Global outline color tint applied to this road mesh.
     public var outlineColor: SIMD4<Float>
     
@@ -17,16 +20,19 @@ public struct RoadComponent: Component, Sendable {
     /// Initializes a new road component.
     /// - Parameters:
     ///   - mesh: The road mesh.
+    ///   - texture: An optional texture mapped onto the road.
     ///   - outlineColor: Outline color (defaults to dark charcoal/slate).
     ///   - outlineWidth: Outline width fraction (defaults to 0.18).
     ///   - widthScale: Global width scale multiplier (defaults to 1.0).
     public init(
         mesh: any Mesh,
+        texture: (any Texture)? = nil,
         outlineColor: SIMD4<Float> = SIMD4<Float>(0.45, 0.45, 0.48, 1.0),
         outlineWidth: Float = 0.18,
         widthScale: Float = 1.0
     ) {
         self.mesh = mesh
+        self.texture = texture
         self.outlineColor = outlineColor
         self.outlineWidth = outlineWidth
         self.widthScale = widthScale

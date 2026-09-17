@@ -17,7 +17,7 @@ namespace Acorn {
         void renderSprite(AcornMetalMesh* mesh, AcornMetalTexture* texture, const SpriteUniforms& uniforms, void* encoderPtr);
         void renderInstanced(AcornMetalMesh* mesh, AcornMetalTexture* texture, const MeshInstanceData* instances, size_t instanceCount, const FrameUniforms& uniforms, void* encoderPtr);
         void renderSpritesInstanced(AcornMetalMesh* mesh, AcornMetalTexture* texture, const SpriteInstanceData* instances, size_t instanceCount, const SpriteFrameUniforms& uniforms, void* encoderPtr);
-        void renderRoads(AcornMetalMesh* mesh, const RoadUniforms& uniforms, void* encoderPtr);
+        void renderRoads(AcornMetalMesh* mesh, AcornMetalTexture* texture, const RoadUniforms& uniforms, void* encoderPtr);
         void renderSkinnedMesh(AcornMetalMesh* mesh, AcornMetalTexture* texture, const GlobalUniforms& uniforms, const void* jointMatricesData, size_t jointCount, void* encoderPtr);
 
     private:

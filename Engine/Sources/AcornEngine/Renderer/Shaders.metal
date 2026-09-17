@@ -365,29 +365,59 @@ vertex VertexOutRoad road_vertex(uint vertexID [[vertex_id]],
 }
 
 fragment float4 road_fragment(VertexOutRoad in [[stage_in]],
-                               constant RoadUniforms &uniforms [[buffer(0)]]) {
+                               constant RoadUniforms &uniforms [[buffer(0)]],
+                               texture2d<float> roadTexture [[texture(0)]]) {
+    constexpr sampler repeatSampler(coord::normalized,
+                                    address::repeat,
+                                    filter::linear);
+
     // in.texCoord.x is normalized across-line coordinate in [-1.0, 1.0]
     float d = abs(in.texCoord.x);
-    float edgeWidth = uniforms.edgeWidth > 0.0 ? uniforms.edgeWidth : 0.04;
-    
+
+    // 1. Sample Precreated Road Texture (Cobblestone / Aggregate Pavement)
+    // Sampled in world-space coordinates to tile seamlessly across ribbon segments and junctions
+    float2 worldXZ = in.worldPosition.xz;
+    float4 texSample = roadTexture.sample(repeatSampler, worldXZ * 0.18);
+
+    // Texture modulation: stone luminescence and mortar grain from precreated texture
+    // For default 1x1 white fallback texture, texSample is (1,1,1,1)
+    float textureLuma = dot(texSample.rgb, float3(0.299, 0.587, 0.114));
+    float textureMod = 0.70 + 0.60 * textureLuma;
+
+    // Road shoulder dust / weathered margin
+    float shoulderDust = smoothstep(0.55, 1.0, d);
+    float3 warmDust = float3(0.44, 0.39, 0.31); // Warm mountain dirt / roadside loam
+    float3 texturedColor = mix(in.roadColor.rgb * textureMod, warmDust, shoulderDust * 0.28);
+
+    // 2. Organic Edge Blending with Ground
+    // Natural edge modulation derived directly from the precreated texture
+    float edgeJitter = (textureLuma - 0.5) * 0.16;
+    float blendMargin = 0.22; // Outer ~22% of road softly feathers and blends with the ground
+
     if (uniforms.renderMode > 0.5) {
-        // Two-pass mode (1.0 = casing pass, 2.0 = fill pass):
-        // Each pass renders a solid ribbon with smooth outer anti-aliasing
-        float alpha = 1.0 - smoothstep(1.0 - edgeWidth, 1.0, d);
-        float4 color = in.roadColor;
-        color.a *= alpha;
-        return color;
+        // Two-pass mode (1.0 = casing pass, 2.0 = fill pass)
+        if (uniforms.renderMode < 1.5) {
+            // Casing pass: road shoulder & perimeter gravel, feathering into the ground
+            float casingAlpha = 1.0 - smoothstep(1.0 - blendMargin + edgeJitter, 1.0 + edgeJitter * 0.5, d);
+            float4 color = float4(texturedColor, in.roadColor.a * casingAlpha);
+            return color;
+        } else {
+            // Fill pass: inner pavement, softly blending into the casing shoulder
+            float outlineRatio = in.texCoord.y > 0.0 ? in.texCoord.y : uniforms.outlineWidth;
+            float innerLimit = 1.0 - outlineRatio;
+            float fillAlpha = 1.0 - smoothstep(innerLimit - 0.06, innerLimit + 0.02, d);
+            float4 color = float4(texturedColor, in.roadColor.a * fillAlpha);
+            return color;
+        }
     }
-    
+
     // Fallback: single-pass mode (renderMode == 0.0)
     float outlineRatio = in.texCoord.y > 0.0 ? in.texCoord.y : uniforms.outlineWidth;
     float innerEdge = 1.0 - outlineRatio;
-    float outlineFactor = smoothstep(innerEdge - edgeWidth, innerEdge + edgeWidth, d);
-    float alpha = 1.0 - smoothstep(1.0 - edgeWidth, 1.0, d);
-    
-    float4 color = mix(in.roadColor, in.outlineColor, outlineFactor);
-    color.a *= alpha;
-    
-    return color;
+    float outlineFactor = smoothstep(innerEdge - 0.08, innerEdge + 0.04, d);
+    float alpha = 1.0 - smoothstep(1.0 - blendMargin + edgeJitter, 1.0 + edgeJitter * 0.5, d);
+
+    float3 finalRgb = mix(texturedColor, in.outlineColor.rgb * (0.85 + 0.30 * textureLuma), outlineFactor);
+    return float4(finalRgb, in.roadColor.a * alpha);
 }
 

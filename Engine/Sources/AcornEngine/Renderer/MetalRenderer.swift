@@ -381,6 +381,7 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
     /// Renders roads using the dedicated road shader with line width and outline.
     public func renderRoads(
         mesh: any Mesh,
+        texture: (any Texture)?,
         uniforms: RoadUniforms,
         context: any RenderContext
     ) {
@@ -394,6 +395,7 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         }
         
         let encoderPtr = Unmanaged.passUnretained(encoder).toOpaque()
+        let targetTexture = texture as? MetalTexture ?? defaultWhiteTexture
         
         var cxxUniforms = Acorn.RoadUniforms()
         cxxUniforms.modelViewProjectionMatrix = uniforms.modelViewProjectionMatrix.asSIMD
@@ -403,7 +405,15 @@ public final class MetalRenderer: Renderer, @unchecked Sendable {
         cxxUniforms.widthScale = uniforms.widthScale
         cxxUniforms.renderMode = uniforms.renderMode
         
-        cxxRenderer.pointee.renderRoads(metalMesh.cxxMesh, cxxUniforms, encoderPtr)
+        cxxRenderer.pointee.renderRoads(metalMesh.cxxMesh, targetTexture.cxxTexture, cxxUniforms, encoderPtr)
+    }
+    
+    public func renderRoads(
+        mesh: any Mesh,
+        uniforms: RoadUniforms,
+        context: any RenderContext
+    ) {
+        renderRoads(mesh: mesh, texture: nil, uniforms: uniforms, context: context)
     }
     
     /// Renders a skinned mesh using joint matrices and GPU vertex deformation.

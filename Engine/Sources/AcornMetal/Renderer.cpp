@@ -372,7 +372,7 @@ namespace Acorn {
         encoder->drawPrimitives(MTL::PrimitiveTypeTriangle, (NS::UInteger)0, (NS::UInteger)mesh->getVertexCount(), instanceCount);
     }
 
-    void AcornMetalRenderer::renderRoads(AcornMetalMesh* mesh, const RoadUniforms& uniforms, void* encoderPtr) {
+    void AcornMetalRenderer::renderRoads(AcornMetalMesh* mesh, AcornMetalTexture* texture, const RoadUniforms& uniforms, void* encoderPtr) {
         MTL::RenderCommandEncoder* encoder = (MTL::RenderCommandEncoder*)encoderPtr;
         if (!mesh || !encoder || !roadPipelineState) return;
         
@@ -382,6 +382,10 @@ namespace Acorn {
         encoder->setVertexBuffer((MTL::Buffer*)mesh->getVertexBuffer(), 0, 0);
         encoder->setVertexBytes(&uniforms, sizeof(RoadUniforms), 1);
         encoder->setFragmentBytes(&uniforms, sizeof(RoadUniforms), 0);
+        
+        if (texture) {
+            encoder->setFragmentTexture((MTL::Texture*)texture->getTexture(), 0);
+        }
         
         if (mesh->getIndexBuffer()) {
             encoder->drawIndexedPrimitives(MTL::PrimitiveTypeTriangle, mesh->getIndexCount(), MTL::IndexTypeUInt32, (MTL::Buffer*)mesh->getIndexBuffer(), 0);

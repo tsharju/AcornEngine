@@ -134,9 +134,9 @@ public struct RenderSystem {
             renderMeshBatch(items: items)
         }
         
-        // Stage 2: Render road components with depth bias (Pass 1 Casing, Pass 2 Fill with depth write disabled)
-        // Two-pass rendering: Pass 1 (Casing) draws outer perimeter outlines; Pass 2 (Fill) draws inner road pavement.
-        // This ensures crossroads and overlapping roads merge seamlessly into a single unbroken roadbed with a single outline.
+        // Stage 2: Render road components with depth bias
+        // Untextured roads use two-pass rendering: Pass 1 (Casing) draws outer perimeter outlines; Pass 2 (Fill) draws inner road pavement.
+        // Textured roads render in a single unified pass at full width showing the texture as-is, with edge feathering where joining the land.
         let roadEntities = world.entities(with: RoadComponent.self)
         if !roadEntities.isEmpty {
             var validRoads: [(RoadComponent, Matrix4x4)] = []
@@ -157,40 +157,64 @@ public struct RenderSystem {
                 return zA > zB
             }
             
-            // Pass 1: Casing (full width with outline color)
-            for (roadComponent, mvp) in validRoads {
-                let casingUniforms = RoadUniforms(
-                    modelViewProjectionMatrix: mvp,
-                    outlineColor: roadComponent.outlineColor,
-                    outlineWidth: roadComponent.outlineWidth,
-                    edgeWidth: 0.04,
-                    widthScale: roadComponent.widthScale,
-                    renderMode: 1.0
-                )
-                renderer.renderRoads(
-                    mesh: roadComponent.mesh,
-                    texture: roadComponent.texture,
-                    uniforms: casingUniforms,
-                    context: context
-                )
+            let untexturedRoads = validRoads.filter { $0.0.texture == nil }
+            let texturedRoads = validRoads.filter { $0.0.texture != nil }
+            
+            // Pass 1 & 2 for untextured vector roads
+            if !untexturedRoads.isEmpty {
+                for (roadComponent, mvp) in untexturedRoads {
+                    let casingUniforms = RoadUniforms(
+                        modelViewProjectionMatrix: mvp,
+                        outlineColor: roadComponent.outlineColor,
+                        outlineWidth: roadComponent.outlineWidth,
+                        edgeWidth: 0.04,
+                        widthScale: roadComponent.widthScale,
+                        renderMode: 1.0
+                    )
+                    renderer.renderRoads(
+                        mesh: roadComponent.mesh,
+                        texture: nil,
+                        uniforms: casingUniforms,
+                        context: context
+                    )
+                }
+                
+                for (roadComponent, mvp) in untexturedRoads {
+                    let fillUniforms = RoadUniforms(
+                        modelViewProjectionMatrix: mvp,
+                        outlineColor: roadComponent.outlineColor,
+                        outlineWidth: roadComponent.outlineWidth,
+                        edgeWidth: 0.04,
+                        widthScale: roadComponent.widthScale,
+                        renderMode: 2.0
+                    )
+                    renderer.renderRoads(
+                        mesh: roadComponent.mesh,
+                        texture: nil,
+                        uniforms: fillUniforms,
+                        context: context
+                    )
+                }
             }
             
-            // Pass 2: Fill (inner pavement width with road color)
-            for (roadComponent, mvp) in validRoads {
-                let fillUniforms = RoadUniforms(
-                    modelViewProjectionMatrix: mvp,
-                    outlineColor: roadComponent.outlineColor,
-                    outlineWidth: roadComponent.outlineWidth,
-                    edgeWidth: 0.04,
-                    widthScale: roadComponent.widthScale,
-                    renderMode: 2.0
-                )
-                renderer.renderRoads(
-                    mesh: roadComponent.mesh,
-                    texture: roadComponent.texture,
-                    uniforms: fillUniforms,
-                    context: context
-                )
+            // Single unified pass for textured roads: full ribbon width with road texture as-is
+            if !texturedRoads.isEmpty {
+                for (roadComponent, mvp) in texturedRoads {
+                    let roadUniforms = RoadUniforms(
+                        modelViewProjectionMatrix: mvp,
+                        outlineColor: roadComponent.outlineColor,
+                        outlineWidth: roadComponent.outlineWidth,
+                        edgeWidth: 0.04,
+                        widthScale: roadComponent.widthScale,
+                        renderMode: 0.0
+                    )
+                    renderer.renderRoads(
+                        mesh: roadComponent.mesh,
+                        texture: roadComponent.texture,
+                        uniforms: roadUniforms,
+                        context: context
+                    )
+                }
             }
         }
         

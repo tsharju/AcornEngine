@@ -45,6 +45,8 @@ private final class MockRenderer: Renderer, @unchecked Sendable {
     
     var lastFrameUniforms: FrameUniforms?
     var lastSpriteFrameUniforms: SpriteFrameUniforms?
+    var lastRoadUniforms: RoadUniforms?
+    var lastRoadTexture: (any Texture)?
     
     var unitQuadMesh: (any Mesh)? = MockMesh(vertexCount: 6)
     
@@ -75,9 +77,15 @@ private final class MockRenderer: Renderer, @unchecked Sendable {
         callOrder.append("instancedMesh")
     }
     
-    func renderRoads(mesh: any Mesh, uniforms: RoadUniforms, context: any RenderContext) {
+    func renderRoads(mesh: any Mesh, texture: (any Texture)?, uniforms: RoadUniforms, context: any RenderContext) {
         renderRoadsCallCount += 1
+        lastRoadUniforms = uniforms
+        lastRoadTexture = texture
         callOrder.append("roads")
+    }
+    
+    func renderRoads(mesh: any Mesh, uniforms: RoadUniforms, context: any RenderContext) {
+        renderRoads(mesh: mesh, texture: nil, uniforms: uniforms, context: context)
     }
     
     func renderSpritesInstanced(
@@ -382,5 +390,28 @@ struct InstancedRenderingTests {
         // Ground is drawn first (stage 1), Roads drawn second (stage 2 casing + fill), Buildings drawn third (stage 3)
         #expect(mockRenderer.callOrder == ["instancedMesh", "roads", "roads", "instancedMesh"])
         #expect(mockRenderer.renderedInstanceBatches.count == 2)
+    }
+    
+    @Test("Textured roads render in a single pass with renderMode 0.0 showing texture as-is")
+    func testTexturedRoadSinglePassRendering() {
+        let mockRenderer = MockRenderer()
+        let renderSystem = RenderSystem(renderer: mockRenderer)
+        let world = World()
+        
+        let roadMesh = MockMesh(vertexCount: 6)
+        let texture = MockTexture(width: 512, height: 512)
+        
+        let roadEntity = world.createEntity()
+        world.addComponent(TransformComponent(), to: roadEntity)
+        world.addComponent(RoadComponent(mesh: roadMesh, texture: texture), to: roadEntity)
+        
+        let context = MockRenderContext()
+        renderSystem.render(world: world, context: context)
+        
+        // Textured road renders in a single unified pass (renderMode == 0.0) without separate casing/fill passes
+        #expect(mockRenderer.callOrder == ["roads"])
+        #expect(mockRenderer.renderRoadsCallCount == 1)
+        #expect(mockRenderer.lastRoadUniforms?.renderMode == 0.0)
+        #expect(mockRenderer.lastRoadTexture != nil)
     }
 }

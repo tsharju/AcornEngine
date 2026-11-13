@@ -161,4 +161,62 @@ struct RendererTests {
         renderer.endFrame(context: context)
         renderer.waitIdle()
     }
+
+    @Test("Headless Two-Pass Offscreen Color+Depth & Fullscreen Post-Process Execution")
+    func headlessOffscreenAndPostProcessExecution() throws {
+        let renderer = try NoGraphicsRenderer()
+        let shaderPair = try NoGraphicsRenderer.loadCompiledShaderPair(prefix: "postprocess_passthrough")
+        let pipeline = try #require(
+            renderer.createPostProcessPipeline(
+                vertexShaderData: shaderPair.vertex,
+                fragmentShaderData: shaderPair.fragment
+            )
+        )
+        let target = try #require(renderer.createOffscreenTarget(width: 128, height: 128))
+        #expect(target.width == 128)
+        #expect(target.height == 128)
+        #expect(renderer.createOffscreenTarget(width: 0, height: 128) == nil)
+        #expect(!renderer.resizeOffscreenTarget(target, width: 0, height: 128))
+        #expect(renderer.resizeOffscreenTarget(target, width: 256, height: 192))
+        #expect(target.width == 256)
+        #expect(target.height == 192)
+
+        let triangle = [
+            Vertex(position: SIMD3<Float>(0, 0.5, 0.2), color: SIMD4<Float>(1, 0, 0, 1)),
+            Vertex(position: SIMD3<Float>(-0.5, -0.5, 0.2), color: SIMD4<Float>(0, 1, 0, 1)),
+            Vertex(position: SIMD3<Float>(0.5, -0.5, 0.2), color: SIMD4<Float>(0, 0, 1, 1))
+        ]
+        let mesh = try #require(renderer.createMesh(vertices: triangle))
+
+        let firstContext = try #require(
+            renderer.beginOffscreenFrame(target: target, clearColor: SIMD4<Float>(0.3, 0.34, 0.32, 1.0))
+        )
+        renderer.render(mesh: mesh, texture: nil, uniforms: GlobalUniforms(), context: firstContext)
+        renderer.beginPostProcessPass(context: firstContext)
+        renderer.renderPostProcess(
+            pipeline: pipeline,
+            target: target,
+            uniforms: SIMD4<Float>(0.2, 0.8, 0.3, 0.5),
+            context: firstContext
+        )
+        renderer.endFrame(context: firstContext)
+
+        // Verify a second frame after another resize retires previous offscreen textures cleanly
+        #expect(renderer.resizeSurface(width: 320, height: 240))
+        let secondContext = try #require(
+            renderer.beginOffscreenFrame(target: target, clearColor: SIMD4<Float>(0.1, 0.2, 0.3, 1.0))
+        )
+        #expect(target.width == 320)
+        #expect(target.height == 240)
+        renderer.render(mesh: mesh, texture: nil, uniforms: GlobalUniforms(), context: secondContext)
+        renderer.beginPostProcessPass(context: secondContext)
+        renderer.renderPostProcess(
+            pipeline: pipeline,
+            target: target,
+            uniforms: SIMD4<Float>(0.0, 0.0, 0.0, 0.0),
+            context: secondContext
+        )
+        renderer.endFrame(context: secondContext)
+        renderer.waitIdle()
+    }
 }

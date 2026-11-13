@@ -1,20 +1,21 @@
 import AcornEngine
 import AcornMath
-import MetalKit
+import QuartzCore
+import simd
 import UIKit
 
 /// The primary view controller for the 3D Location-Based Map Game.
 ///
-/// Manages the AcornEngine instance, Metal rendering pipeline, real-time Mapbox 3D vector tile
+/// Manages the AcornEngine instance, NoGraphicsAPI rendering pipeline, real-time Mapbox 3D vector tile
 /// streaming via `MapTileSystem` and `MapboxTileService`, 3D player character locomotion,
 /// third-person follow camera, and interactive on-screen HUD controls.
-class GameViewController: UIViewController, MTKViewDelegate, UIGestureRecognizerDelegate {
+class GameViewController: UIViewController, UIGestureRecognizerDelegate {
     // MARK: - Engine & Rendering
 
     private var engine: Engine!
-    private var renderer: MetalRenderer!
+    private var renderer: NoGraphicsRenderer!
+    private var surfaceView: RenderSurfaceView!
     private var postProcess: PostApocalypticPostProcess?
-    private var commandQueue: MTLCommandQueue!
     private var lastRenderTime: CFTimeInterval = 0
 
     // MARK: - Map & Location Systems
@@ -54,51 +55,53 @@ class GameViewController: UIViewController, MTKViewDelegate, UIGestureRecognizer
 
     // MARK: - Lifecycle
 
+    override func loadView() {
+        let surfaceView = RenderSurfaceView()
+        surfaceView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.view = surfaceView
+        self.surfaceView = surfaceView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        guard let mtkView = view as? MTKView else {
-            print("GameViewController: View is not an MTKView")
+        guard let surfaceView = view as? RenderSurfaceView else {
+            print("GameViewController: View is not a RenderSurfaceView")
             return
         }
-
-        guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
-            print("GameViewController: Metal is not supported on this device")
-            return
-        }
-
-        mtkView.device = defaultDevice
-        mtkView.colorPixelFormat = .bgra8Unorm_srgb
-        mtkView.depthStencilPixelFormat = .depth32Float
+        self.surfaceView = surfaceView
+        surfaceView.pixelFormat = .bgra8UnormSRGB
         // Atmospheric post-apocalyptic sky clear color
-        mtkView.clearColor = MTLClearColor(red: 0.30, green: 0.34, blue: 0.32, alpha: 1.0)
-
-        guard let queue = defaultDevice.makeCommandQueue() else {
-            print("GameViewController: Failed to create MTLCommandQueue")
-            return
-        }
-        commandQueue = queue
+        surfaceView.clearColor = SIMD4<Float>(0.30, 0.34, 0.32, 1.0)
 
         do {
-            renderer = try MetalRenderer(device: defaultDevice)
-            postProcess = PostApocalypticPostProcess(device: defaultDevice, pixelFormat: mtkView.colorPixelFormat)
+            renderer = try NoGraphicsRenderer(surface: surfaceView.surfaceDescriptor)
+            surfaceView.attachRenderer(renderer)
+
+            postProcess = PostApocalypticPostProcess(renderer: renderer)
             postProcess?.uniforms.isEnabled = 0.0
             engine = Engine(renderer: renderer)
 
             // Register engine systems
             engine.world.registerSystem(CameraSystem())
 
-            mtkView.delegate = self
-
             setupGameScene()
             setupHUD()
             setupGestureRecognizers()
             setupLocationTracking()
 
+            surfaceView.onDrawableSizeChanged = { [weak self] size in
+                self?.handleDrawableSizeChange(size)
+            }
+            surfaceView.onRenderFrame = { [weak self] in
+                self?.renderFrame()
+            }
+
             // Set initial aspect ratio and post-process texture sizes
-            self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
+            handleDrawableSizeChange(surfaceView.drawableSize)
+            surfaceView.startRendering()
         } catch {
-            print("GameViewController: Failed to initialize MetalRenderer: \(error)")
+            print("GameViewController: Failed to initialize NoGraphicsRenderer: \(error)")
         }
     }
 
@@ -525,9 +528,9 @@ class GameViewController: UIViewController, MTKViewDelegate, UIGestureRecognizer
         super.pressesEnded(presses, with: event)
     }
 
-    // MARK: - MTKViewDelegate
+    // MARK: - Rendering & Loop
 
-    func mtkView(_: MTKView, drawableSizeWillChange size: CGSize) {
+    private func handleDrawableSizeChange(_ size: CGSize) {
         guard let engine = engine else { return }
         let aspect = Float(max(size.width, 1.0) / max(size.height, 1.0))
 
@@ -541,13 +544,8 @@ class GameViewController: UIViewController, MTKViewDelegate, UIGestureRecognizer
         postProcess?.updateDrawableSize(size)
     }
 
-    func draw(in view: MTKView) {
-        guard let engine = engine,
-              let commandQueue = commandQueue,
-              let drawable = view.currentDrawable,
-              let descriptor = view.currentRenderPassDescriptor,
-              let commandBuffer = commandQueue.makeCommandBuffer()
-        else {
+    private func renderFrame() {
+        guard let engine = engine, let renderer = renderer else {
             return
         }
 
@@ -646,28 +644,22 @@ class GameViewController: UIViewController, MTKViewDelegate, UIGestureRecognizer
         let projMatrix = camera.projectionMatrix()
         let viewProj = projMatrix * viewMatrix
 
-        if let pp = postProcess, pp.uniforms.isEnabled > 0.0, let sceneContext = pp.beginScenePass(commandBuffer: commandBuffer) {
-            _ = sceneContext.getOrCreateEncoder()
+        if let pp = postProcess, pp.uniforms.isEnabled > 0.0, let sceneContext = pp.beginScenePass() {
+            // Pass 1: Render 3D scene into offscreen color + sampled depth targets
             engine.render(context: sceneContext)
-            sceneContext.endEncoding()
 
-            // Pass 2: Fullscreen Post-Process Pass (Moss & Post-Apocalyptic Atmosphere)
+            // Pass 2: Fullscreen Post-Process Pass (Moss, SSAO & Post-Apocalyptic Atmosphere)
             pp.renderPostProcess(
-                commandBuffer: commandBuffer,
-                destinationDescriptor: descriptor,
+                context: sceneContext,
                 viewProjectionMatrix: viewProj,
                 cameraPosition: camPos,
                 playerPosition: playerCharacter.worldPosition,
                 deltaTime: deltaTime
             )
-        } else {
-            let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
-            _ = context.getOrCreateEncoder()
+            renderer.endFrame(context: sceneContext)
+        } else if let context = renderer.beginFrame(clearColor: surfaceView.clearColor) {
             engine.render(context: context)
-            context.endEncoding()
+            renderer.endFrame(context: context)
         }
-
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
     }
 }

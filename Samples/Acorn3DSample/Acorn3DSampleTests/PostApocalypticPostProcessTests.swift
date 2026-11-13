@@ -1,5 +1,4 @@
 import Foundation
-import Metal
 import simd
 import Testing
 import AcornEngine
@@ -107,38 +106,47 @@ struct PostApocalypticPostProcessTests {
         #expect(abs(reconstructedWorldPos.z - originalWorldPos.z) < 0.01)
     }
 
-    @Test("PostApocalypticPostProcess texture reallocation on size change")
+    @Test("PostApocalypticPostProcess offscreen target allocation and resize")
     @MainActor
-    func textureAllocation() {
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
-        let postProcess = PostApocalypticPostProcess(device: device)
-        
-        #expect(postProcess.sceneColorTexture == nil)
-        #expect(postProcess.sceneDepthTexture == nil)
-        
+    func textureAllocation() throws {
+        let renderer = try NoGraphicsRenderer()
+        let postProcess = PostApocalypticPostProcess(renderer: renderer)
+
+        #expect(postProcess.offscreenTarget == nil)
+        #expect(postProcess.drawableSize == nil)
+
         let targetSize = CGSize(width: 400, height: 800)
         postProcess.updateDrawableSize(targetSize)
-        
-        #expect(postProcess.sceneColorTexture != nil)
-        #expect(postProcess.sceneDepthTexture != nil)
-        #expect(postProcess.sceneColorTexture?.width == 400)
-        #expect(postProcess.sceneColorTexture?.height == 800)
-        #expect(postProcess.sceneDepthTexture?.width == 400)
-        #expect(postProcess.sceneDepthTexture?.height == 800)
-        #expect(postProcess.sceneDepthTexture?.pixelFormat == .depth32Float)
-        #expect(postProcess.sceneColorTexture?.pixelFormat == .bgra8Unorm_srgb)
-        #if os(macOS)
-        #expect(postProcess.sceneColorTexture?.storageMode == .managed)
-        #else
-        #expect(postProcess.sceneColorTexture?.storageMode == .private, "Offscreen color texture must use private storage on iOS for GPU energy efficiency")
-        #endif
+
+        let target = try #require(postProcess.offscreenTarget)
+        #expect(target.width == 400)
+        #expect(target.height == 800)
+        #expect(postProcess.drawableSize == targetSize)
+
+        postProcess.updateDrawableSize(CGSize(width: 640, height: 480))
+        #expect(target.width == 640)
+        #expect(target.height == 480)
+        #expect(postProcess.drawableSize == CGSize(width: 640, height: 480))
     }
 
-    @Test("PostApocalypticPostProcess pipeline state creation")
+    @Test("PostApocalypticPostProcess pipeline creation and headless two-pass render")
     @MainActor
-    func pipelineStateCreation() {
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
-        let postProcess = PostApocalypticPostProcess(device: device)
-        #expect(postProcess.pipelineState != nil, "Post-process render pipeline state should compile successfully")
+    func pipelineStateCreation() throws {
+        let renderer = try NoGraphicsRenderer()
+        let postProcess = PostApocalypticPostProcess(renderer: renderer)
+        #expect(postProcess.pipeline != nil, "Post-process Slang pipeline should load and compile successfully")
+
+        postProcess.updateDrawableSize(CGSize(width: 256, height: 256))
+        let context = try #require(postProcess.beginScenePass())
+        let viewProj = Matrix4x4(perspectiveFovY: .pi / 3.0, aspect: 1.0, nearZ: 0.5, farZ: 100.0)
+        postProcess.renderPostProcess(
+            context: context,
+            viewProjectionMatrix: viewProj,
+            cameraPosition: SIMD3<Float>(0, 10, 20),
+            playerPosition: .zero,
+            deltaTime: 0.016
+        )
+        renderer.endFrame(context: context)
+        renderer.waitIdle()
     }
 }

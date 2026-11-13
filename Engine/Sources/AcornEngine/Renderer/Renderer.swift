@@ -552,7 +552,51 @@ public protocol Renderer: Sendable {
 
     /// Blocks until all submitted GPU work has completed.
     func waitIdle()
+
+    /// Creates a resizable offscreen color and sampled-depth render target pair.
+    func createOffscreenTarget(width: Int, height: Int) -> (any OffscreenRenderTarget)?
+
+    /// Resizes an existing offscreen render target when viewport dimensions change.
+    @discardableResult
+    func resizeOffscreenTarget(_ target: any OffscreenRenderTarget, width: Int, height: Int) -> Bool
+
+    /// Creates a fullscreen post-processing pipeline from compiled shader bytecode.
+    func createPostProcessPipeline(
+        vertexShaderData: Data,
+        fragmentShaderData: Data,
+        vertexEntry: String,
+        fragmentEntry: String
+    ) -> (any PostProcessPipeline)?
+
+    /// Begins recording a frame cleared to `clearColor` targeting an offscreen color + sampled-depth target.
+    func beginOffscreenFrame(
+        target: any OffscreenRenderTarget,
+        clearColor: SIMD4<Float>
+    ) -> (any RenderContext)?
+
+    /// Ends the offscreen scene pass, issues fragment-read barriers, and begins the final presentation pass.
+    func beginPostProcessPass(context: any RenderContext)
+
+    /// Executes a fullscreen triangle post-process draw reading the offscreen target and binding uniform bytes.
+    func renderPostProcess(
+        pipeline: any PostProcessPipeline,
+        target: any OffscreenRenderTarget,
+        uniformData: Data,
+        context: any RenderContext
+    )
 }
+
+/// Opaque protocol representing a resizable offscreen color and sampled-depth render target pair.
+public protocol OffscreenRenderTarget: Sendable {
+    /// Current width of the offscreen attachments in pixels.
+    var width: Int { get }
+
+    /// Current height of the offscreen attachments in pixels.
+    var height: Int { get }
+}
+
+/// Opaque protocol representing a compiled fullscreen post-processing pipeline.
+public protocol PostProcessPipeline: Sendable {}
 
 public extension Renderer {
     var unitQuadMesh: (any Mesh)? {
@@ -597,6 +641,52 @@ public extension Renderer {
     }
 
     func waitIdle() {}
+
+    func createOffscreenTarget(width: Int, height: Int) -> (any OffscreenRenderTarget)? {
+        return nil
+    }
+
+    @discardableResult
+    func resizeOffscreenTarget(_ target: any OffscreenRenderTarget, width: Int, height: Int) -> Bool {
+        return false
+    }
+
+    func createPostProcessPipeline(
+        vertexShaderData: Data,
+        fragmentShaderData: Data,
+        vertexEntry: String = "vertexMain",
+        fragmentEntry: String = "fragmentMain"
+    ) -> (any PostProcessPipeline)? {
+        return nil
+    }
+
+    func beginOffscreenFrame(
+        target: any OffscreenRenderTarget,
+        clearColor: SIMD4<Float>
+    ) -> (any RenderContext)? {
+        return nil
+    }
+
+    func beginPostProcessPass(context: any RenderContext) {}
+
+    func renderPostProcess(
+        pipeline: any PostProcessPipeline,
+        target: any OffscreenRenderTarget,
+        uniformData: Data,
+        context: any RenderContext
+    ) {}
+
+    /// Convenience helper serializing a bitwise-trivial uniform struct into `Data` for post-processing.
+    func renderPostProcess<Uniforms>(
+        pipeline: any PostProcessPipeline,
+        target: any OffscreenRenderTarget,
+        uniforms: Uniforms,
+        context: any RenderContext
+    ) {
+        var copy = uniforms
+        let data = withUnsafeBytes(of: &copy) { Data($0) }
+        renderPostProcess(pipeline: pipeline, target: target, uniformData: data, context: context)
+    }
     
     func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {
         render(mesh: mesh, texture: nil, uniforms: uniforms, context: context)

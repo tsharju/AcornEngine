@@ -144,6 +144,15 @@ struct AcornRoadRoot {
     uint32 _pad;
 };
 
+struct AcornPostProcessRoot {
+    float4* uniforms;
+    uint32 colorTextureIndex;
+    uint32 depthTextureIndex;
+    uint32 colorSamplerIndex;
+    uint32 depthSamplerIndex;
+    uint32 _pad[2];
+};
+
 #if !defined(__SLANG__)
 static_assert(sizeof(AcornGpuVertex) == 64);
 static_assert(sizeof(AcornGpuSkinnedVertex) == 80);
@@ -163,4 +172,5 @@ static_assert(sizeof(AcornSdfRoot) == 32);
 static_assert(sizeof(AcornSpriteRoot) == 32);
 static_assert(sizeof(AcornInstancedSpriteRoot) == 32);
 static_assert(sizeof(AcornRoadRoot) == 32);
+static_assert(sizeof(AcornPostProcessRoot) == 32);
 #endif

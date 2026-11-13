@@ -12,6 +12,8 @@ typedef struct AcornRHIDevice AcornRHIDevice;
 typedef struct AcornRHIMesh AcornRHIMesh;
 typedef struct AcornRHITexture AcornRHITexture;
 typedef struct AcornRHIFrame AcornRHIFrame;
+typedef struct AcornRHIOffscreenTarget AcornRHIOffscreenTarget;
+typedef struct AcornRHIPostProcessPipeline AcornRHIPostProcessPipeline;
 
 /// Pixel formats supported across surfaces and textures.
 typedef enum AcornRHIPixelFormat {
@@ -249,6 +251,71 @@ void acorn_rhi_draw_roads(
     const AcornRHIMesh* mesh,
     const AcornRHITexture* textureOrNull,
     const AcornRHIRoadUniforms* uniforms
+);
+
+/// Creates a resizable offscreen color + sampled-depth render target pair.
+AcornRHIOffscreenTarget* acorn_rhi_create_offscreen_target(
+    AcornRHIDevice* device,
+    uint32_t width,
+    uint32_t height
+);
+
+/// Resizes an offscreen target's color and depth attachments if dimensions changed.
+bool acorn_rhi_resize_offscreen_target(
+    AcornRHIDevice* device,
+    AcornRHIOffscreenTarget* target,
+    uint32_t width,
+    uint32_t height
+);
+
+/// Defers freeing GPU offscreen attachments and descriptors, and deletes the handle.
+void acorn_rhi_destroy_offscreen_target(
+    AcornRHIDevice* device,
+    AcornRHIOffscreenTarget* target
+);
+
+uint32_t acorn_rhi_offscreen_target_width(const AcornRHIOffscreenTarget* target);
+uint32_t acorn_rhi_offscreen_target_height(const AcornRHIOffscreenTarget* target);
+
+/// Creates a fullscreen post-processing graphics PSO targeting the swapchain/final color format.
+AcornRHIPostProcessPipeline* acorn_rhi_create_post_process_pipeline(
+    AcornRHIDevice* device,
+    const AcornRHIShaderBinary* shader
+);
+
+/// Defers destroying the post-processing graphics PSO and deletes the handle.
+void acorn_rhi_destroy_post_process_pipeline(
+    AcornRHIDevice* device,
+    AcornRHIPostProcessPipeline* pipeline
+);
+
+/// Begins recording a two-pass frame into an offscreen color + sampled-depth render target.
+/// Returns NULL if the swapchain drawable is currently unavailable (e.g. zero extent).
+AcornRHIFrame* acorn_rhi_begin_offscreen_frame(
+    AcornRHIDevice* device,
+    AcornRHIOffscreenTarget* target,
+    float clearR,
+    float clearG,
+    float clearB,
+    float clearA
+);
+
+/// Ends the active offscreen scene pass, emits color+depth -> fragment read barriers,
+/// and begins the final post-process pass targeting the swapchain or headless color buffer.
+void acorn_rhi_begin_post_process_pass(
+    AcornRHIDevice* device,
+    AcornRHIFrame* frame
+);
+
+/// Executes a fullscreen triangle post-process draw reading the offscreen color and depth
+/// attachments and binding caller-provided uniform bytes to root.uniforms.
+void acorn_rhi_draw_post_process(
+    AcornRHIDevice* device,
+    AcornRHIFrame* frame,
+    const AcornRHIPostProcessPipeline* pipeline,
+    const AcornRHIOffscreenTarget* target,
+    const void* uniformData,
+    size_t uniformSize
 );
 
 #ifdef __cplusplus

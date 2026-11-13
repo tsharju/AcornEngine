@@ -214,6 +214,125 @@ public final class NoGraphicsRenderer: Renderer, @unchecked Sendable {
         acorn_rhi_wait_idle(deviceBox.handle)
     }
 
+    /// Creates a resizable offscreen color and sampled-depth render target pair.
+    public func createOffscreenTarget(width: Int, height: Int) -> (any OffscreenRenderTarget)? {
+        guard width > 0, height > 0 else { return nil }
+        guard let rhiHandle = acorn_rhi_create_offscreen_target(
+            deviceBox.handle,
+            UInt32(width),
+            UInt32(height)
+        ) else {
+            return nil
+        }
+        return NoGraphicsOffscreenTarget(deviceBox: deviceBox, rhiHandle: rhiHandle)
+    }
+
+    /// Resizes an existing offscreen render target when viewport dimensions change.
+    @discardableResult
+    public func resizeOffscreenTarget(_ target: any OffscreenRenderTarget, width: Int, height: Int) -> Bool {
+        guard width > 0, height > 0, let ngTarget = target as? NoGraphicsOffscreenTarget else {
+            return false
+        }
+        return acorn_rhi_resize_offscreen_target(deviceBox.handle, ngTarget.rhiHandle, UInt32(width), UInt32(height))
+    }
+
+    /// Creates a fullscreen post-processing pipeline from compiled platform shader binaries.
+    public func createPostProcessPipeline(
+        vertexShaderData: Data,
+        fragmentShaderData: Data,
+        vertexEntry: String = "vertexMain",
+        fragmentEntry: String = "fragmentMain"
+    ) -> (any PostProcessPipeline)? {
+        guard !vertexShaderData.isEmpty, !fragmentShaderData.isEmpty else {
+            return nil
+        }
+        let vNSData = vertexShaderData as NSData
+        let fNSData = fragmentShaderData as NSData
+        let rhiHandle: OpaquePointer? = vertexEntry.withCString { vEntryPtr in
+            fragmentEntry.withCString { fEntryPtr in
+                var binary = AcornRHIShaderBinary(
+                    vertexCode: vNSData.bytes.assumingMemoryBound(to: UInt8.self),
+                    vertexSize: vertexShaderData.count,
+                    vertexEntry: vEntryPtr,
+                    fragmentCode: fNSData.bytes.assumingMemoryBound(to: UInt8.self),
+                    fragmentSize: fragmentShaderData.count,
+                    fragmentEntry: fEntryPtr
+                )
+                return withExtendedLifetime((vNSData, fNSData)) {
+                    withUnsafePointer(to: &binary) { ptr in
+                        acorn_rhi_create_post_process_pipeline(deviceBox.handle, ptr)
+                    }
+                }
+            }
+        }
+        guard let rhiHandle else { return nil }
+        return NoGraphicsPostProcessPipeline(deviceBox: deviceBox, rhiHandle: rhiHandle)
+    }
+
+    /// Begins recording a two-pass frame cleared to `clearColor` targeting `target`.
+    public func beginOffscreenFrame(
+        target: any OffscreenRenderTarget,
+        clearColor: SIMD4<Float>
+    ) -> (any RenderContext)? {
+        guard let ngTarget = target as? NoGraphicsOffscreenTarget else {
+            return nil
+        }
+        guard let frameHandle = acorn_rhi_begin_offscreen_frame(
+            deviceBox.handle,
+            ngTarget.rhiHandle,
+            clearColor.x,
+            clearColor.y,
+            clearColor.z,
+            clearColor.w
+        ) else {
+            return nil
+        }
+        return NoGraphicsRenderContext(frameHandle: frameHandle)
+    }
+
+    /// Ends the offscreen scene pass, issues fragment-read barriers, and begins the final pass.
+    public func beginPostProcessPass(context: any RenderContext) {
+        guard let rhiContext = context as? NoGraphicsRenderContext, !rhiContext.isEnded else {
+            return
+        }
+        acorn_rhi_begin_post_process_pass(deviceBox.handle, rhiContext.frameHandle)
+    }
+
+    /// Executes a fullscreen triangle post-process draw reading the offscreen target and binding uniform bytes.
+    public func renderPostProcess(
+        pipeline: any PostProcessPipeline,
+        target: any OffscreenRenderTarget,
+        uniformData: Data,
+        context: any RenderContext
+    ) {
+        guard let rhiContext = context as? NoGraphicsRenderContext, !rhiContext.isEnded,
+              let ngPipeline = pipeline as? NoGraphicsPostProcessPipeline,
+              let ngTarget = target as? NoGraphicsOffscreenTarget else {
+            return
+        }
+        if uniformData.isEmpty {
+            acorn_rhi_draw_post_process(
+                deviceBox.handle,
+                rhiContext.frameHandle,
+                ngPipeline.rhiHandle,
+                ngTarget.rhiHandle,
+                nil,
+                0
+            )
+            return
+        }
+        uniformData.withUnsafeBytes { bytes in
+            acorn_rhi_draw_post_process(
+                deviceBox.handle,
+                rhiContext.frameHandle,
+                ngPipeline.rhiHandle,
+                ngTarget.rhiHandle,
+                bytes.baseAddress,
+                bytes.count
+            )
+        }
+    }
+
     /// Renders a single unskinned 3D mesh.
     public func render(
         mesh: any Mesh,
@@ -490,14 +609,17 @@ public final class NoGraphicsRenderer: Renderer, @unchecked Sendable {
 
     // MARK: - Matrix & Uniform Marshaling
 
-    package typealias RowMajorFloat4x4 = (
+    /// 16-float row-major storage tuple matching Slang/NoGraphicsAPI `float4x4` GPU uniform layout.
+    public typealias RowMajorFloat4x4 = (
         Float, Float, Float, Float,
         Float, Float, Float, Float,
         Float, Float, Float, Float,
         Float, Float, Float, Float
     )
 
-    package static func packRowMajor(_ matrix: Matrix4x4, flipClipY: Bool = false) -> RowMajorFloat4x4 {
+    /// Packs a column-major `Matrix4x4` into row-major GPU layout, optionally negating clip-space Y
+    /// for top-down Metal 4 / Vulkan render targets.
+    public static func packRowMajor(_ matrix: Matrix4x4, flipClipY: Bool = false) -> RowMajorFloat4x4 {
         let c0 = matrix.columns.0
         let c1 = matrix.columns.1
         let c2 = matrix.columns.2
@@ -597,14 +719,25 @@ public final class NoGraphicsRenderer: Renderer, @unchecked Sendable {
         }
     }
 
-    private static func loadCompiledShaderSet() throws -> CompiledShaderSet {
+    private static func platformShaderSubdirectory() throws -> String {
         #if os(iOS)
-        let subdir = "CompiledShaders/ios"
+        return "CompiledShaders/ios"
         #elseif os(macOS)
-        let subdir = "CompiledShaders/macos"
+        return "CompiledShaders/macos"
         #else
         throw RendererError.libraryNotFound
         #endif
+    }
+
+    /// Loads a compiled vertex/fragment shader binary pair from `Bundle.module` for the active platform.
+    package static func loadCompiledShaderPair(prefix: String) throws -> (vertex: Data, fragment: Data) {
+        let subdir = try platformShaderSubdirectory()
+        let pair = try loadPair(prefix: prefix, subdirectory: subdir)
+        return (pair.vertex, pair.fragment)
+    }
+
+    private static func loadCompiledShaderSet() throws -> CompiledShaderSet {
+        let subdir = try platformShaderSubdirectory()
 
         return try CompiledShaderSet(
             mesh: loadPair(prefix: "mesh", subdirectory: subdir),

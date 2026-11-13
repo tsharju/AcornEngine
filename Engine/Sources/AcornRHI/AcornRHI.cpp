@@ -39,6 +39,7 @@ constexpr uint32 kSamplerDescriptorCapacity = 8;
 
 constexpr uint32 kSamplerClampLinear = 0;
 constexpr uint32 kSamplerRepeatLinear = 1;
+constexpr uint32 kSamplerClampNearest = 2;
 
 void onGpuError(const char* message, bool fatal) noexcept {
     std::fprintf(stderr, "[NoGraphicsAPI%s] %s\n", fatal ? " FATAL" : "", message ? message : "(null)");
@@ -69,6 +70,7 @@ enum class DepthMode : uint8_t {
     opaque3D,
     transparent2D,
     road,
+    disabled,
 };
 
 struct MeshSlab {
@@ -83,12 +85,13 @@ struct TextureSlab {
 
 struct PendingRetire {
     uint64 retireValue = 0;
-    uint32 kind = 0; // 0 = mesh alloc, 1 = texture + view/descriptor, 2 = render view
+    uint32 kind = 0; // 0 = mesh alloc, 1 = texture + view/descriptor, 2 = render view, 3 = PSO
     uint32 slabIndex = 0;
     gpu::HeapAllocation<byte> heapAlloc{};
     gpu::PlacedTexture placedTexture{};
     gpu::RenderView* renderView = nullptr;
     uint32 descriptorSlot = UINT32_MAX;
+    gpu::PSO* pso = nullptr;
 };
 
 struct FrameSlot {
@@ -127,6 +130,25 @@ struct AcornRHIFrame {
     DepthMode activeDepthMode = DepthMode::unknown;
     uint32 width = 0;
     uint32 height = 0;
+    gpu::RenderView* finalColorView = nullptr;
+    bool inPostProcessPass = false;
+};
+
+struct AcornRHIOffscreenTarget {
+    uint32 width = 0;
+    uint32 height = 0;
+    uint32 colorSlabIndex = 0;
+    gpu::PlacedTexture colorPlaced{};
+    gpu::RenderView* colorView = nullptr;
+    uint32 colorDescriptorIndex = UINT32_MAX;
+    uint32 depthSlabIndex = 0;
+    gpu::PlacedTexture depthPlaced{};
+    gpu::RenderView* depthView = nullptr;
+    uint32 depthDescriptorIndex = UINT32_MAX;
+};
+
+struct AcornRHIPostProcessPipeline {
+    gpu::PSO* pso = nullptr;
 };
 
 struct AcornRHIDevice {
@@ -297,6 +319,11 @@ struct AcornRHIDevice {
                     gpu::destroy_render_view(item.renderView);
                 }
                 break;
+            case 3:
+                if (item.pso) {
+                    gpu::destroy_pso(item.pso);
+                }
+                break;
         }
     }
 
@@ -350,6 +377,9 @@ struct AcornRHIDevice {
                     break;
                 case DepthMode::road:
                     ds = {.depth_test = true, .depth_write = false, .depth_compare = gpu::CompareOp::less_equal};
+                    break;
+                case DepthMode::disabled:
+                    ds = {.depth_test = false, .depth_write = false, .depth_compare = gpu::CompareOp::always};
                     break;
                 case DepthMode::unknown:
                     break;
@@ -429,7 +459,13 @@ struct AcornRHIDevice {
 
 namespace {
 
-gpu::PSO* buildPSO(gpu::Device* device, const AcornRHIShaderBinary& shader, gpu::Format colorFormat, bool blendEnabled) noexcept {
+gpu::PSO* buildPSO(
+    gpu::Device* device,
+    const AcornRHIShaderBinary& shader,
+    gpu::Format colorFormat,
+    bool blendEnabled,
+    gpu::Format depthFormat = gpu::Format::d32_float
+) noexcept {
     if (!shader.vertexCode || shader.vertexSize == 0 || !shader.fragmentCode || shader.fragmentSize == 0) {
         return nullptr;
     }
@@ -467,7 +503,7 @@ gpu::PSO* buildPSO(gpu::Device* device, const AcornRHIShaderBinary& shader, gpu:
             .entry_point = shader.fragmentEntry ? shader.fragmentEntry : "fragmentMain",
         },
         .color_targets = {&target, 1},
-        .depth_format = gpu::Format::d32_float,
+        .depth_format = depthFormat,
         .rasterization = {.cull = gpu::CullMode::none},
     };
     return gpu::create_graphics_pso(device, psoDesc);
@@ -620,6 +656,14 @@ extern "C" AcornRHIDevice* acorn_rhi_create_device(
         .address_u = gpu::AddressMode::repeat,
         .address_v = gpu::AddressMode::repeat,
         .address_w = gpu::AddressMode::repeat,
+    });
+    gpu::write_sampler_descriptor(rhi->samplerDescriptorHeap, kSamplerClampNearest, {
+        .min_filter = gpu::Filter::nearest,
+        .mag_filter = gpu::Filter::nearest,
+        .mip_filter = gpu::Filter::nearest,
+        .address_u = gpu::AddressMode::clamp_to_edge,
+        .address_v = gpu::AddressMode::clamp_to_edge,
+        .address_w = gpu::AddressMode::clamp_to_edge,
     });
 
     rhi->meshPSO = buildPSO(rhi->device, shaders->mesh, swapFormat, false);
@@ -899,17 +943,14 @@ extern "C" uint32_t acorn_rhi_texture_height(const AcornRHITexture* texture) {
     return texture ? texture->height : 0;
 }
 
-extern "C" AcornRHIFrame* acorn_rhi_begin_frame(
+bool beginFrameSetupLocked(
     AcornRHIDevice* device,
-    float clearR,
-    float clearG,
-    float clearB,
-    float clearA
-) {
-    if (!device || !device->device) return nullptr;
-    std::lock_guard<std::mutex> lock(device->mutex);
-    if (device->frameActive) return nullptr;
-
+    uint32& outSlotIdx,
+    gpu::CommandBuffer*& outCmd,
+    gpu::RenderView*& outFinalColorView,
+    uint32& outWidth,
+    uint32& outHeight
+) noexcept {
     if (device->latestSubmittedValue >= kFramesInFlight) {
         gpu::wait_timeline({
             .semaphore = device->frameSemaphore,
@@ -928,7 +969,7 @@ extern "C" AcornRHIFrame* acorn_rhi_begin_frame(
     }
 
     gpu::CommandBuffer* cmd = gpu::begin_commands(slot.commandPool);
-    if (!cmd) return nullptr;
+    if (!cmd) return false;
 
     gpu::RenderView* colorView = nullptr;
     uint32 width = device->targetWidth;
@@ -938,7 +979,7 @@ extern "C" AcornRHIFrame* acorn_rhi_begin_frame(
         const gpu::SwapchainFrame swap = gpu::acquire(cmd);
         if (!swap.render_view) {
             gpu::end_commands(cmd);
-            return nullptr;
+            return false;
         }
         colorView = swap.render_view;
         width = swap.extent.x;
@@ -947,7 +988,7 @@ extern "C" AcornRHIFrame* acorn_rhi_begin_frame(
 
     if (!device->ensureRenderAttachments(cmd, width, height)) {
         gpu::end_commands(cmd);
-        return nullptr;
+        return false;
     }
     if (!device->hasWindow) {
         colorView = device->headlessColorView;
@@ -955,6 +996,187 @@ extern "C" AcornRHIFrame* acorn_rhi_begin_frame(
 
     gpu::set_texture_descriptor_heap(cmd, device->textureDescriptorHeap);
     gpu::set_sampler_descriptor_heap(cmd, device->samplerDescriptorHeap);
+
+    outSlotIdx = slotIdx;
+    outCmd = cmd;
+    outFinalColorView = colorView;
+    outWidth = width;
+    outHeight = height;
+    return true;
+}
+
+void retireTextureAttachmentLocked(
+    AcornRHIDevice* device,
+    uint64 retireAt,
+    uint32& slabIndex,
+    gpu::PlacedTexture& placed,
+    gpu::RenderView*& view,
+    uint32& descriptorSlot
+) noexcept {
+    if (!placed.texture && !view && descriptorSlot == UINT32_MAX) return;
+    PendingRetire item{};
+    item.retireValue = retireAt;
+    item.kind = 1;
+    item.slabIndex = slabIndex;
+    item.placedTexture = placed;
+    item.renderView = view;
+    item.descriptorSlot = descriptorSlot;
+    device->retireQueue.push_back(item);
+    slabIndex = 0;
+    placed = {};
+    view = nullptr;
+    descriptorSlot = UINT32_MAX;
+}
+
+bool createSampledAttachmentLocked(
+    AcornRHIDevice* device,
+    gpu::CommandBuffer* cmdOrNull,
+    uint32 width,
+    uint32 height,
+    gpu::Format format,
+    gpu::TextureUsage usage,
+    gpu::TextureAspect aspect,
+    uint32& outSlabIndex,
+    gpu::PlacedTexture& outPlaced,
+    gpu::RenderView*& outView,
+    uint32& outDescriptorSlot
+) noexcept {
+    if (device->freeDescriptorSlots.empty()) return false;
+
+    const gpu::TextureDesc desc{
+        .type = gpu::TextureType::two_d,
+        .extent = {.x = width, .y = height, .z = 1},
+        .mip_levels = 1,
+        .layer_count = 1,
+        .format = format,
+        .usage = usage,
+    };
+
+    uint32 slabIndex = 0;
+    gpu::PlacedTexture placed{};
+    if (!device->allocateTextureFromSlabs(desc, slabIndex, placed)) {
+        return false;
+    }
+
+    const bool initialized = cmdOrNull
+        ? (gpu::initialize_texture(cmdOrNull, placed.texture), true)
+        : device->initializeTextureSync(placed.texture);
+    if (!initialized) {
+        device->textureSlabs[slabIndex]->allocator->free(placed);
+        return false;
+    }
+
+    gpu::RenderView* view = gpu::create_render_view(placed.texture);
+    if (!view) {
+        device->textureSlabs[slabIndex]->allocator->free(placed);
+        return false;
+    }
+
+    const uint32 slot = device->freeDescriptorSlots.back();
+    device->freeDescriptorSlots.pop_back();
+    gpu::write_texture_descriptor(
+        device->textureDescriptorHeap,
+        slot,
+        placed.texture,
+        gpu::TextureDescriptorType::sampled,
+        {.aspect = aspect}
+    );
+
+    outSlabIndex = slabIndex;
+    outPlaced = placed;
+    outView = view;
+    outDescriptorSlot = slot;
+    return true;
+}
+
+bool ensureOffscreenTexturesLocked(
+    AcornRHIDevice* device,
+    gpu::CommandBuffer* cmdOrNull,
+    AcornRHIOffscreenTarget* target,
+    uint32 width,
+    uint32 height
+) noexcept {
+    if (!device || !target || width == 0 || height == 0) return false;
+    if (target->width == width && target->height == height && target->colorView && target->depthView) {
+        return true;
+    }
+
+    device->retireCompleted(false);
+    const uint64 retireAt = device->pendingRetireValue();
+    retireTextureAttachmentLocked(
+        device, retireAt,
+        target->colorSlabIndex, target->colorPlaced, target->colorView, target->colorDescriptorIndex
+    );
+    retireTextureAttachmentLocked(
+        device, retireAt,
+        target->depthSlabIndex, target->depthPlaced, target->depthView, target->depthDescriptorIndex
+    );
+
+    if (device->freeDescriptorSlots.size() < 2) {
+        return false;
+    }
+
+    uint32 colorSlab = 0;
+    gpu::PlacedTexture colorPlaced{};
+    gpu::RenderView* colorView = nullptr;
+    uint32 colorSlot = UINT32_MAX;
+    if (!createSampledAttachmentLocked(
+            device, cmdOrNull, width, height,
+            device->swapchainFormat,
+            gpu::TextureUsage::color_attachment | gpu::TextureUsage::sampled,
+            gpu::TextureAspect::color,
+            colorSlab, colorPlaced, colorView, colorSlot
+        )) {
+        return false;
+    }
+
+    uint32 depthSlab = 0;
+    gpu::PlacedTexture depthPlaced{};
+    gpu::RenderView* depthView = nullptr;
+    uint32 depthSlot = UINT32_MAX;
+    if (!createSampledAttachmentLocked(
+            device, cmdOrNull, width, height,
+            gpu::Format::d32_float,
+            gpu::TextureUsage::depth_stencil_attachment | gpu::TextureUsage::sampled,
+            gpu::TextureAspect::depth,
+            depthSlab, depthPlaced, depthView, depthSlot
+        )) {
+        retireTextureAttachmentLocked(device, retireAt, colorSlab, colorPlaced, colorView, colorSlot);
+        return false;
+    }
+
+    target->width = width;
+    target->height = height;
+    target->colorSlabIndex = colorSlab;
+    target->colorPlaced = colorPlaced;
+    target->colorView = colorView;
+    target->colorDescriptorIndex = colorSlot;
+    target->depthSlabIndex = depthSlab;
+    target->depthPlaced = depthPlaced;
+    target->depthView = depthView;
+    target->depthDescriptorIndex = depthSlot;
+    return true;
+}
+
+extern "C" AcornRHIFrame* acorn_rhi_begin_frame(
+    AcornRHIDevice* device,
+    float clearR,
+    float clearG,
+    float clearB,
+    float clearA
+) {
+    if (!device || !device->device) return nullptr;
+    std::lock_guard<std::mutex> lock(device->mutex);
+    if (device->frameActive) return nullptr;
+
+    uint32 slotIdx = 0;
+    gpu::CommandBuffer* cmd = nullptr;
+    gpu::RenderView* colorView = nullptr;
+    uint32 width = 0;
+    uint32 height = 0;
+    if (!beginFrameSetupLocked(device, slotIdx, cmd, colorView, width, height)) {
+        return nullptr;
+    }
 
     const gpu::ColorAttachment colorAttachment{
         .render_view = colorView,
@@ -981,6 +1203,8 @@ extern "C" AcornRHIFrame* acorn_rhi_begin_frame(
         .activeDepthMode = DepthMode::unknown,
         .width = width,
         .height = height,
+        .finalColorView = colorView,
+        .inPostProcessPass = false,
     };
     return &device->currentFrame;
 }
@@ -1281,4 +1505,218 @@ extern "C" void acorn_rhi_draw_roads(
     } else {
         gpu::draw(frame->commands, rootAlloc.gpu, mesh->vertexCount);
     }
+}
+
+extern "C" AcornRHIOffscreenTarget* acorn_rhi_create_offscreen_target(
+    AcornRHIDevice* device,
+    uint32_t width,
+    uint32_t height
+) {
+    if (!device || !device->device || width == 0 || height == 0) return nullptr;
+    std::lock_guard<std::mutex> lock(device->mutex);
+    auto target = std::make_unique<AcornRHIOffscreenTarget>();
+    if (!ensureOffscreenTexturesLocked(device, nullptr, target.get(), width, height)) {
+        return nullptr;
+    }
+    return target.release();
+}
+
+extern "C" bool acorn_rhi_resize_offscreen_target(
+    AcornRHIDevice* device,
+    AcornRHIOffscreenTarget* target,
+    uint32_t width,
+    uint32_t height
+) {
+    if (!device || !device->device || !target || width == 0 || height == 0) return false;
+    std::lock_guard<std::mutex> lock(device->mutex);
+    return ensureOffscreenTexturesLocked(device, nullptr, target, width, height);
+}
+
+extern "C" void acorn_rhi_destroy_offscreen_target(
+    AcornRHIDevice* device,
+    AcornRHIOffscreenTarget* target
+) {
+    if (!target) return;
+    if (device && device->device) {
+        std::lock_guard<std::mutex> lock(device->mutex);
+        const uint64 retireAt = device->pendingRetireValue();
+        retireTextureAttachmentLocked(
+            device, retireAt,
+            target->colorSlabIndex, target->colorPlaced, target->colorView, target->colorDescriptorIndex
+        );
+        retireTextureAttachmentLocked(
+            device, retireAt,
+            target->depthSlabIndex, target->depthPlaced, target->depthView, target->depthDescriptorIndex
+        );
+    }
+    delete target;
+}
+
+extern "C" uint32_t acorn_rhi_offscreen_target_width(const AcornRHIOffscreenTarget* target) {
+    return target ? target->width : 0;
+}
+
+extern "C" uint32_t acorn_rhi_offscreen_target_height(const AcornRHIOffscreenTarget* target) {
+    return target ? target->height : 0;
+}
+
+extern "C" AcornRHIPostProcessPipeline* acorn_rhi_create_post_process_pipeline(
+    AcornRHIDevice* device,
+    const AcornRHIShaderBinary* shader
+) {
+    if (!device || !device->device || !shader) return nullptr;
+    std::lock_guard<std::mutex> lock(device->mutex);
+    gpu::PSO* pso = buildPSO(device->device, *shader, device->swapchainFormat, false, gpu::Format::undefined);
+    if (!pso) return nullptr;
+    auto pipeline = std::make_unique<AcornRHIPostProcessPipeline>();
+    pipeline->pso = pso;
+    return pipeline.release();
+}
+
+extern "C" void acorn_rhi_destroy_post_process_pipeline(
+    AcornRHIDevice* device,
+    AcornRHIPostProcessPipeline* pipeline
+) {
+    if (!pipeline) return;
+    if (device && device->device && pipeline->pso) {
+        std::lock_guard<std::mutex> lock(device->mutex);
+        PendingRetire item{};
+        item.retireValue = device->pendingRetireValue();
+        item.kind = 3;
+        item.pso = pipeline->pso;
+        device->retireQueue.push_back(item);
+        pipeline->pso = nullptr;
+    } else if (pipeline->pso) {
+        gpu::destroy_pso(pipeline->pso);
+        pipeline->pso = nullptr;
+    }
+    delete pipeline;
+}
+
+extern "C" AcornRHIFrame* acorn_rhi_begin_offscreen_frame(
+    AcornRHIDevice* device,
+    AcornRHIOffscreenTarget* target,
+    float clearR,
+    float clearG,
+    float clearB,
+    float clearA
+) {
+    if (!device || !device->device || !target) return nullptr;
+    std::lock_guard<std::mutex> lock(device->mutex);
+    if (device->frameActive) return nullptr;
+
+    uint32 slotIdx = 0;
+    gpu::CommandBuffer* cmd = nullptr;
+    gpu::RenderView* finalColorView = nullptr;
+    uint32 width = 0;
+    uint32 height = 0;
+    if (!beginFrameSetupLocked(device, slotIdx, cmd, finalColorView, width, height)) {
+        return nullptr;
+    }
+
+    if (!ensureOffscreenTexturesLocked(device, cmd, target, width, height)) {
+        gpu::end_commands(cmd);
+        return nullptr;
+    }
+
+    const gpu::ColorAttachment colorAttachment{
+        .render_view = target->colorView,
+        .load = gpu::LoadOp::clear,
+        .store = gpu::StoreOp::store,
+        .clear = {.x = clearR, .y = clearG, .z = clearB, .w = clearA},
+    };
+    const gpu::RenderingDesc passDesc{
+        .colors = {&colorAttachment, 1},
+        .depth = {
+            .render_view = target->depthView,
+            .load = gpu::LoadOp::clear,
+            .store = gpu::StoreOp::store,
+            .clear = 1.0f,
+        },
+    };
+    gpu::begin_render_pass(cmd, passDesc);
+
+    device->frameActive = true;
+    device->currentFrame = {
+        .slotIndex = slotIdx,
+        .commands = cmd,
+        .activePSO = nullptr,
+        .activeDepthMode = DepthMode::unknown,
+        .width = width,
+        .height = height,
+        .finalColorView = finalColorView,
+        .inPostProcessPass = false,
+    };
+    return &device->currentFrame;
+}
+
+extern "C" void acorn_rhi_begin_post_process_pass(
+    AcornRHIDevice* device,
+    AcornRHIFrame* frame
+) {
+    if (!device || !device->device || !frame) return;
+    std::lock_guard<std::mutex> lock(device->mutex);
+    if (!device->frameActive || frame != &device->currentFrame || frame->inPostProcessPass || !frame->finalColorView) {
+        return;
+    }
+
+    gpu::end_render_pass(frame->commands);
+    gpu::barrier(
+        frame->commands,
+        gpu::Stage::color_output | gpu::Stage::depth_stencil_tests,
+        gpu::Access::color_write | gpu::Access::depth_stencil_write,
+        gpu::Stage::fragment,
+        gpu::Access::shader_read
+    );
+
+    const gpu::ColorAttachment finalColorAttachment{
+        .render_view = frame->finalColorView,
+        .load = gpu::LoadOp::clear,
+        .store = gpu::StoreOp::store,
+        .clear = {.x = 0.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f},
+    };
+    const gpu::RenderingDesc finalPassDesc{
+        .colors = {&finalColorAttachment, 1},
+    };
+    gpu::begin_render_pass(frame->commands, finalPassDesc);
+    frame->activePSO = nullptr;
+    frame->activeDepthMode = DepthMode::unknown;
+    frame->inPostProcessPass = true;
+}
+
+extern "C" void acorn_rhi_draw_post_process(
+    AcornRHIDevice* device,
+    AcornRHIFrame* frame,
+    const AcornRHIPostProcessPipeline* pipeline,
+    const AcornRHIOffscreenTarget* target,
+    const void* uniformData,
+    size_t uniformSize
+) {
+    if (!device || !frame || !pipeline || !pipeline->pso || !target) return;
+    std::lock_guard<std::mutex> lock(device->mutex);
+    if (!device->frameActive || frame != &device->currentFrame || !frame->inPostProcessPass) return;
+    if (target->colorDescriptorIndex == UINT32_MAX || target->depthDescriptorIndex == UINT32_MAX) return;
+
+    FrameSlot& slot = device->frames[frame->slotIndex];
+    const uint64 roundedUniformBytes = std::max<uint64>(16ull, ((uniformSize + 15ull) & ~15ull));
+    auto uniformAlloc = device->allocateFrameBytes<float4>(slot, roundedUniformBytes);
+    auto rootAlloc = device->allocateFrameTyped<AcornPostProcessRoot>(slot, 1);
+    if (!uniformAlloc.cpu || !rootAlloc.cpu) return;
+
+    std::memset(uniformAlloc.cpu, 0, roundedUniformBytes);
+    if (uniformData && uniformSize > 0) {
+        std::memcpy(uniformAlloc.cpu, uniformData, uniformSize);
+    }
+
+    *rootAlloc.cpu = {
+        .uniforms = reinterpret_cast<float4*>(uniformAlloc.gpu),
+        .colorTextureIndex = target->colorDescriptorIndex,
+        .depthTextureIndex = target->depthDescriptorIndex,
+        .colorSamplerIndex = kSamplerClampLinear,
+        .depthSamplerIndex = kSamplerClampNearest,
+        ._pad = {0u, 0u},
+    };
+
+    device->bindPipelineAndDepth(*frame, pipeline->pso, DepthMode::disabled);
+    gpu::draw(frame->commands, rootAlloc.gpu, 3);
 }

@@ -2,9 +2,6 @@ import AcornEngine
 import AcornMath
 import Foundation
 import simd
-#if canImport(Metal)
-    import Metal
-#endif
 
 /// A class that manages the player entity in the AcornEngine World.
 ///
@@ -57,13 +54,13 @@ public final class PlayerCharacter {
     /// Creates and spawns a player character entity hierarchy into the world.
     /// - Parameters:
     ///   - world: The ECS world.
-    ///   - renderer: The MetalRenderer used for creating buffers and loading models.
+    ///   - renderer: The `Renderer` used for creating buffers and loading models.
     ///   - initialGPS: The initial GPS coordinate where the player spawns.
     ///   - referenceGPS: The reference GPS coordinate mapping to the world origin (0, 0, 0).
     /// - Returns: A fully initialized `PlayerCharacter`.
     public static func create(
         in world: World,
-        renderer: MetalRenderer,
+        renderer: any Renderer,
         initialGPS: GPSCoordinate,
         referenceGPS: GPSCoordinate
     ) -> PlayerCharacter {

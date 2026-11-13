@@ -1,5 +1,5 @@
 import UIKit
-import MetalKit
+import QuartzCore
 import AcornEngine
 import CoreMotion
 import simd
@@ -14,14 +14,14 @@ public enum GameState: Equatable, Sendable {
     case gameOver(height: Float, score: Int, acorns: Int)
 }
 
-/// The main View Controller managing Metal rendering, the AcornEngine ECS, motion/touch gesture controls, and UI overlays.
+/// The main View Controller managing NoGraphics rendering, the AcornEngine ECS, motion/touch gesture controls, and UI overlays.
 @MainActor
-public class GameViewController: UIViewController, MTKViewDelegate {
+public class GameViewController: UIViewController {
     
     // MARK: - Engine Properties
     private var engine: Engine!
-    private var renderer: MetalRenderer!
-    private var commandQueue: MTLCommandQueue!
+    private var renderer: NoGraphicsRenderer!
+    private var surfaceView: RenderSurfaceView!
     private var lastRenderTime: CFTimeInterval = 0
     
     // MARK: - Systems
@@ -67,8 +67,10 @@ public class GameViewController: UIViewController, MTKViewDelegate {
     private var gameOverOverlay: GameOverOverlay!
     
     public override func loadView() {
-        let mtkView = MTKView()
-        self.view = mtkView
+        let view = RenderSurfaceView()
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.view = view
+        self.surfaceView = view
     }
     
     public override func viewDidLoad() {
@@ -76,7 +78,7 @@ public class GameViewController: UIViewController, MTKViewDelegate {
         
         view.backgroundColor = UIColor(red: 0.08, green: 0.16, blue: 0.12, alpha: 1.0)
         
-        setupMetal()
+        setupRenderer()
         setupMotion()
         setupOverlays()
         loadAssets()
@@ -116,30 +118,18 @@ public class GameViewController: UIViewController, MTKViewDelegate {
         }
     }
     
-    private func setupMetal() {
-        guard let mtkView = view as? MTKView else {
-            print("Error: View is not an MTKView")
+    private func setupRenderer() {
+        guard let surfaceView = view as? RenderSurfaceView else {
+            print("Error: View is not a RenderSurfaceView")
             return
         }
-        
-        guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
-            print("Error: Metal is not supported on this device")
-            return
-        }
-        
-        mtkView.device = defaultDevice
-        mtkView.colorPixelFormat = .bgra8Unorm_srgb
-        mtkView.depthStencilPixelFormat = .depth32Float
-        mtkView.clearColor = MTLClearColor(red: 0.08, green: 0.16, blue: 0.12, alpha: 1.0)
-        
-        guard let queue = defaultDevice.makeCommandQueue() else {
-            print("Error: Failed to create command queue")
-            return
-        }
-        self.commandQueue = queue
+        self.surfaceView = surfaceView
+        surfaceView.pixelFormat = .bgra8UnormSRGB
+        surfaceView.clearColor = SIMD4<Float>(0.08, 0.16, 0.12, 1.0)
         
         do {
-            self.renderer = try MetalRenderer(device: defaultDevice)
+            self.renderer = try NoGraphicsRenderer(surface: surfaceView.surfaceDescriptor)
+            surfaceView.attachRenderer(self.renderer)
             self.engine = Engine(renderer: self.renderer)
             
             // Register Gameplay Systems
@@ -156,6 +146,10 @@ public class GameViewController: UIViewController, MTKViewDelegate {
             engine.world.registerSystem(self.cameraFollowSystem)
             
             // Setup Camera Entity
+            let drawableSize = surfaceView.drawableSize
+            let initialAspect: Float = (drawableSize.width > 0 && drawableSize.height > 0)
+                ? Float(drawableSize.width / drawableSize.height)
+                : Float(max(view.bounds.width, 1.0) / max(view.bounds.height, 1.0))
             let camEntity = engine.world.createEntity()
             let camTransform = TransformComponent(position: SIMD3<Float>(0, 0, -10.0))
             let camComp = CameraComponent(
@@ -163,7 +157,7 @@ public class GameViewController: UIViewController, MTKViewDelegate {
                 orthographicSize: 5.5,
                 nearZ: 0.1,
                 farZ: 100.0,
-                aspectRatio: Float(view.bounds.width / max(view.bounds.height, 1))
+                aspectRatio: initialAspect
             )
             engine.world.addComponent(camTransform, to: camEntity)
             engine.world.addComponent(camComp, to: camEntity)
@@ -174,10 +168,16 @@ public class GameViewController: UIViewController, MTKViewDelegate {
                 self?.spawnEndlessChunk(fromY: fromY, toY: toY)
             }
             
-            mtkView.delegate = self
-            self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
+            surfaceView.onDrawableSizeChanged = { [weak self] size in
+                self?.updateCameraAspectRatio(for: size)
+            }
+            surfaceView.onRenderFrame = { [weak self] in
+                self?.renderFrame()
+            }
+            updateCameraAspectRatio(for: surfaceView.drawableSize)
+            surfaceView.startRendering()
         } catch {
-            print("Failed to initialize MetalRenderer: \(error)")
+            print("Failed to initialize NoGraphicsRenderer: \(error)")
         }
     }
     
@@ -263,7 +263,7 @@ public class GameViewController: UIViewController, MTKViewDelegate {
             return
         }
         
-        let loader = TextureLoader(device: renderer.device)
+        let loader = TextureLoader(renderer: renderer)
         Task {
             do {
                 let texture = try await loader.loadTexture(from: pngUrl)
@@ -297,10 +297,8 @@ public class GameViewController: UIViewController, MTKViewDelegate {
         cameraFollowSystem.reset(initialY: 0.0)
         
         // Update background color based on Zone Theme
-        if let mtkView = view as? MTKView {
-            let bg = blueprint.definition.zone.backgroundColor
-            mtkView.clearColor = MTLClearColor(red: Double(bg.x), green: Double(bg.y), blue: Double(bg.z), alpha: 1.0)
-        }
+        let bg = blueprint.definition.zone.backgroundColor
+        surfaceView.clearColor = SIMD4<Float>(bg.x, bg.y, bg.z, 1.0)
         
         mainMenuOverlay.isHidden = true
         levelSelectOverlay.isHidden = true
@@ -324,9 +322,7 @@ public class GameViewController: UIViewController, MTKViewDelegate {
         
         cameraFollowSystem.reset(initialY: 0.0)
         
-        if let mtkView = view as? MTKView {
-            mtkView.clearColor = MTLClearColor(red: 0.06, green: 0.12, blue: 0.22, alpha: 1.0)
-        }
+        surfaceView.clearColor = SIMD4<Float>(0.06, 0.12, 0.22, 1.0)
         
         mainMenuOverlay.isHidden = true
         levelSelectOverlay.isHidden = true
@@ -638,11 +634,11 @@ public class GameViewController: UIViewController, MTKViewDelegate {
         engine.world.addComponent(proj, to: bulletEntity)
     }
     
-    // MARK: - MTKViewDelegate
+    // MARK: - Rendering Loop
     
-    public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        guard let engine = engine else { return }
-        let aspect = Float(max(size.width, 1.0) / max(size.height, 1.0))
+    private func updateCameraAspectRatio(for size: CGSize) {
+        guard let engine = engine, size.width > 0, size.height > 0 else { return }
+        let aspect = Float(size.width / size.height)
         
         if let camEntity = cameraEntity,
            var camera = engine.world.component(ofType: CameraComponent.self, for: camEntity) {
@@ -651,12 +647,8 @@ public class GameViewController: UIViewController, MTKViewDelegate {
         }
     }
     
-    public func draw(in view: MTKView) {
-        guard let engine = engine,
-              let queue = commandQueue,
-              let drawable = view.currentDrawable,
-              let descriptor = view.currentRenderPassDescriptor,
-              let commandBuffer = queue.makeCommandBuffer() else {
+    private func renderFrame() {
+        guard let engine = engine, let renderer = renderer else {
             return
         }
         
@@ -672,13 +664,11 @@ public class GameViewController: UIViewController, MTKViewDelegate {
         }
         
         // 2. Render 2D Sprites
-        let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
-        _ = context.getOrCreateEncoder()
+        guard let context = renderer.beginFrame(clearColor: surfaceView.clearColor) else {
+            return
+        }
         engine.render(context: context)
-        context.endEncoding()
-        
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
+        renderer.endFrame(context: context)
     }
     
     private func checkGameStateTransitions() {

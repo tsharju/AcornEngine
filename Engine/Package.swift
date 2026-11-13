@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "AcornEngine",
     defaultLocalization: "en",
-    platforms: [.iOS(.v16), .macOS(.v13)],
+    platforms: [.iOS(.v26), .macOS(.v26)],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
@@ -29,12 +29,16 @@ let package = Package(
             name: "AcornEngine",
             dependencies: [
                 "box2d",
-                .target(name: "AcornMetal", condition: .when(platforms: [.iOS, .macOS, .tvOS, .visionOS])),
+                "AcornGLTF",
+                "AcornRHI",
                 "AcornMath",
                 "AcornMapGeometry"
             ],
+            exclude: [
+                "Renderer/Shaders"
+            ],
             resources: [
-                .process("Renderer/Shaders.metal")
+                .copy("Renderer/CompiledShaders")
             ],
             swiftSettings: [.interoperabilityMode(.Cxx)]
         ),
@@ -70,13 +74,32 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
-            name: "AcornMetal",
+            name: "AcornGLTF",
             dependencies: ["fastgltf"],
-            path: "Sources/AcornMetal",
+            path: "Sources/AcornGLTF",
             publicHeadersPath: "include",
             cxxSettings: [
-                .headerSearchPath("../../Dependencies/metal-cpp"),
                 .define("DEBUG", to: "1", .when(configuration: .debug))
+            ]
+        ),
+        .binaryTarget(
+            name: "NoGraphicsAPI",
+            path: "Binaries/NoGraphicsAPI.xcframework"
+        ),
+        .target(
+            name: "AcornRHI",
+            dependencies: ["NoGraphicsAPI"],
+            path: "Sources/AcornRHI",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .headerSearchPath("../../Dependencies/NoGraphicsAPI/include"),
+                .headerSearchPath("../../Dependencies/NoGraphicsAPI/utility/include"),
+                .define("DEBUG", to: "1", .when(configuration: .debug))
+            ],
+            linkerSettings: [
+                .linkedFramework("Metal"),
+                .linkedFramework("QuartzCore"),
+                .linkedFramework("Foundation")
             ]
         ),
         .target(
@@ -102,5 +125,5 @@ let package = Package(
         ),
     ],
     swiftLanguageModes: [.v6],
-    cxxLanguageStandard: .cxx17
+    cxxLanguageStandard: .cxx20
 )

@@ -3,12 +3,61 @@ import AcornMath
 
 /// An error that can occur during renderer initialization.
 public enum RendererError: Error {
-    /// Failed to create a command queue.
+    /// Failed to create a command queue or RHI device.
     case initializationFailed
-    /// Failed to load the default Metal library.
+    /// Failed to load a required compiled shader library.
     case libraryNotFound
     /// Failed to find the required shader functions.
     case functionNotFound
+}
+
+/// Swapchain pixel format supported by a rendering surface.
+public enum SurfacePixelFormat: Sendable, Equatable {
+    /// 8-bit normalized BGRA color format.
+    case bgra8Unorm
+    /// 8-bit sRGB BGRA color format.
+    case bgra8UnormSRGB
+    /// 8-bit normalized RGBA color format.
+    case rgba8Unorm
+}
+
+/// Describes a native presentation surface (such as `CAMetalLayer`) or headless extent.
+public struct RenderSurfaceDescriptor: @unchecked Sendable {
+    /// Opaque pointer to the native presentation layer (`CAMetalLayer` on Apple platforms), or `nil` for headless rendering.
+    public var nativeLayer: UnsafeMutableRawPointer?
+
+    /// Drawable width in pixels.
+    public var width: Int
+
+    /// Drawable height in pixels.
+    public var height: Int
+
+    /// Display scale factor mapping points to pixels.
+    public var scaleFactor: Float
+
+    /// Swapchain color pixel format.
+    public var pixelFormat: SurfacePixelFormat
+
+    /// Initializes a new render surface descriptor.
+    /// - Parameters:
+    ///   - nativeLayer: Opaque pointer to the native layer, or `nil` for headless rendering.
+    ///   - width: Target width in pixels. Defaults to 1280.
+    ///   - height: Target height in pixels. Defaults to 720.
+    ///   - scaleFactor: Display scale factor. Defaults to 1.0.
+    ///   - pixelFormat: Swapchain pixel format. Defaults to `.bgra8UnormSRGB`.
+    public init(
+        nativeLayer: UnsafeMutableRawPointer? = nil,
+        width: Int = 1280,
+        height: Int = 720,
+        scaleFactor: Float = 1.0,
+        pixelFormat: SurfacePixelFormat = .bgra8UnormSRGB
+    ) {
+        self.nativeLayer = nativeLayer
+        self.width = width
+        self.height = height
+        self.scaleFactor = scaleFactor
+        self.pixelFormat = pixelFormat
+    }
 }
 
 
@@ -465,6 +514,44 @@ public protocol Renderer: Sendable {
         jointMatrices: [Matrix4x4],
         context: any RenderContext
     )
+
+    /// Creates a backend-specific skinned mesh resource from packed 80-byte skinned vertex data.
+    /// - Parameters:
+    ///   - skinnedVertexData: Packed binary vertex data using the 80-byte skinned vertex layout.
+    ///   - vertexCount: The number of vertices in the buffer.
+    ///   - indices: Optional 32-bit triangle indices.
+    /// - Returns: A backend-specific `Mesh` resource with `isSkinned == true`, or `nil` if creation fails.
+    func createSkinnedMesh(
+        skinnedVertexData: Data,
+        vertexCount: Int,
+        indices: [UInt32]
+    ) -> (any Mesh)?
+
+    /// Begins recording a frame onto the active surface or headless offscreen target.
+    /// - Parameter clearColor: RGBA clear color for the main color attachment.
+    /// - Returns: A `RenderContext` for issuing draw calls, or `nil` if no drawable is available.
+    func beginFrame(clearColor: SIMD4<Float>) -> (any RenderContext)?
+
+    /// Ends frame recording, submits GPU commands, and presents when attached to a window surface.
+    /// - Parameter context: The `RenderContext` returned by `beginFrame(clearColor:)`.
+    func endFrame(context: any RenderContext)
+
+    /// Notifies the renderer of updated drawable dimensions in pixels.
+    /// - Parameters:
+    ///   - width: New drawable width in pixels.
+    ///   - height: New drawable height in pixels.
+    /// - Returns: `true` if the resize succeeded.
+    @discardableResult
+    func resizeSurface(width: Int, height: Int) -> Bool
+
+    /// Attaches or replaces the native presentation surface on an initialized renderer.
+    /// - Parameter surface: The surface configuration.
+    /// - Returns: `true` if attaching succeeded.
+    @discardableResult
+    func attachSurface(_ surface: RenderSurfaceDescriptor) -> Bool
+
+    /// Blocks until all submitted GPU work has completed.
+    func waitIdle()
 }
 
 public extension Renderer {
@@ -475,10 +562,41 @@ public extension Renderer {
     func createMesh(meshData: CPUMeshData) -> (any Mesh)? {
         return createMesh(vertices: meshData.vertices)
     }
+
+    func createSkinnedMesh(
+        skinnedVertexData: Data,
+        vertexCount: Int,
+        indices: [UInt32] = []
+    ) -> (any Mesh)? {
+        return nil
+    }
     
     func createTexture(width: Int, height: Int, pixelData: [UInt8], format: TextureFormat) -> (any Texture)? {
         return nil
     }
+
+    func beginFrame(clearColor: SIMD4<Float>) -> (any RenderContext)? {
+        return nil
+    }
+
+    /// Convenience helper that begins a frame cleared to opaque black.
+    func beginFrame() -> (any RenderContext)? {
+        return beginFrame(clearColor: SIMD4<Float>(0, 0, 0, 1))
+    }
+
+    func endFrame(context: any RenderContext) {}
+
+    @discardableResult
+    func resizeSurface(width: Int, height: Int) -> Bool {
+        return false
+    }
+
+    @discardableResult
+    func attachSurface(_ surface: RenderSurfaceDescriptor) -> Bool {
+        return false
+    }
+
+    func waitIdle() {}
     
     func render(mesh: Mesh, uniforms: GlobalUniforms, context: RenderContext) {
         render(mesh: mesh, texture: nil, uniforms: uniforms, context: context)

@@ -2,9 +2,6 @@ import Testing
 import Foundation
 import AcornMath
 @testable import AcornEngine
-#if canImport(Metal)
-import Metal
-#endif
 
 // MARK: - Mock Types for Platform-Agnostic Verification
 
@@ -303,14 +300,12 @@ struct AndroidRenderingArchitectureTests {
         #expect(surfaceCreatedEventsReceived == 1)
     }
     
-    // MARK: 7. MetalRenderer Indexed Mesh Creation from CPUMeshData
+    // MARK: 7. NoGraphicsRenderer Indexed Mesh Creation from CPUMeshData
     
-    #if canImport(Metal)
     @MainActor
-    @Test("MetalRenderer creates indexed mesh from CPUMeshData with valid indexBuffer and indexCount")
-    func testMetalRendererIndexedMesh() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
-        let renderer = try MetalRenderer(device: device)
+    @Test("NoGraphicsRenderer creates indexed mesh from CPUMeshData with valid indexCount")
+    func testNoGraphicsRendererIndexedMesh() throws {
+        let renderer = try NoGraphicsRenderer()
         
         let vertices = [
             Vertex(position: SIMD3<Float>(0, 0, 0), color: SIMD4<Float>(1, 1, 1, 1)),
@@ -321,19 +316,16 @@ struct AndroidRenderingArchitectureTests {
         
         let indexedData = CPUMeshData(vertices: vertices, indices: indices)
         let indexedMesh = renderer.createMesh(meshData: indexedData)
-        let metalMesh = try #require(indexedMesh as? MetalMesh)
-        #expect(metalMesh.vertexCount == 3)
-        #expect(metalMesh.indexCount == 3)
-        #expect(metalMesh.indexBuffer != nil)
+        let ngMesh = try #require(indexedMesh as? NoGraphicsMesh)
+        #expect(ngMesh.vertexCount == 3)
+        #expect(ngMesh.indexCount == 3)
         
         let nonIndexedData = CPUMeshData(vertices: vertices, indices: [])
         let nonIndexedMesh = renderer.createMesh(meshData: nonIndexedData)
-        let metalNonIndexedMesh = try #require(nonIndexedMesh as? MetalMesh)
-        #expect(metalNonIndexedMesh.vertexCount == 3)
-        #expect(metalNonIndexedMesh.indexCount == 0)
-        #expect(metalNonIndexedMesh.indexBuffer == nil)
+        let ngNonIndexedMesh = try #require(nonIndexedMesh as? NoGraphicsMesh)
+        #expect(ngNonIndexedMesh.vertexCount == 3)
+        #expect(ngNonIndexedMesh.indexCount == 0)
     }
-    #endif
     
     // MARK: 8. SDFFontAtlasGenerator Division-by-Zero & Validation
     
@@ -459,27 +451,18 @@ struct AndroidRenderingArchitectureTests {
             _ = try loader.loadMeshes(from: dummyUrl)
         }
         
-        #if canImport(Metal)
-        if let device = MTLCreateSystemDefaultDevice() {
-            let metalRenderer = try MetalRenderer(device: device)
-            let metalLoader = GLTFModelLoader(renderer: metalRenderer)
-            
-            let fm = FileManager.default
-            let currentDir = fm.currentDirectoryPath
-            let candidatePaths = [
-                "../Samples/Acorn3DSample/Acorn3DSample/Resources/Avocado.glb",
-                "../Samples/AcornSampleApp/AcornSampleApp/Resources/Avocado.glb"
-            ]
-            for path in candidatePaths {
-                let fullPath = (currentDir as NSString).appendingPathComponent(path)
-                if fm.fileExists(atPath: fullPath) {
-                    let result = try metalLoader.loadMeshes(from: URL(fileURLWithPath: fullPath))
-                    #expect(!result.meshes.isEmpty)
-                    #expect(!result.nodes.isEmpty)
-                    break
-                }
-            }
+        let ngRenderer = try NoGraphicsRenderer()
+        let ngLoader = GLTFModelLoader(renderer: ngRenderer)
+        let testDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let repoRoot = testDir.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let candidateURLs = [
+            repoRoot.appendingPathComponent("Samples/AcornSampleApp/AcornSampleApp/Resources/Avocado.glb"),
+            repoRoot.appendingPathComponent("Samples/Acorn3DSample/Acorn3DSample/Resources/Avocado.glb")
+        ]
+        if let url = candidateURLs.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+            let result = try ngLoader.loadMeshes(from: url)
+            #expect(!result.meshes.isEmpty)
+            #expect(!result.nodes.isEmpty)
         }
-        #endif
     }
 }

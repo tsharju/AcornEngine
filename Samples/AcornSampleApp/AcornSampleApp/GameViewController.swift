@@ -1,11 +1,11 @@
 import UIKit
-import MetalKit
+import QuartzCore
 import AcornEngine
 
-class GameViewController: UIViewController, MTKViewDelegate {
+class GameViewController: UIViewController {
     var engine: Engine!
-    var renderer: MetalRenderer!
-    var commandQueue: MTLCommandQueue!
+    var renderer: NoGraphicsRenderer!
+    private var surfaceView: RenderSurfaceView!
     var lastRenderTime: CFTimeInterval = 0
     
     private var animationCycleTask: Task<Void, Never>?
@@ -18,6 +18,13 @@ class GameViewController: UIViewController, MTKViewDelegate {
         modelAnimationCycleTask?.cancel()
     }
     
+    override func loadView() {
+        let view = RenderSurfaceView()
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.view = view
+        self.surfaceView = view
+    }
+    
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         animationCycleTask?.cancel()
@@ -28,34 +35,21 @@ class GameViewController: UIViewController, MTKViewDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        guard let mtkView = view as? MTKView else {
-            print("View of GameViewController is not an MTKView")
+        guard let surfaceView = view as? RenderSurfaceView else {
+            print("View of GameViewController is not a RenderSurfaceView")
             return
         }
-        
-        guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
-            print("Metal is not supported")
-            return
-        }
-        
-        mtkView.device = defaultDevice
-        mtkView.colorPixelFormat = .bgra8Unorm_srgb
-        mtkView.depthStencilPixelFormat = .depth32Float
-        mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.2, blue: 0.3, alpha: 1.0)
-        
-        guard let queue = defaultDevice.makeCommandQueue() else {
-            print("Failed to create command queue")
-            return
-        }
-        self.commandQueue = queue
+        self.surfaceView = surfaceView
+        surfaceView.pixelFormat = .bgra8UnormSRGB
+        surfaceView.clearColor = SIMD4<Float>(0.1, 0.2, 0.3, 1.0)
         
         do {
-            self.renderer = try MetalRenderer(device: defaultDevice)
+            self.renderer = try NoGraphicsRenderer(surface: surfaceView.surfaceDescriptor)
+            surfaceView.attachRenderer(self.renderer)
             self.engine = Engine(renderer: self.renderer)
             self.engine.world.registerSystem(CameraSystem())
             self.engine.world.registerSystem(PhysicsSystem())
             self.engine.world.registerSystem(ParticleSystem())
-            mtkView.delegate = self
             setupScene()
             
             // Add basic lighting
@@ -68,7 +62,14 @@ class GameViewController: UIViewController, MTKViewDelegate {
             dirTransform.rotation = SIMD3<Float>(-.pi / 4, -.pi / 4, 0)
             engine.world.addComponent(dirTransform, to: dirLight)
             
-            self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
+            surfaceView.onDrawableSizeChanged = { [weak self] size in
+                self?.updateCameraAspectRatio(for: size)
+            }
+            surfaceView.onRenderFrame = { [weak self] in
+                self?.renderFrame()
+            }
+            updateCameraAspectRatio(for: surfaceView.drawableSize)
+            surfaceView.startRendering()
         } catch {
             print("Failed to initialize Renderer: \(error)")
         }
@@ -123,14 +124,14 @@ class GameViewController: UIViewController, MTKViewDelegate {
         }
         
         // Setup SDF Text Entity
-        let device = self.renderer.device
+        let renderer = self.renderer!
         let engine = self.engine!
         Task.detached(priority: .userInitiated) {
             do {
                 let fontAtlas = try SDFFontAtlasGenerator.generate(
                     fontName: "Helvetica-Bold",
                     fontSize: 48,
-                    device: device
+                    renderer: renderer
                 )
                 
                 await MainActor.run {
@@ -212,7 +213,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         Task {
             do {
-                let textureLoader = TextureLoader(device: self.renderer.device)
+                let textureLoader = TextureLoader(renderer: self.renderer)
                 let texture = try await textureLoader.loadTexture(from: pngUrl)
                 let jsonData = try Data(contentsOf: jsonUrl)
                 let decoder = JSONDecoder()
@@ -299,7 +300,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         Task {
             do {
-                let textureLoader = TextureLoader(device: self.renderer.device)
+                let textureLoader = TextureLoader(renderer: self.renderer)
                 let texture = try await textureLoader.loadTexture(from: pngUrl)
                 let jsonData = try Data(contentsOf: jsonUrl)
                 let decoder = JSONDecoder()
@@ -393,12 +394,12 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         Task {
             do {
-                let loader = GLTFModelLoader(device: self.renderer.device)
+                let loader = GLTFModelLoader(renderer: self.renderer)
                 let loaded = try loader.load(from: avocadoUrl)
                 
                 var texture: Texture? = nil
                 if let texData = loaded.textureData {
-                    let textureLoader = TextureLoader(device: self.renderer.device)
+                    let textureLoader = TextureLoader(renderer: self.renderer)
                     texture = try await textureLoader.loadTexture(from: texData)
                 }
                 
@@ -476,7 +477,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         Task {
             do {
-                let loader = GLTFModelLoader(device: self.renderer.device)
+                let loader = GLTFModelLoader(renderer: self.renderer)
                 let model = try loader.loadModel(from: modelUrl)
                 
                 await MainActor.run {
@@ -518,9 +519,9 @@ class GameViewController: UIViewController, MTKViewDelegate {
         }
     }
     
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        guard let engine = engine else { return }
-        let aspect = Float(max(size.width, 1.0) / max(size.height, 1.0))
+    private func updateCameraAspectRatio(for size: CGSize) {
+        guard let engine = engine, size.width > 0, size.height > 0 else { return }
+        let aspect = Float(size.width / size.height)
         
         if let cameraTuple = engine.world.entities(with: CameraComponent.self).first {
             let entityId = cameraTuple.0
@@ -530,12 +531,8 @@ class GameViewController: UIViewController, MTKViewDelegate {
         }
     }
     
-    func draw(in view: MTKView) {
-        guard let engine = engine,
-              let commandQueue = commandQueue,
-              let drawable = view.currentDrawable,
-              let descriptor = view.currentRenderPassDescriptor,
-              let commandBuffer = commandQueue.makeCommandBuffer() else {
+    private func renderFrame() {
+        guard let engine = engine, let renderer = renderer else {
             return
         }
         
@@ -545,20 +542,10 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         engine.tick(deltaTime: deltaTime)
         
-        let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
-        
-        // Force encoder creation so clear color is always applied
-        _ = context.getOrCreateEncoder()
-        
-        engine.render(context: context)
-        context.endEncoding()
-        
-        commandBuffer.present(drawable)
-        commandBuffer.addCompletedHandler { cb in
-            if let error = cb.error {
-                print("Command buffer error: \(error.localizedDescription) (domain: \((error as NSError).domain), code: \((error as NSError).code))")
-            }
+        guard let context = renderer.beginFrame(clearColor: surfaceView.clearColor) else {
+            return
         }
-        commandBuffer.commit()
+        engine.render(context: context)
+        renderer.endFrame(context: context)
     }
 }

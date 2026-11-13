@@ -9,10 +9,6 @@ import CoreGraphics
 import CoreText
 #endif
 
-#if canImport(Metal)
-import Metal
-#endif
-
 /// Errors that can occur during SDF Font Atlas generation.
 public enum SDFFontAtlasGeneratorError: Error, Equatable {
     /// Failed to create the texture resource on the renderer/device.
@@ -194,67 +190,6 @@ public struct SDFFontAtlasGenerator {
         )
     }
 
-    #if canImport(Metal)
-    /// Generates a `FontAtlas` dynamically for a given font and set of characters using an Apple Metal device.
-    /// Backward-compatible overload for Metal-only callers.
-    public static func generate(
-        fontName: String,
-        fontSize: Float,
-        characters: Set<Character> = Set((32...126).map { Character(UnicodeScalar($0)!) }),
-        device: any MTLDevice,
-        cellSize: Int = 64,
-        searchRadius: Float = 8.0
-    ) throws -> FontAtlas {
-        #if canImport(CoreText) && canImport(CoreGraphics)
-        let rasterizer = CoreTextFontRasterizer()
-        let data = try buildAtlasData(
-            fontName: fontName,
-            fontSize: fontSize,
-            characters: characters,
-            rasterizer: rasterizer,
-            cellSize: cellSize,
-            searchRadius: searchRadius
-        )
-        
-        let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .r8Unorm,
-            width: data.width,
-            height: data.height,
-            mipmapped: false
-        )
-        textureDescriptor.usage = [.shaderRead]
-        
-        #if os(macOS)
-        let hasUnified = device.hasUnifiedMemory
-        textureDescriptor.storageMode = hasUnified ? .shared : .managed
-        #else
-        textureDescriptor.storageMode = .shared
-        #endif
-        
-        guard let mtlTexture = device.makeTexture(descriptor: textureDescriptor) else {
-            throw SDFFontAtlasGeneratorError.textureCreationFailed
-        }
-        
-        mtlTexture.replace(
-            region: MTLRegionMake2D(0, 0, data.width, data.height),
-            mipmapLevel: 0,
-            withBytes: data.atlasBytes,
-            bytesPerRow: data.width
-        )
-        
-        let texture = MetalTexture(texture: mtlTexture)
-        return FontAtlas(
-            texture: texture,
-            glyphs: data.glyphs,
-            fontSize: fontSize,
-            lineHeight: data.lineHeight
-        )
-        #else
-        throw SDFFontAtlasGeneratorError.rasterizerRequired
-        #endif
-    }
-    #endif
-    
     /// Generates a signed distance field (SDF) from a grayscale pixel buffer.
     public static func generateSDF(
         pixelBuffer: [UInt8],

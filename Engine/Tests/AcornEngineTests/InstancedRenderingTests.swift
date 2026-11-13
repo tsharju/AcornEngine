@@ -1,5 +1,4 @@
 import Testing
-import Metal
 import simd
 import Foundation
 @testable import AcornEngine
@@ -323,13 +322,9 @@ struct InstancedRenderingTests {
         #expect(mockRenderer.renderSpriteCallCount == 0)
     }
     
-    @Test("MetalRenderer Instanced Execution with Real GPU")
-    func testMetalRendererInstancedExecution() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            return
-        }
-        
-        let renderer = try MetalRenderer(device: device)
+    @Test("NoGraphicsRenderer Instanced Execution with Real GPU")
+    func testNoGraphicsRendererInstancedExecution() throws {
+        let renderer = try NoGraphicsRenderer()
         let world = World()
         let renderSystem = RenderSystem(renderer: renderer)
         
@@ -346,20 +341,10 @@ struct InstancedRenderingTests {
             world.addComponent(MeshComponent(mesh: mesh), to: e)
         }
         
-        let commandQueue = try #require(device.makeCommandQueue())
-        let commandBuffer = try #require(commandQueue.makeCommandBuffer())
-        let rpDescriptor = MTLRenderPassDescriptor()
-        let texDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm_srgb, width: 64, height: 64, mipmapped: false)
-        texDesc.usage = [.renderTarget, .shaderRead]
-        let dummyTarget = try #require(device.makeTexture(descriptor: texDesc))
-        rpDescriptor.colorAttachments[0].texture = dummyTarget
-        
-        let context = MetalRenderContext(renderPassDescriptor: rpDescriptor, commandBuffer: commandBuffer)
-        
+        let context = try #require(renderer.beginFrame(clearColor: SIMD4<Float>(0, 0, 0, 1)))
         renderSystem.render(world: world, context: context)
-        context.endEncoding()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
+        renderer.endFrame(context: context)
+        renderer.waitIdle()
     }
     
     @Test("3-Stage Rendering: GroundMeshComponent before Roads before MeshComponent")

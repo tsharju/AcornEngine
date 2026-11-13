@@ -1,9 +1,6 @@
 import Testing
 import Foundation
 import AcornMath
-#if canImport(Metal)
-import Metal
-#endif
 @testable import AcornEngine
 
 @Suite("3D Model Animation Tests")
@@ -304,18 +301,16 @@ struct ModelAnimationTests {
     
     @Test("Load animated glTF model and instantiate into ECS world")
     func testLoadAnimatedGLTF() throws {
-        #if canImport(Metal)
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
-        
-        let currentDir = FileManager.default.currentDirectoryPath
-        let glbPath = (currentDir as NSString).appendingPathComponent("Engine/Tests/AcornEngineTests/Resources/AnimatedTestModel.glb")
-        guard FileManager.default.fileExists(atPath: glbPath) else {
+        let renderer = try NoGraphicsRenderer()
+        let glbURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/AnimatedTestModel.glb")
+        guard FileManager.default.fileExists(atPath: glbURL.path) else {
             return
         }
         
-        let loader = GLTFModelLoader(device: device)
-        let url = URL(fileURLWithPath: glbPath)
-        let model = try loader.loadModel(from: url)
+        let loader = GLTFModelLoader(renderer: renderer)
+        let model = try loader.loadModel(from: glbURL)
         
         #expect(model.meshes.count > 0)
         #expect(model.nodes.count == 2)
@@ -355,14 +350,12 @@ struct ModelAnimationTests {
         #expect(armTransform!.orientation != nil)
         let expectedZ = sin((Float.pi / 4.0) / 2.0)
         #expect(abs(armTransform!.orientation!.z - expectedZ) < 0.01)
-        #endif
     }
     
     @Test("Skinned Mesh Component and Joint Matrices Evaluation")
-    func testSkinnedMeshJointMatrices() {
-        #if canImport(Metal)
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
-        guard let mesh = MetalMesh(device: device, vertices: [
+    func testSkinnedMeshJointMatrices() throws {
+        let renderer = try NoGraphicsRenderer()
+        guard let mesh = renderer.createMesh(vertices: [
             Vertex(position: SIMD3<Float>(0, 0, 0), color: SIMD4<Float>(1, 1, 1, 1)),
             Vertex(position: SIMD3<Float>(0, 1, 0), color: SIMD4<Float>(1, 1, 1, 1)),
             Vertex(position: SIMD3<Float>(1, 0, 0), color: SIMD4<Float>(1, 1, 1, 1))
@@ -428,14 +421,11 @@ struct ModelAnimationTests {
         #expect(abs(updatedComp.jointMatrices[0].columns.3.y - 0.0) < 0.01)
         // Joint 1: world matrix has y=3, IBM has y=-2 -> combined matrix y translation = 1.0
         #expect(abs(updatedComp.jointMatrices[1].columns.3.y - 1.0) < 0.01)
-        #endif
     }
     
-    #if canImport(Metal)
-    @Test("MetalRenderer Skinned Mesh Execution on GPU")
-    func testMetalRendererSkinnedMeshExecution() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
-        let renderer = try MetalRenderer(device: device)
+    @Test("NoGraphicsRenderer Skinned Mesh Execution on GPU")
+    func testNoGraphicsRendererSkinnedMeshExecution() throws {
+        let renderer = try NoGraphicsRenderer()
         let world = World()
         let renderSystem = RenderSystem(renderer: renderer)
         
@@ -459,7 +449,8 @@ struct ModelAnimationTests {
         ]
         
         let data = verts.withUnsafeBufferPointer { Data(buffer: $0) }
-        let mesh = try #require(MetalMesh(device: device, skinnedVertexData: data, vertexCount: 3))
+        let mesh = try #require(renderer.createSkinnedMesh(skinnedVertexData: data, vertexCount: 3, indices: []))
+        #expect(mesh.isSkinned)
         
         let skinnedEntity = world.createEntity()
         world.addComponent(TransformComponent(), to: skinnedEntity)
@@ -472,22 +463,9 @@ struct ModelAnimationTests {
             to: skinnedEntity
         )
         
-        let commandQueue = try #require(device.makeCommandQueue())
-        let commandBuffer = try #require(commandQueue.makeCommandBuffer())
-        let rpDescriptor = MTLRenderPassDescriptor()
-        let texDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm_srgb, width: 64, height: 64, mipmapped: false)
-        texDesc.usage = [.renderTarget, .shaderRead]
-        let dummyTarget = try #require(device.makeTexture(descriptor: texDesc))
-        rpDescriptor.colorAttachments[0].texture = dummyTarget
-        
-        let context = MetalRenderContext(renderPassDescriptor: rpDescriptor, commandBuffer: commandBuffer)
+        let context = try #require(renderer.beginFrame(clearColor: SIMD4<Float>(0, 0, 0, 1)))
         renderSystem.render(world: world, context: context)
-        context.endEncoding()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        
-        #expect(commandBuffer.status == .completed)
-        #expect(commandBuffer.error == nil)
+        renderer.endFrame(context: context)
+        renderer.waitIdle()
     }
-    #endif
 }

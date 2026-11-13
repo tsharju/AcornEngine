@@ -58,15 +58,14 @@ As the codebase grows, organize modules and sources using the following standard
 ---
 
 ## 7. Visual Verification & Automated Feedback Loop
-For any visual, rendering, or shader-related changes (e.g., changes to `MetalRenderer`, Signed Distance Fields, Shader definitions, Camera, or UI systems), agents must perform visual verification using the sample app:
-1. **Identify and Boot iOS Simulator**: Ensure an iOS simulator matching the app's minimum deployment version (e.g., iOS 26.5 or later) is booted. Use `xcrun simctl list devices booted` to find running simulators, and `xcrun simctl boot <device-id>` to boot one if needed.
-2. **Build the Sample App**: Compile the sample app using `xcodebuild -project Samples/AcornSampleApp/AcornSampleApp.xcodeproj -scheme AcornSampleApp -configuration Debug -sdk iphonesimulator -derivedDataPath build_output build`.
-3. **Install on Simulator**: Install the built `.app` bundle: `xcrun simctl install <device-id> build_output/Build/Products/Debug-iphonesimulator/AcornSampleApp.app`.
-4. **Launch the App**: Start the application: `xcrun simctl launch <device-id> im.teemu.AcornSampleApp`.
-5. **Capture Simulator Screenshot**: Take a screenshot: `xcrun simctl io <device-id> screenshot <absolute-path-to-artifacts>/sample_app_screenshot.png`.
-6. **Visual Inspection & Verification**: View the screenshot using the `view_file` tool to inspect the rendered output. Verify colors, geometry, alignment, text clarity, and general rendering correctness.
-7. **Iterative Feedback Loop**: If the screenshot reveals bugs (e.g. incorrect colors, misaligned layouts, or rendering artifacts), analyze the issue, update the codebase, and repeat steps 2-6 until the rendering is completely correct.
-8. **Document in Walkthrough**: Embed the final verified screenshot in the `walkthrough.md` report so the user can easily see the verified visual results.
+For any visual, rendering, or shader-related changes (e.g., changes to `NoGraphicsRenderer`, `AcornRHI`, `RenderSurfaceView`, Slang shader definitions under `Engine/Sources/AcornEngine/Renderer/Shaders/`, Signed Distance Fields, Camera, or UI systems), agents must verify compilation and GPU execution on Metal 4 (`Apple7+` / iOS 26+ / macOS 26+ ARM64 physical hardware; iOS Simulator is unsupported by `NoGraphicsAPI`):
+1. **Recompile Shaders & Run Headless GPU Tests (macOS 26+)**: Run `./Engine/Scripts/compile_shaders.sh` to update `.metallib` artifacts, then run `swift test` to execute headless `NoGraphicsRenderer` GPU verification tests across all pipelines.
+2. **Identify Connected Physical iOS 26+ Device**: Run `xcrun devicectl list devices` (or `xcrun xctrace list devices`) to check for a connected, unlocked physical Apple Silicon iOS device running iOS 26+ (`MTLGPUFamilyApple7` + `MTLGPUFamilyMetal4`).
+3. **Build the Sample App for Device**: Compile using `xcodebuild -project Samples/AcornSampleApp/AcornSampleApp.xcodeproj -scheme AcornSampleApp -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build_output build`.
+4. **Install on Physical Device**: Install the built `.app` bundle via `xcrun devicectl device install app --device <device-id> build_output/Build/Products/Debug-iphoneos/AcornSampleApp.app`.
+5. **Launch & Inspect on Physical Device**: Start the app with `xcrun devicectl device process launch --device <device-id> im.teemu.AcornSampleApp` (optionally `--console`), capture or collect the on-device visual verification screenshot/logs when a device is attached, and verify rendering, alignment, colors, and clean frame presentation.
+6. **Iterative Feedback Loop**: If shader compilation, device tests, or on-device inspection reveal issues, update the shader/renderer/sample code, recompile shaders, and repeat steps 1-5 until verified cleanly (clean up temporary `build_output` directories afterward).
+7. **Document in Walkthrough**: Embed any captured screenshots or explicitly report the exact commands/device coverage in the final report.
 
 ---
 

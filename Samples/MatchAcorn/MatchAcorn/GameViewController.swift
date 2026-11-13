@@ -1,5 +1,5 @@
 import UIKit
-import MetalKit
+import QuartzCore
 import AcornEngine
 import simd
 
@@ -19,12 +19,12 @@ func writeLog(_ message: String) {
     }
 }
 
-class GameViewController: UIViewController, MTKViewDelegate {
+class GameViewController: UIViewController {
     
     // MARK: - Engine Variables
     var engine: Engine!
-    var renderer: MetalRenderer!
-    var commandQueue: MTLCommandQueue!
+    var renderer: NoGraphicsRenderer!
+    private var surfaceView: RenderSurfaceView!
     var lastRenderTime: CFTimeInterval = 0
     var boardEntity: Entity!
     
@@ -43,6 +43,13 @@ class GameViewController: UIViewController, MTKViewDelegate {
     let acornScale: Float = 0.00215
     let tileScale: Float = 0.00234
     
+    override func loadView() {
+        let view = RenderSurfaceView()
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.view = view
+        self.surfaceView = view
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -55,35 +62,29 @@ class GameViewController: UIViewController, MTKViewDelegate {
         
         setupHUD()
         
-        guard let mtkView = view as? MTKView else {
-            print("View of GameViewController is not an MTKView")
+        guard let surfaceView = view as? RenderSurfaceView else {
+            print("View of GameViewController is not a RenderSurfaceView")
             return
         }
-        
-        guard let defaultDevice = MTLCreateSystemDefaultDevice() else {
-            print("Metal is not supported")
-            return
-        }
-        
-        mtkView.device = defaultDevice
-        mtkView.colorPixelFormat = .bgra8Unorm_srgb
-        mtkView.depthStencilPixelFormat = .depth32Float
-        mtkView.clearColor = MTLClearColor(red: 0.05, green: 0.1, blue: 0.15, alpha: 1.0)
-        
-        guard let queue = defaultDevice.makeCommandQueue() else {
-            print("Failed to create command queue")
-            return
-        }
-        self.commandQueue = queue
+        self.surfaceView = surfaceView
+        surfaceView.pixelFormat = .bgra8UnormSRGB
+        surfaceView.clearColor = SIMD4<Float>(0.05, 0.1, 0.15, 1.0)
         
         do {
-            self.renderer = try MetalRenderer(device: defaultDevice)
+            self.renderer = try NoGraphicsRenderer(surface: surfaceView.surfaceDescriptor)
+            surfaceView.attachRenderer(self.renderer)
             self.engine = Engine(renderer: self.renderer)
             
             loadAssetsAndSetupGame()
             
-            mtkView.delegate = self
-            self.mtkView(mtkView, drawableSizeWillChange: mtkView.drawableSize)
+            surfaceView.onDrawableSizeChanged = { [weak self] size in
+                self?.updateCameraAspectRatio(for: size)
+            }
+            surfaceView.onRenderFrame = { [weak self] in
+                self?.renderFrame()
+            }
+            updateCameraAspectRatio(for: surfaceView.drawableSize)
+            surfaceView.startRendering()
         } catch {
             print("Failed to initialize Renderer: \(error)")
         }
@@ -148,7 +149,7 @@ class GameViewController: UIViewController, MTKViewDelegate {
         }
         
         do {
-            let textureLoader = TextureLoader(device: self.renderer.device)
+            let textureLoader = TextureLoader(renderer: self.renderer)
             // Load asynchronously using a Task
             Task {
                 do {
@@ -180,12 +181,17 @@ class GameViewController: UIViewController, MTKViewDelegate {
         let cameraTransform = TransformComponent(position: SIMD3<Float>(0, 0, -5.0))
         engine.world.addComponent(cameraTransform, to: cameraEntity)
         
+        let drawableSize = surfaceView.drawableSize
+        let initialAspect: Float = (drawableSize.width > 0 && drawableSize.height > 0)
+            ? Float(drawableSize.width / drawableSize.height)
+            : Float(max(view.bounds.width, 1.0) / max(view.bounds.height, 1.0))
+
         let cameraComponent = CameraComponent(
             projectionType: .orthographic,
             orthographicSize: 2.7,
             nearZ: 0.1,
             farZ: 100.0,
-            aspectRatio: 1.0
+            aspectRatio: initialAspect
         )
         engine.world.addComponent(cameraComponent, to: cameraEntity)
         
@@ -363,11 +369,11 @@ class GameViewController: UIViewController, MTKViewDelegate {
         board.state = .swapping(entityA: entityA, entityB: entityB, revert: false)
     }
     
-    // MARK: - MTKViewDelegate
+    // MARK: - Rendering Loop
     
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        guard let engine = engine else { return }
-        let aspect = Float(max(size.width, 1.0) / max(size.height, 1.0))
+    func updateCameraAspectRatio(for size: CGSize) {
+        guard let engine = engine, size.width > 0, size.height > 0 else { return }
+        let aspect = Float(size.width / size.height)
         
         if let cameraTuple = engine.world.entities(with: CameraComponent.self).first {
             let entityId = cameraTuple.0
@@ -377,12 +383,8 @@ class GameViewController: UIViewController, MTKViewDelegate {
         }
     }
     
-    func draw(in view: MTKView) {
-        guard let engine = engine,
-              let commandQueue = commandQueue,
-              let drawable = view.currentDrawable,
-              let descriptor = view.currentRenderPassDescriptor,
-              let commandBuffer = commandQueue.makeCommandBuffer() else {
+    func renderFrame() {
+        guard let engine = engine, let renderer = renderer else {
             return
         }
         
@@ -397,14 +399,11 @@ class GameViewController: UIViewController, MTKViewDelegate {
         updateHUDLabels()
         
         // Render Frame
-        let context = MetalRenderContext(renderPassDescriptor: descriptor, commandBuffer: commandBuffer)
-        _ = context.getOrCreateEncoder()
-        
+        guard let context = renderer.beginFrame(clearColor: surfaceView.clearColor) else {
+            return
+        }
         engine.render(context: context)
-        context.endEncoding()
-        
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
+        renderer.endFrame(context: context)
     }
     
     private func updateHUDLabels() {

@@ -1,5 +1,4 @@
 import Testing
-import Metal
 import Foundation
 @testable import AcornEngine
 
@@ -7,56 +6,43 @@ import Foundation
 struct GLTFLoaderTests {
     @Test("Load Non-existent GLTF Model")
     func loadNonExistent() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            return
-        }
-        
-        let loader = GLTFModelLoader(device: device)
+        let renderer = try NoGraphicsRenderer()
+        let loader = GLTFModelLoader(renderer: renderer)
         let url = URL(fileURLWithPath: "/nonexistent/model.gltf")
         #expect(throws: Error.self) {
             _ = try loader.load(from: url)
         }
     }
-    
+
     @Test("Load Real GLTF Model")
     func loadReal() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            return
-        }
-        
         let fm = FileManager.default
-        let currentDir = fm.currentDirectoryPath
-        let candidatePaths = [
-            "../Samples/Acorn3DSample/Acorn3DSample/Resources/Avocado.glb",
-            "../Samples/AcornSampleApp/AcornSampleApp/Resources/Avocado.glb"
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // AcornEngineTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // Engine
+            .deletingLastPathComponent() // repo root
+        let candidateURLs = [
+            repoRoot.appendingPathComponent("Samples/AcornSampleApp/AcornSampleApp/Resources/Avocado.glb"),
+            repoRoot.appendingPathComponent("Samples/Acorn3DSample/Acorn3DSample/Resources/Avocado.glb")
         ]
-        
-        var avocadoUrl: URL?
-        for path in candidatePaths {
-            let fullPath = (currentDir as NSString).appendingPathComponent(path)
-            if fm.fileExists(atPath: fullPath) {
-                avocadoUrl = URL(fileURLWithPath: fullPath)
-                break
-            }
-        }
-        
-        guard let url = avocadoUrl else {
-            return
-        }
-        
-        let loader = GLTFModelLoader(device: device)
+
+        let url = try #require(candidateURLs.first { fm.fileExists(atPath: $0.path) })
+
+        let renderer = try NoGraphicsRenderer()
+        let loader = GLTFModelLoader(renderer: renderer)
         let result = try loader.load(from: url)
-        
-        #expect(result.meshes.count > 0)
-        #expect(result.nodes.count > 0)
+
+        #expect(!result.meshes.isEmpty)
+        #expect(!result.nodes.isEmpty)
         #expect(result.textureData != nil)
-        
+
         let rootNodes = result.nodes.filter { $0.parentIndex == nil }
-        #expect(rootNodes.count > 0)
-        
+        #expect(!rootNodes.isEmpty)
+
         for mesh in result.meshes {
             #expect(mesh.vertexCount > 0)
-            #expect(mesh.vertexBuffer.length > 0)
+            #expect(mesh as? NoGraphicsMesh != nil)
         }
     }
 }

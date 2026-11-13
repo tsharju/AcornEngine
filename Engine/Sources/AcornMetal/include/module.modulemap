@@ -1,4 +1,0 @@
-module AcornMetal {
-    umbrella header "AcornMetal.hpp"
-    export *
-}

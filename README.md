@@ -77,7 +77,8 @@ AcornEngine/
 
 For more details on how to build, run, and modify individual components, refer to their respective READMEs:
 
-* [Engine Documentation](Engine/README.md) – Deep dive into the Entity Component System, EventBus, 2D Sprite Animation, Unified Input, 3D Spatial Audio, Metal Renderer & Instancing, Box2D physics simulation & contacts, 2D particle emitter, and coordinate geometry math.
+* [Engine Documentation](Engine/README.md) – Deep dive into the Entity Component System, EventBus, 2D Sprite Animation, Unified Input, 3D Spatial Audio, Renderer & Instancing, Box2D physics simulation & contacts, 2D particle emitter, and coordinate geometry math.
+* [NoGraphicsAPI Migration & API Reference Guide](Docs/NOGRAPHICS_MIGRATION_GUIDE.md) – Complete guide on the NoGraphicsAPI rendering backend, API replacements (`NoGraphicsRenderer`, `RenderSurfaceView`), two-pass offscreen post-processing, and shader pipelines.
 * [Editor Documentation](Editor/README.md) – In-depth guide on the macOS desktop workspace, Dear ImGui interop structure, Cocoa and Metal integration delegates, inspectable components, and interactive line-projection drawing.
 * [Roadmap & TODO List](TODO.md) – Feature roadmap, technical priorities, and planned subsystems.
 * [Android Compatibility Plan](Docs/ANDROID_SUPPORT_PLAN.md) – Architectural blueprint, subsystem abstractions, and phased roadmap for Android (API 24+) support using Vulkan, Oboe, and GameActivity.
